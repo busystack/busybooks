@@ -120,7 +120,8 @@ remains Apache-2.0. See [NOTICE](../../NOTICE) and
 | Original source | Comics 1 GiB; EPUB/PDF/FB2 retain 256 MiB |
 | Comic archive | 20,000 entries; 64 MiB actual bytes per entry; 4 GiB aggregate output |
 | Comic images | 1–10,000 pages; 16,000 pixels per side; 32 × 1024 × 1024 decoded pixels per image |
-| Comic metadata | ComicInfo 1 MiB; aggregate logical names 4 MiB; bounded individual metadata strings |
+| Comic metadata | ComicInfo 1 MiB; bounded individual strings; prepared logical names 4M UTF-16 units aggregate |
+| Comic ZIP indexing | Central/local metadata 16 MiB each; encoded names 4 MiB aggregate and 32 KiB each; actual counts checked before allocation; ZIP64 resolved |
 | RAR process | 768 MiB memory; dictionary 256 MiB; three-minute deadline; cancel polling 25 ms |
 | FB2 XML | 64 MiB; depth 128; 500,000 XML events/attributes; 256 attributes per element; 262,144 UTF-16 units per tag; 10,000 sections |
 | FB2 binaries | 2,048 resources; 24 MiB encoded base64 per resource; 64 MiB encoded aggregate; bounded decoded dimensions/pixels |
@@ -131,7 +132,9 @@ remains Apache-2.0. See [NOTICE](../../NOTICE) and
 | Existing backup | 100,000 combined records; 128 MiB encoded manifest; unchanged |
 
 ZIP comics use a file-backed index and stream stored/deflated chunks with actual
-size/CRC checks. RAR callbacks stream to numeric owned staging filenames; archive
+size/CRC checks. A preflight bounds central and local ZIP metadata before the
+archive library allocates its index, resolves ZIP64, checks actual entry counts
+and rejects ambiguous EOCD signatures. RAR callbacks stream to numeric owned staging filenames; archive
 names never become output paths. Logical names map to hashed physical filenames,
 preserving case distinctions on Windows. No full comic archive decompression
 buffer is retained. Links, unsafe paths, duplicates, encryption and multipart
@@ -157,8 +160,8 @@ collection references retain shared SHA identity.
 
 The 1 GiB cap was chosen after preparing a 290,794,372-byte stored CBZ with 42
 deterministic 1280×1800 entropy PNG pages, exceeding the former 256 MiB limit.
-The compiled probe used about 55 MiB peak RSS and 8.8 seconds for preparation;
-exact final figures are in the JSON record. This is measured evidence, not a
+The compiled probe used about 55 MiB peak RSS; preparation time and exact final
+figures are in the JSON record. This is measured evidence, not a
 claim about every maximum-size book. JIT/compiler memory is not release-runtime
 memory.
 

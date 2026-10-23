@@ -185,7 +185,11 @@ Future<Map<String, dynamic>> extractComic(
   if (format == 'cbz') {
     final input = InputFileStream(source);
     try {
-      checkZipEntryCount(input);
+      checkZipEntryCount(
+        input,
+        maximumMetadataBytes: 16 * 1024 * 1024,
+        maximumNameBytes: 4 * 1024 * 1024,
+      );
       final directory = ZipDirectory()..read(input);
       validateZipDirectory(
         directory,

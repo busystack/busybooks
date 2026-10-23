@@ -6,6 +6,7 @@ import 'package:busybooks/src/library/data/book_xml.dart';
 import 'package:busybooks/src/library/data/comic_book.dart';
 import 'package:busybooks/src/library/data/fb2_book.dart';
 import 'package:busybooks/src/library/data/record_validation.dart';
+import 'package:busybooks/src/import_export/data/archive_guard.dart';
 import 'package:busybooks/src/library/domain/book_format.dart';
 import 'package:busybooks/src/library/domain/book.dart';
 import 'package:busybooks/src/app/product_actions.dart' show bookFileTypes;
@@ -223,6 +224,131 @@ void main() {
       }
     }
   });
+  test(
+    'comic ZIP preflight bounds allocation and resolves ZIP64 metadata',
+    () async {
+      final source = await File(
+        'test/fixtures/formats/comic-stored.cbz',
+      ).readAsBytes();
+      final end = source.length - 22, original = ByteData.sublistView(source);
+      void preflight(
+        Uint8List bytes, {
+        int maximumNames = 4 * 1024 * 1024,
+        int maximumMetadata = 16 * 1024 * 1024,
+      }) => checkZipEntryCount(
+        InputMemoryStream(bytes),
+        maximumMetadataBytes: maximumMetadata,
+        maximumNameBytes: maximumNames,
+      );
+      preflight(source);
+      final directory = original.getUint32(end + 16, Endian.little);
+      final huge = Uint8List.fromList(source);
+      ByteData.sublistView(
+        huge,
+      ).setUint32(end + 12, 16 * 1024 * 1024 + 1, Endian.little);
+      expect(() => preflight(huge), throwsFormatException);
+      expect(() => preflight(source, maximumNames: 1), throwsFormatException);
+      final falseCount = Uint8List.fromList(source),
+          countData = ByteData.sublistView(falseCount);
+      countData.setUint16(end + 8, 1, Endian.little);
+      countData.setUint16(end + 10, 1, Endian.little);
+      expect(() => preflight(falseCount), throwsFormatException);
+      final local = Uint8List.fromList(source),
+          localData = ByteData.sublistView(local);
+      localData.setUint16(
+        original.getUint32(directory + 42, Endian.little) + 28,
+        65535,
+        Endian.little,
+      );
+      expect(
+        () => preflight(local, maximumMetadata: 16384),
+        throwsFormatException,
+      );
+      final comment = Uint8List(source.length + 44)..setAll(0, source),
+          commentData = ByteData.sublistView(comment);
+      commentData.setUint16(end + 20, 44, Endian.little);
+      commentData.setUint32(source.length, 0x06054b50, Endian.little);
+      // A fake EOCD inside the comment must never bypass the inspected index.
+      expect(
+        () => checkZipEntryCount(InputMemoryStream(comment)),
+        throwsFormatException,
+      );
+      final zip64 = Uint8List(source.length + 76)..setRange(0, end, source);
+      final data = ByteData.sublistView(zip64);
+      data.setUint32(end, 0x06064b50, Endian.little);
+      data.setUint64(end + 4, 44, Endian.little);
+      data.setUint16(end + 12, 45, Endian.little);
+      data.setUint16(end + 14, 45, Endian.little);
+      final count = original.getUint16(end + 10, Endian.little);
+      data.setUint64(end + 24, count, Endian.little);
+      data.setUint64(end + 32, count, Endian.little);
+      data.setUint64(
+        end + 40,
+        original.getUint32(end + 12, Endian.little),
+        Endian.little,
+      );
+      data.setUint64(end + 48, directory, Endian.little);
+      data.setUint32(end + 56, 0x07064b50, Endian.little);
+      data.setUint64(end + 64, end, Endian.little);
+      data.setUint32(end + 72, 1, Endian.little);
+      zip64.setRange(end + 76, zip64.length, source, end);
+      data.setUint16(end + 76 + 8, 65535, Endian.little);
+      data.setUint16(end + 76 + 10, 65535, Endian.little);
+      data.setUint32(end + 76 + 12, 0xffffffff, Endian.little);
+      data.setUint32(end + 76 + 16, 0xffffffff, Endian.little);
+      preflight(zip64);
+      final oversizedRecord = Uint8List.fromList(zip64);
+      ByteData.sublistView(
+        oversizedRecord,
+      ).setUint64(end + 4, 0x7fffffffffffffff, Endian.little);
+      expect(() => preflight(oversizedRecord), throwsFormatException);
+      // A ZIP64 local-header offset can also appear with an ordinary EOCD.
+      final filenameSize = original.getUint16(directory + 28, Endian.little),
+          extraSize = original.getUint16(directory + 30, Endian.little);
+      final insertion = directory + 46 + filenameSize,
+          offset64 = Uint8List(source.length + 12);
+      offset64.setRange(0, insertion, source);
+      offset64.setRange(insertion + 12, offset64.length, source, insertion);
+      final offsetData = ByteData.sublistView(offset64);
+      offsetData.setUint16(directory + 30, extraSize + 12, Endian.little);
+      offsetData.setUint32(directory + 42, 0xffffffff, Endian.little);
+      offsetData.setUint16(insertion, 1, Endian.little);
+      offsetData.setUint16(insertion + 2, 8, Endian.little);
+      offsetData.setUint64(
+        insertion + 4,
+        original.getUint32(directory + 42, Endian.little),
+        Endian.little,
+      );
+      offsetData.setUint32(
+        end + 12 + 12,
+        original.getUint32(end + 12, Endian.little) + 12,
+        Endian.little,
+      );
+      preflight(offset64);
+      final parsed = ZipDirectory()..read(InputMemoryStream(offset64));
+      expect(
+        parsed.fileHeaders.first.localHeaderOffset,
+        original.getUint32(directory + 42, Endian.little),
+      );
+      final owned = await Directory.systemTemp.createTemp('busybooks-zip64-');
+      try {
+        final archive = await File(
+              '${owned.path}/forced.cbz',
+            ).writeAsBytes(zip64),
+            stage = await Directory('${owned.path}/stage').create();
+        final prepared = await extractComic(
+          archive.path,
+          'cbz',
+          stage,
+          () => false,
+        );
+        expect((prepared['pages'] as List).length, 7);
+        expect(prepared['metadata']['direction'], 'rtl');
+      } finally {
+        await owned.delete(recursive: true);
+      }
+    },
+  );
   test(
     'native CFI ranges persist empty endpoints and retain passage order',
     () {
