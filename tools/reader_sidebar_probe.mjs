@@ -12,7 +12,7 @@ const normalize=value=>JSON.parse(JSON.stringify(value))
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}}
 function adapter(extra={}) {
   const events=[],content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
-  const context=vm.createContext({...typographyUtilities,URL,Uint8Array,console,validPage,setTimeout,clearTimeout,requestAnimationFrame:f=>f(),
+  const context=vm.createContext({...typographyUtilities,AbortController,URL,Uint8Array,console,validPage,setTimeout,clearTimeout,requestAnimationFrame:f=>f(),
     pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},
     document:{querySelector:()=>content,querySelectorAll:()=>[],addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}},
     window:{location:{href:'https://busybooks.local/?session=sidebar'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}},...extra})

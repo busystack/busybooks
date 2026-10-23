@@ -1,5 +1,12 @@
 # Shared reading typography and local fonts
 
+Reflowable EPUB 2/3 and FB2 use these same preferences, local-font controls and
+durable reflow/selection safeguards. FB2's deterministic prepared tree is shared
+by rendering, search and CFI resolution. Comics report no typography capability
+and retain artwork colors; their zoom/spread/direction defaults are separate from
+PDF defaults. See [format verification](format-verification.md) for the format
+matrix, cache-deletion/restart attachment checks and remaining platform gates.
+
 Font preferences belong to the reading system. `FontChoice` and
 `TypographyCapabilities` in `lib/src/core/typography.dart` contain no format or
 engine names. The existing appearance map, settings writer, book records and

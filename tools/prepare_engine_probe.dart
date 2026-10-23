@@ -15,7 +15,25 @@ Future<void> main(List<String> arguments) async {
   final store = await ReadingDataStore.open(root.path);
   try {
     final descriptors = <Map<String, dynamic>>[];
-    for (final name in ['reflowable.epub', 'fixed-layout.epub', 'text.pdf']) {
+    for (final name in [
+      'reflowable.epub',
+      'fixed-layout.epub',
+      'text.pdf',
+      'image-only.pdf',
+      'formats/epub2.epub',
+      'formats/epub2-dtbook.epub',
+      'formats/representative.kepub.epub',
+      'formats/fiction-utf8.fb2',
+      'formats/fiction-utf16.fb2',
+      'formats/fiction-cp1251.fb2',
+      'formats/fiction.fb2.zip',
+      'formats/fiction.fbz',
+      'formats/comic-deflated.cbz',
+      'formats/comic-stored.cbz',
+      for (final generation in [4, 5])
+        for (final profile in ['stored', 'compressed', 'solid'])
+          'formats/comic-rar$generation-$profile.cbr',
+    ]) {
       final workspace =
           await store.call('openPath', {
                 'path': p.absolute('test', 'fixtures', name),

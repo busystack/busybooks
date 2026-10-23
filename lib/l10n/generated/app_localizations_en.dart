@@ -364,11 +364,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupHelp =>
-      'Backup & Restore Reading Data includes collections, reading positions, annotations, private notes and preferences. Original EPUB/PDF files are excluded.';
+      'Backup & Restore Reading Data includes collections, reading positions, annotations, private notes and preferences. Original book files are excluded.';
 
   @override
   String get restoreWarning =>
-      'Restore reading data into this profile? Matching book, annotation, collection and Recent records will be replaced. Unrelated data is kept. Original EPUB/PDF files are excluded and will not be changed.';
+      'Restore reading data into this profile? Matching book, annotation, collection and Recent records will be replaced. Unrelated data is kept. Original book files are excluded and will not be changed.';
 
   @override
   String get backupComplete => 'Backup saved';
@@ -403,7 +403,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutText =>
-      'An offline personal EPUB 3 and PDF library and reader. Built with the BusyStack desktop foundation.';
+      'An offline personal EPUB, PDF, FB2 and comic library and reader. Built with the BusyStack desktop foundation.';
 
   @override
   String get accessibility => 'Accessibility';
@@ -465,7 +465,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadingBook => 'Opening book';
 
   @override
-  String get unsupported => 'Only DRM-free EPUB 3 and PDF are supported.';
+  String get unsupported =>
+      'Only DRM-free EPUB 2/3, PDF, FB2 (.fb2, .fb2.zip, .fbz), CBZ and CBR are supported.';
 
   @override
   String get goToHelp =>
@@ -516,7 +517,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openBook => 'Open Book';
 
   @override
-  String get openBookHelp => 'Read an EPUB 3 or PDF from its current location.';
+  String get openBookHelp =>
+      'Read an EPUB, PDF, FB2, CBZ or CBR from its current location.';
 
   @override
   String get createCollection => 'Create Collection';
@@ -561,7 +563,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyCollection =>
-      'This collection has no books. Add EPUB/PDF files from any location.';
+      'This collection has no books. Add supported book files from any location.';
 
   @override
   String get removeReference => 'Remove from Collection';
@@ -635,6 +637,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get highlightColor => 'Highlight Color';
+
+  @override
+  String get regionColor => 'Region Color';
 
   @override
   String get moreTypography => 'More Typography';
@@ -848,7 +853,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unsupportedTarget =>
-      'Folders and collection files are unsupported. Open an EPUB/PDF file or choose a collection saved in BusyBooks.';
+      'Folders and collection files are unsupported. Open a supported book file or choose a collection saved in BusyBooks.';
 
   @override
   String get saveWarning =>
@@ -1063,4 +1068,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rememberedFont => 'Saved font';
+
+  @override
+  String get regionNote => 'Region note';
+
+  @override
+  String get regionNotes => 'Region notes';
+
+  @override
+  String get comicDefaults => 'Comic Reading Defaults';
+
+  @override
+  String get readingDirection => 'Reading direction';
+
+  @override
+  String get directionAuto => 'From book';
+
+  @override
+  String get directionLtr => 'Left to right';
+
+  @override
+  String get directionRtl => 'Right to left';
+
+  @override
+  String get regionInstructions =>
+      'Select a rectangle on one page. Arrow keys move it; Shift+Arrow resizes; Enter confirms; Escape cancels.';
+
+  @override
+  String get protectedBookHelp =>
+      'Protected books and encrypted archives cannot be opened. Reading data is preserved.';
+
+  @override
+  String get bookResourceLimitHelp =>
+      'This book exceeds a reading resource limit. Details below identify the affected file or resource.';
+
+  @override
+  String get damagedBookHelp =>
+      'The book is damaged or has invalid content. Locate a complete, readable copy of the same original to keep its reading data.';
+
+  @override
+  String get firstPage => 'First page';
+
+  @override
+  String get lastPage => 'Last page';
 }

@@ -94,7 +94,7 @@ primary cache retains at most thirty-two previews and eight MiB. Images preserve
 aspect ratio; page selection uses the same location formatting/history as
 Outline and Go To. No EPUB page-preview capability is advertised.
 
-Annotations uses publication order and All/Highlights/Bookmarks plus With Notes.
+Annotations uses publication order and All/Highlights/Bookmarks/Regions plus With Notes.
 Compact previews use the effective protected draft; complete notes stay in the
 existing store/controllers and Notebook. Context actions share deletion, color
 and edit coordination. Open in Notebook reveals the requested item, then leaves
@@ -154,8 +154,9 @@ Settings accepts only Home, collection, Reading and Notebook return targets;
 re-entry is disabled/no-op and cannot overwrite that original destination.
 
 Go To resolves its current header anchor for pointer, shortcut and menu entry.
-PDF printed labels and physical position remain distinct; reflowable EPUB uses
+PDF printed labels and physical position remain distinct; reflowable EPUB/FB2 use
 progress/chapter and publisher references without invented screen-page counts.
+Comics use physical page count/references, First/Last and the same Go To surface.
 The form measures its natural height, including feedback and text scaling, and
 scrolls only inside native screen bounds. Native preparation allocates a frame
 surface without exposing empty interactive controls: GTK maps a transparent,
@@ -241,6 +242,35 @@ Native rendering, keyboard traversal, accessible publication text, popover
 stacking, audible speech, scaling and visual comparison require actual Linux
 and Windows execution. Controlled channel/DOM tests do not establish those.
 
+
+## FB2 and comic controls
+
+FB2 uses the existing reflowable appearance defaults, local fonts, text search,
+selection actions, dictionary, narration and protected note editor. Outline,
+search, position, selection, footnotes and narration emit the same typed durable
+FB2 locator. Notes made inside an FB2 note body reopen that body on return.
+
+CBZ and CBR share page controls, sidebar thumbnails, fit-page/fit-width, zoom,
+panning, single/spread presentation and automatic/LTR/RTL direction. Wide pages
+occupy a spread by themselves. View changes preserve the selected page and
+applicable normalized scroll position. Artwork colors remain unchanged by the
+application theme. Comic view defaults have their own settings entry; PDF
+rotation/tint defaults keep their existing meaning. Text search, selection,
+dictionary and read-aloud are absent for image-only comics. Notebook search and
+private notes remain available.
+
+On a comic, the existing Add Note command enters a temporary rectangle mode
+inside one image. Drag a rectangle, or use arrows to move, Shift+arrows to resize,
+and Ctrl for smaller steps; Enter confirms and Escape cancels. Ordinary drag
+panning resumes outside selection mode. Confirming opens the existing native
+note editor with the captured session, book, page and rectangle. Save, failed-save
+draft retention, Retry and deletion use the existing protected workflow. The
+region is normalized against the oriented intrinsic image and painted/hit-tested
+with one shared transform. Saved region buttons open the same editor and are
+keyboard reachable. Notebook/Annotations offer a Region filter and return to
+the correct page and region. A page bookmark's optional note remains page-wide;
+independent regions never participate in page-bookmark deduplication. Ordinary
+renderer annotation payloads still omit private note text.
 
 ## Selected-text actions
 

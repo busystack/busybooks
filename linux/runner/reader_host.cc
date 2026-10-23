@@ -12,6 +12,7 @@
 struct BusyBooksReaderHost {
   BusyBooksReaderSurface* surface;
   ReaderPopover* popover = nullptr;
+  GtkWidget* chrome = nullptr;
   WebKitWebView* web = nullptr;
   WebKitWebContext* context;
   FlMethodChannel* channel;
@@ -143,8 +144,17 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
     h->popover->Hide();
     h->surface->SetBounds(number("x"),number("y"),number("width"),number("height"));
   } else if (strcmp(name,"visible") == 0) {
-    if (!fl_value_get_bool(args)) h->popover->Hide();
-    h->surface->SetVisible(fl_value_get_bool(args));
+    const bool visible = fl_value_get_bool(args);
+    if (!visible) h->popover->Hide();
+    h->surface->SetVisible(visible);
+    // WebKit may retain GTK keyboard ownership after it is hidden for Notebook
+    // or a Flutter dialog. Return it to the owning main view, without activating
+    // an inactive application or focusing a transient editor.
+    if (!visible && gtk_widget_get_mapped(h->chrome)) {
+      auto* window = gtk_widget_get_toplevel(h->chrome);
+      if (GTK_IS_WINDOW(window) && gtk_window_is_active(GTK_WINDOW(window)))
+        gtk_widget_grab_focus(h->chrome);
+    }
   } else if (strcmp(name,"dispatch") == 0) {
     const char* json=fl_value_get_string(args);
     if (!json || strlen(json)>1048576) {fl_method_call_respond_error(method,"reader-message","Invalid message",nullptr,nullptr);return;}
@@ -160,10 +170,12 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
 }
 BusyBooksReaderHost* busybooks_reader_host_new(GtkWidget* overlay, FlView* view) {
   auto* h=new BusyBooksReaderHost{};
+  h->chrome=GTK_WIDGET(g_object_ref(view));
   g_autofree char* exe=g_file_read_link("/proc/self/exe",nullptr);
   g_autofree char* dir=g_path_get_dirname(exe);
   h->assets=std::string(dir)+"/data/flutter_assets/assets/reader";
   h->context=webkit_web_context_new_ephemeral();
+  webkit_web_context_set_cache_model(h->context,WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
   webkit_web_context_register_uri_scheme(h->context,"busybooks",scheme,h,nullptr);
   auto* security=webkit_web_context_get_security_manager(h->context);
   webkit_security_manager_register_uri_scheme_as_secure(security,"busybooks");
@@ -201,5 +213,6 @@ void busybooks_reader_host_free(BusyBooksReaderHost* h) {
   delete h->surface;
   fl_method_channel_set_method_call_handler(h->fonts,nullptr,nullptr,nullptr);
   g_clear_object(&h->fonts);
+  g_clear_object(&h->chrome);
   g_clear_object(&h->channel);g_clear_object(&h->context);delete h;
 }

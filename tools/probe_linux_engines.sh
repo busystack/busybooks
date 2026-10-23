@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [ -x "$PWD/build/linux/x64/release/bundle/busybooks_comic_archive" ]; then
+  export BUSYBOOKS_COMIC_DECODER="${BUSYBOOKS_COMIC_DECODER:-$PWD/build/linux/x64/release/bundle/busybooks_comic_archive}"
+else
+  export BUSYBOOKS_COMIC_DECODER="${BUSYBOOKS_COMIC_DECODER:-$PWD/build/comic-decoder/busybooks_comic_archive}"
+fi
 profile=$(mktemp -d /tmp/busybooks-engine-proof-XXXXXX)
 binary=$(mktemp /tmp/busybooks-engine-probe-XXXXXX)
 trap 'rm -rf "$profile"; rm -f "$binary" "$profile-input.json"' EXIT

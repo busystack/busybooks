@@ -140,3 +140,16 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE" "${CMAKE_CURRENT_SOURCE_D
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../README.md" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/doc/busybooks" COMPONENT Runtime)
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../docs/" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/doc/busybooks/docs" COMPONENT Runtime)
+
+add_subdirectory("../native/comic-decoder" "comic-decoder")
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/io.busystack.busybooks.mime.xml" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/mime/packages" COMPONENT Runtime)
+find_program(BUSYBOOKS_UPDATE_MIME_DATABASE update-mime-database)
+if(NOT BUSYBOOKS_UPDATE_MIME_DATABASE)
+  message(FATAL_ERROR "Install shared-mime-info (update-mime-database) to build BusyBooks")
+endif()
+install(CODE "
+  execute_process(COMMAND \"${BUSYBOOKS_UPDATE_MIME_DATABASE}\" \"${CMAKE_INSTALL_PREFIX}/share/mime\" RESULT_VARIABLE busybooks_mime_result)
+  if(NOT busybooks_mime_result EQUAL 0)
+    message(FATAL_ERROR \"Could not compile BusyBooks MIME resources\")
+  endif()
+  " COMPONENT Runtime)

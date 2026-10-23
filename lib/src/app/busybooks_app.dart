@@ -210,8 +210,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
       BusyBooksCommandIds.returnToPassage: () => reader.send('back'),
       BusyBooksCommandIds.nextResult: () => reader.stepMatch(1),
       BusyBooksCommandIds.previousResult: () => reader.stepMatch(-1),
-      BusyBooksCommandIds.addNote: () =>
-          reader.showPopover('selection', extra: {'editing': true}),
+      BusyBooksCommandIds.addNote: reader.addNote,
       BusyBooksCommandIds.annotations: () => reader.panel('annotations'),
       BusyBooksCommandIds.appearance: () => reader.showPopover(
         'appearance',
@@ -273,6 +272,14 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             c.id: () =>
                 bookView() &&
                 (!notebook() || sharedBookCommands.contains(c.id)),
+        BusyBooksCommandIds.search: () =>
+            notebook() || reading() && reader.textInteraction,
+        BusyBooksCommandIds.readAloud: () =>
+            reading() && reader.textInteraction,
+        BusyBooksCommandIds.dictionary: () =>
+            reading() && reader.textInteraction,
+        BusyBooksCommandIds.highlight: () =>
+            reading() && reader.textInteraction,
         BusyBooksCommandIds.thumbnails: () =>
             reading() && reader.panelAvailable('thumbnails'),
         BusyBooksCommandIds.readerBooks: () =>
@@ -320,7 +327,12 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             reading() && reader.panelAvailable('thumbnails'),
         BusyBooksCommandIds.readerBooks: () =>
             reading() && reader.panelAvailable('books'),
-        BusyBooksCommandIds.search: () => notebook() || reading(),
+        BusyBooksCommandIds.search: () =>
+            notebook() || reading() && reader.textInteraction,
+        BusyBooksCommandIds.readAloud: () =>
+            reading() &&
+            reader.textInteraction &&
+            ref.read(readerControllerProvider).location['noText'] != true,
         BusyBooksCommandIds.backToCollection: () =>
             bookView() &&
             ref.read(workspaceControllerProvider).workspace?.isBook == false,
@@ -336,15 +348,21 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             reading() && ref.read(readerControllerProvider).canPrevious,
         BusyBooksCommandIds.bookmark: () => reading() && reader.canBookmark,
         BusyBooksCommandIds.addNote: () =>
-            reading() && ref.read(readerControllerProvider).selection != null,
+            reading() &&
+            (reader.regionNotes ||
+                ref.read(readerControllerProvider).selection != null),
         BusyBooksCommandIds.nextResult: () =>
             reading() && ref.read(readerControllerProvider).matches.isNotEmpty,
         BusyBooksCommandIds.previousResult: () =>
             reading() && ref.read(readerControllerProvider).matches.isNotEmpty,
         BusyBooksCommandIds.highlight: () =>
-            reading() && ref.read(readerControllerProvider).selection != null,
+            reading() &&
+            reader.textInteraction &&
+            ref.read(readerControllerProvider).selection != null,
         BusyBooksCommandIds.dictionary: () =>
-            reading() && ref.read(readerControllerProvider).selection != null,
+            reading() &&
+            reader.textInteraction &&
+            ref.read(readerControllerProvider).selection != null,
       },
     );
     return effectiveCommandRegistry(

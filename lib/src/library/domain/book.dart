@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../../core/reading_preferences.dart';
+import 'book_format.dart';
 
 class Book {
   Book(this.data);
@@ -15,6 +16,11 @@ class Book {
   num get seriesOrder => data['seriesOrder'] as num? ?? 0;
   String get language => data['language'] as String? ?? '';
   String get format => data['format'] as String;
+  bool get comic => isComicFormat(format);
+  bool get pageBased => isPageFormat(format);
+  bool get textInteraction => !comic;
+  String get originalSuffix =>
+      originalBookSuffix(path) ?? data['originalSuffix'] as String? ?? format;
   String get state => data['state'] as String? ?? 'unread';
   String? get cover => data['cover'] as String?;
   double get progress => (data['progress'] as num? ?? 0).toDouble();

@@ -518,7 +518,9 @@ class _PopoverContentsState extends State<_PopoverContents> {
   @override
   void initState() {
     super.initState();
-    editing = widget.data['editing'] == true;
+    editing =
+        widget.data['editing'] == true ||
+        widget.data['annotationKind'] == 'region';
   }
 
   @override
@@ -623,6 +625,7 @@ class _PopoverContentsState extends State<_PopoverContents> {
         preferences: preferences,
         capabilities: TypographyCapabilities.fromJson(d['typography']),
         pdf: d['pdf'] == true,
+        comic: d['comic'] == true,
         noText: (d['location'] as Map?)?['noText'] == true,
         onChanged: (v) async {
           await widget.action('appearance', {'value': v});
@@ -705,7 +708,7 @@ class _PopoverContentsState extends State<_PopoverContents> {
         const SizedBox(height: BusyBooksSpacing.sm),
         if (d['annotationKind'] != 'bookmark') ...[
           Text(
-            l.highlightColor,
+            d['annotationKind'] == 'region' ? l.regionColor : l.highlightColor,
             style: Theme.of(context).textTheme.labelMedium,
           ),
           const SizedBox(height: BusyBooksSpacing.sm),
@@ -924,7 +927,9 @@ class _PopoverContentsState extends State<_PopoverContents> {
   }
 
   Widget _goTo(BuildContext context) {
-    final d = widget.data, l = context.l10n, pdf = d['pdf'] == true;
+    final d = widget.data,
+        l = context.l10n,
+        pdf = d['pageNavigation'] == true || d['pdf'] == true;
     final chapters = (d['toc'] as List)
         .where(
           (entry) =>
@@ -973,7 +978,7 @@ class _PopoverContentsState extends State<_PopoverContents> {
               _pdfReference(context),
               style: Theme.of(context).textTheme.bodySmall,
             ),
-          if (pdf)
+          if (pdf && d['comic'] != true)
             BusyBooksComboRow<bool>(
               title: l.location,
               values: const [false, true],
@@ -1006,6 +1011,30 @@ class _PopoverContentsState extends State<_PopoverContents> {
             onPressed: navigating ? null : go,
             child: Text(l.go),
           ),
+          if (d['comic'] == true)
+            Wrap(
+              spacing: 8,
+              children: [
+                BusyBooksPushButton.standard(
+                  onPressed: navigating
+                      ? null
+                      : () {
+                          entry.text = '1';
+                          unawaited(go());
+                        },
+                  child: Text(l.firstPage),
+                ),
+                BusyBooksPushButton.standard(
+                  onPressed: navigating
+                      ? null
+                      : () {
+                          entry.text = '${d['pages']}';
+                          unawaited(go());
+                        },
+                  child: Text(l.lastPage),
+                ),
+              ],
+            ),
           if (!pdf && chapters.isNotEmpty)
             BusyBooksComboRow<int>(
               title: l.chapter,

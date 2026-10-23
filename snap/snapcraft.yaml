@@ -1,9 +1,9 @@
 name: busybooks
 title: BusyBooks
 version: '0.1.0'
-summary: Local-first EPUB 3 and PDF reader with Notebook
+summary: Offline EPUB, PDF, FB2 and comic reader with Notebook
 description: |
-  Open DRM-free EPUB 3 and PDF files directly. Read offline and organize
+  Open DRM-free EPUB 2/3, PDF, FB2, CBZ and CBR files directly. Read offline and organize
   named database collections using book identities. Preserve bookmarks,
   highlights, notes and positions. Back up reading data and collections;
   original book files stay in their own filesystem locations.
@@ -47,7 +47,7 @@ parts:
     flutter-channel: stable
     build-environment:
       - BUSYBOOKS_FLUTTER_VERSION: '3.47.5'
-    build-packages: [git, curl, unzip, xz-utils, clang, cmake, ninja-build, pkg-config, libgtk-3-dev, libhandy-1-dev, libwebkit2gtk-4.1-dev]
+    build-packages: [git, curl, unzip, xz-utils, clang, cmake, ninja-build, pkg-config, shared-mime-info, libgtk-3-dev, libhandy-1-dev, libwebkit2gtk-4.1-dev]
     stage-packages: [libwebkit2gtk-4.1-0, libhandy-1-0, libsqlite3-0, libspeechd2, speech-dispatcher, speech-dispatcher-espeak-ng, fonts-noto-core, fonts-noto-cjk, yaru-theme-gtk, yaru-theme-icon]
     override-build: |
       set -eu
@@ -69,11 +69,12 @@ parts:
   desktop-integration:
     after: [busybooks]
     plugin: nil
-    build-packages: [patchelf]
+    build-packages: [patchelf, shared-mime-info]
     override-prime: |
       craftctl default
+      update-mime-database "$CRAFT_PRIME/share/mime"
       # Preserve GNOME/Mesa runtime precedence, following BusyMark's correction.
-      for bundled_elf in "$CRAFT_PRIME/busybooks" "$CRAFT_PRIME/lib"/*.so; do
+      for bundled_elf in "$CRAFT_PRIME/busybooks" "$CRAFT_PRIME/busybooks_comic_archive" "$CRAFT_PRIME/lib"/*.so; do
         existing_rpath="$(patchelf --print-rpath "$bundled_elf")"
         if [ -n "$existing_rpath" ]; then patchelf --set-rpath "$existing_rpath" "$bundled_elf"; fi
       done

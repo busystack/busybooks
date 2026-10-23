@@ -79,6 +79,9 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       if(controller_&&visible_&&!IsIconic(owner)&&GetForegroundWindow()==owner)controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
     }else if(name=="visible"){
       auto value=call.arguments()?std::get_if<bool>(call.arguments()):nullptr;visible_=value&&*value;if(!visible_)popover_->Hide();if(controller_)controller_->put_IsVisible(visible_);
+      // A hidden publication must not retain keyboard ownership in Notebook.
+      HWND owner=GetAncestor(parent_,GA_ROOT);
+      if(!visible_&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner)SetFocus(parent_);
     }else if(name=="dispatch"){
       auto json=call.arguments()?std::get_if<std::string>(call.arguments()):nullptr;if(!web_||!json||json->size()>1048576){result->Error("reader-unavailable","Reader is unavailable");return;}
       auto script=wide("window.busybooks?.dispatch("+*json+")");web_->ExecuteScript(script.c_str(),nullptr);

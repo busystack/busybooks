@@ -34,21 +34,42 @@ Future<void> prepareEpubCache(
   }
   final target = Directory(p.join(parent.path, id));
   final index = File(p.join(parent.path, '$id.json'));
+  // Never let a warm representation stand in for the original publication.
+  final file = File(sourcePath);
+  final before = await file.stat();
+  Future<void> checkOriginal() async {
+    final after = await file.stat();
+    if (before.type != FileSystemEntityType.file ||
+        before.size != after.size ||
+        before.modified != after.modified ||
+        before.changed != after.changed) {
+      throw const FileSystemException(
+        'Original EPUB changed during cache preparation',
+      );
+    }
+  }
+
+  if (await file.length() > 256 * 1024 * 1024) {
+    throw const FormatException('EPUB exceeds resource limit');
+  }
+  if (verifiedBytes == null &&
+      (await sha256.bind(file.openRead()).first).toString() != id) {
+    throw const FileSystemException(
+      'Original EPUB changed during cache preparation',
+    );
+  }
   if (!force && await index.exists() && await target.exists()) {
     try {
       final metadata = jsonDecode(await index.readAsString()) as Map;
       if (metadata['version'] == 2 &&
           metadata['id'] == id &&
           metadata['resources'] is Map) {
+        await checkOriginal();
         return;
       }
     } catch (_) {
       /* An interrupted or damaged cache is regenerated. */
     }
-  }
-  final file = File(sourcePath);
-  if (await file.length() > 256 * 1024 * 1024) {
-    throw const FormatException('EPUB exceeds resource limit');
   }
   final bytes = verifiedBytes ?? await file.readAsBytes();
   if (verifiedBytes == null && sha256.convert(bytes).toString() != id) {
@@ -73,6 +94,8 @@ Future<void> prepareEpubCache(
         resources[entry.name] = {'file': filename, 'size': entry.size};
       }
     }
+    await checkOriginal();
+    if (cancelled()) throw const FormatException('EPUB preparation cancelled');
     if (await target.exists()) {
       await target.delete(recursive: true);
     }

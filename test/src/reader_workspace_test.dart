@@ -7613,4 +7613,153 @@ void main() {
       }
     },
   );
+
+  test(
+    'comic region notes retain protected drafts, independent bookmarks and private payloads',
+    () async {
+      late AnnotationStoreGate gate;
+      final f = await _ReaderFixture.create(
+        'formats/comic-deflated.cbz',
+        wrapStore: (store) => gate = AnnotationStoreGate(store),
+      );
+      try {
+        final book = f.reader.book!;
+        final descriptor =
+            await f.store.call('prepare', {'id': book.id, 'path': book.path})
+                as Map;
+        final index =
+            jsonDecode(
+                  await File(
+                    '${descriptor['cacheDirectory']}.json',
+                  ).readAsString(),
+                )
+                as Map;
+        final page = {
+          'kind': 'comic',
+          'version': 1,
+          'format': 'cbz',
+          'page': 0,
+          'pageId': index['pages'][0]['file'],
+        };
+        await f.event('metadata', {
+          'pages': 7,
+          'labels': ['1', '2', '3', '4', '5', '6', '7'],
+        });
+        await f.event('location', {
+          'anchor': page,
+          'progress': .1,
+          'reference': 'Page 1',
+          'noText': true,
+        });
+        expect(f.reader.textInteraction, isFalse);
+        expect(f.reader.regionNotes, isTrue);
+        expect(f.reader.panelAvailable('thumbnails'), isTrue);
+        final query = f.state.query;
+        f.reader.search('art');
+        expect(f.state.query, query);
+        await f.reader.addNote();
+        expect(f.dispatches.last['action'], 'beginRegion');
+        final region = {
+          ...page,
+          'region': [.1, .2, .3, .4],
+        };
+        await f.event('regionSelected', {
+          'anchor': region,
+          'text': '',
+          'reference': 'Page 1',
+          'rect': {'x': 10, 'y': 20, 'width': 30, 'height': 40},
+        });
+        expect(f.popup['annotationKind'], 'region');
+        expect(f.popup['editing'], isTrue);
+        gate.failPut = true;
+        await f.action('highlight', {
+          'note': 'Private image note',
+          'color': 'blue',
+        });
+        await _until(
+          () =>
+              f.drafts.drafts.isNotEmpty &&
+              f.drafts.drafts.values.single.error != null,
+        );
+        final id = f.drafts.drafts.keys.single;
+        expect(f.drafts.sources[id]!.kind, 'region');
+        expect(f.drafts.sources[id]!.text, isEmpty);
+        expect(f.drafts.drafts[id]!.text, 'Private image note');
+        expect(await f.store.call('annotations', book.id), isEmpty);
+        gate.failPut = false;
+        await f.notes.save(id);
+        await f.reader.syncAnnotations();
+        final projected =
+            (f.dispatches.lastWhere(
+                          (d) => d['action'] == 'annotations',
+                        )['value']
+                        as List)
+                    .single
+                as Map;
+        expect(projected['annotationKind'], 'region');
+        expect(projected['anchor'], region);
+        expect(projected.containsKey('note'), isFalse);
+        await f.reader.annotation('bookmark');
+        expect((await f.store.call('annotations', book.id) as List).length, 2);
+        await f.reader.annotation('bookmark');
+        expect(
+          (await f.store.call('annotations', book.id) as List)
+              .single['annotationKind'],
+          'region',
+        );
+        await f.reader.editAnnotation(f.reader.annotations.single);
+        await f.action('annotationNote', {'note': 'Edited region note'});
+        expect(
+          (await f.store.call('annotations', book.id) as List).single['note'],
+          'Edited region note',
+        );
+        final popovers = f.calls.where((c) => c.method == 'popover').length;
+        await f.event('regionSelected', {
+          'session': 'obsolete',
+          'anchor': region,
+          'text': '',
+        });
+        expect(f.calls.where((c) => c.method == 'popover').length, popovers);
+        await f.container
+            .read(workspaceControllerProvider.notifier)
+            .deleteAnnotation(id);
+        expect(await f.store.call('annotations', book.id), isEmpty);
+      } finally {
+        await f.dispose();
+      }
+    },
+  );
+  testWidgets(
+    'comic sidebar exposes page panels without publication text search',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create('formats/comic-deflated.cbz');
+        await f.reader.panel('outline');
+      });
+      try {
+        await tester.pumpWidget(_sidebarApplication(f));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Search in Book'), findsNothing);
+        await tester.tap(
+          find.byKey(const ValueKey('reader-sidebar-view-menu')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Search Results'), findsNothing);
+        expect(find.text('Thumbnails'), findsOneWidget);
+        expect(find.text('Annotations'), findsOneWidget);
+        await tester.tap(find.text('Thumbnails'));
+        await tester.pumpAndSettle();
+        expect(f.state.panel, 'thumbnails');
+        expect(f.state.searchVisible, isFalse);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await _readerAction(tester, f.dispose);
+      }
+    },
+  );
 }

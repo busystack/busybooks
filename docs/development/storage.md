@@ -1,6 +1,7 @@
 # Books, collections and reading data
 
-Original EPUB/PDF files open directly. Opening, reading, collection membership
+Original PDF, EPUB 2/3, FB2 (raw or ZIP-wrapped), CBZ and CBR files open directly.
+Opening, reading, collection membership
 and Backup & Restore Reading Data never move or copy them. Only explicit Move
 Book or Export Original Book changes publication files.
 
@@ -28,10 +29,30 @@ Directories and manifest files are unsupported opening targets.
 Collection queries return stored metadata immediately. Accessibility checks run
 in batches of at most 64, without inspecting publication content. Selecting a
 book verifies its entire content identity. A single-use, stat-bound worker token
-avoids inspecting the same selected file twice; only the latest EPUB inspection
-buffer is retained temporarily for cache preparation. PDF inspection streams its
-fingerprint and retains only its header/trailer. Regenerable EPUB resource caches
-preserve existing archive/resource isolation.
+avoids inspecting the same selected file twice. Only the latest EPUB/FB2 byte
+buffer is retained temporarily; comics instead retain an owned file-backed
+staging descriptor. PDF inspection streams its fingerprint and retains only its
+header/trailer. Validation of the original and expected SHA-256 precedes parsing
+and preparation, including warm-cache opens. A missing/changed original cannot
+be replaced by a cache. Cancellation and a replaced session cannot attach late
+preparation results. Interrupted owned staging directories are removed under the
+profile lock on startup.
+
+The logical format is independent of the original representation. EPUB 2 remains
+`epub`; `.fb2`, `.fb2.zip` and `.fbz` remain `fb2`. Optional `originalSuffix`
+metadata plus the verified current path preserves the actual export suffix.
+Compressed exports reproduce the complete original ZIP bytes. New format values
+are JSON records in schema 2; no SQL migration or historical importer is needed.
+
+Disposable `cache/fb2-v1` and `cache/comic-v1` representations contain controlled
+resource indices and SHA-256 physical filenames. Versioned interpretation and
+stable logical paths preserve case-distinct archive names on Windows. Preparation
+publishes a complete validated directory and writes its index last. FB2-generated
+XHTML is rendering preparation, never an authoritative replacement publication.
+All original bytes, extracted pages, generated HTML, thumbnails and caches remain
+excluded from backup. Source and decompression limits for the new formats are
+listed in [format-verification.md](format-verification.md); EPUB/backup limits
+are unchanged.
 
 Known paths are references, including foreign-platform paths. Accessibility is
 separate from verified identity. Locate checks the full SHA-256 and updates the
@@ -40,7 +61,14 @@ Failure to find a path does not establish whether a file was moved or deleted.
 The Notebook reads stored quotations, notes, locations and structural metadata.
 Stored outline records retain optional stable IDs, ordered depths, exact
 destinations and publisher labels. Restore validates their types, uniqueness
-and bounds, including finite PDF destination rectangles. This metadata remains
+and bounds, including finite PDF destination rectangles. FB2 anchors carry
+`kind:fb2`, `version:1`, a stable section identity/index and CFI. Comic anchors
+carry `kind:comic`, `version:1`, the exact logical format, zero-based page index
+and hashed logical page identity. Optional within-page position and region
+rectangles use normalized oriented intrinsic-image coordinates. Regions require
+finite positive geometry wholly within one page; text/format mismatches are
+rejected. Bookmark deduplication is page-wide and independent of region notes.
+Notebook ordering and Markdown references use these semantic locations. This metadata remains
 reading data; regenerable page previews are not another persistence authority.
 
 Move Book operates on the displayed physical source path. Its durable

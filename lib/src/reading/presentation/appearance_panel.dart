@@ -26,13 +26,14 @@ class ReadingAppearanceControls extends StatefulWidget {
     required this.onSaveDefaults,
     this.defaults = false,
     this.noText = false,
+    this.comic = false,
   });
   final Map<String, dynamic> preferences;
   final TypographyCapabilities capabilities;
   final ReadingFontService? fonts;
   final ValueChanged<bool>? onFontChooserChanged;
   final int fontChooserEscape;
-  final bool pdf, defaults, noText;
+  final bool pdf, comic, defaults, noText;
   final Future<void> Function(Map<String, dynamic>) onChanged;
   final Future<void> Function() onReset, onSaveDefaults;
   @override
@@ -249,16 +250,23 @@ class _ReadingAppearanceControlsState extends State<ReadingAppearanceControls> {
           ),
         BusyBooksGroupedList(
           children: [
-            choices('color', l.pageColor, [
-              ('system', l.system),
-              ('light', l.light),
-              ('dark', l.dark),
-              ('sepia', l.sepia),
-            ]),
+            if (!widget.comic)
+              choices('color', l.pageColor, [
+                ('system', l.system),
+                ('light', l.light),
+                ('dark', l.dark),
+                ('sepia', l.sepia),
+              ]),
             if (widget.capabilities.textMetrics || widget.pdf)
               choices('flow', l.readingMode, [
                 ('paginated', l.paginated),
                 ('scrolled', l.continuous),
+              ]),
+            if (widget.comic)
+              choices('direction', l.readingDirection, [
+                ('auto', l.directionAuto),
+                ('ltr', l.directionLtr),
+                ('rtl', l.directionRtl),
               ]),
             BusyBooksSwitchRow(
               title: l.twoPages,
@@ -401,38 +409,47 @@ class AppearancePanel extends ConsumerStatefulWidget {
 }
 
 class _AppearancePanelState extends ConsumerState<AppearancePanel> {
-  bool pdfDefaults = false;
+  String defaultsKey = 'reading';
   @override
   Widget build(BuildContext context) {
     ref.watch(readerControllerProvider);
     final settings = ref.watch(appSettingsControllerProvider);
     final reader = ref.read(readerControllerProvider.notifier),
-        pdf = widget.defaults ? pdfDefaults : reader.book?.format == 'pdf';
-    final key = pdf ? 'pdfReading' : 'reading';
+        pdf = widget.defaults
+            ? defaultsKey == 'pdfReading'
+            : reader.book?.format == 'pdf',
+        comic = widget.defaults
+            ? defaultsKey == 'comicReading'
+            : reader.regionNotes;
+    final key = widget.defaults ? defaultsKey : reader.appearanceDefaultsKey;
     final p = widget.defaults
         ? (settings.data[key] as Map).cast<String, dynamic>()
         : reader.appearance;
     return Column(
       children: [
         if (widget.defaults)
-          BusyBooksComboRow<bool>(
+          BusyBooksComboRow<String>(
             title: context.l10n.reading,
-            values: const [false, true],
-            selected: pdfDefaults,
-            labelFor: (v) =>
-                v ? context.l10n.pdfDefaults : context.l10n.reflowableDefaults,
-            onSelected: (v) => setState(() => pdfDefaults = v),
+            values: const ['reading', 'pdfReading', 'comicReading'],
+            selected: defaultsKey,
+            labelFor: (v) => v == 'pdfReading'
+                ? context.l10n.pdfDefaults
+                : v == 'comicReading'
+                ? context.l10n.comicDefaults
+                : context.l10n.reflowableDefaults,
+            onSelected: (v) => setState(() => defaultsKey = v),
           ),
         Expanded(
           child: ReadingAppearanceControls(
             preferences: p,
             capabilities: widget.defaults
-                ? (pdf
+                ? (pdf || comic
                       ? TypographyCapabilities.none
                       : TypographyCapabilities.reflowable)
                 : reader.typographyCapabilities,
             fonts: ref.read(readingFontServiceProvider),
             pdf: pdf,
+            comic: comic,
             defaults: widget.defaults,
             onChanged: (v) => widget.defaults
                 ? ref
@@ -448,7 +465,11 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
                       .read(appSettingsControllerProvider.notifier)
                       .updateReadingDefaults(
                         key,
-                        pdf ? defaultPdfAppearance : defaultReadingAppearance,
+                        pdf
+                            ? defaultPdfAppearance
+                            : comic
+                            ? defaultComicAppearance
+                            : defaultReadingAppearance,
                       )
                 : reader.resetAppearance(),
             onSaveDefaults: () => reader.setAppearance({}, defaults: true),

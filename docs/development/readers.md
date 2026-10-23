@@ -5,8 +5,10 @@ EPUB uses [Foliate.js](https://github.com/johnfactotum/foliate-js) pinned to
 reflow paginator, fixed-layout renderer, CFI resolver, text walker, search and
 overlayer are used directly. The upstream project documents both renderer
 interfaces and has no stable release/API promise; a pinned vendored revision
-avoids an unreviewed runtime update. Only EPUB 3 reaches the renderer. Its demo,
-other-format parsers and browser ZIP loader are not application dependencies.
+avoids an unreviewed runtime update. EPUB 2 and 3 use this loader. FB2 and comics
+construct book objects through its documented book interface and share Foliate
+mounting, navigation and layout. Its demo, generic format dispatch and browser
+ZIP loader are not application dependencies.
 
 PDF uses [Mozilla PDF.js](https://mozilla.github.io/pdf.js/getting_started/)
 5.5.207, build `527964698` (Apache-2.0), directly rather than Foliate's
@@ -23,8 +25,9 @@ surfaces under Xvfb: reflowable EPUB, fixed-layout EPUB and text PDF each report
 `opened=1 location=1 search=1`. This is smoke evidence only. It does not establish
 selection, rendered annotation attachment, accessibility, image-only PDF or the
 full application workflows. Windows tests failed before compilation in that
-run; WebView2 execution remains unverified. The mandatory engine-selection gate
-remains unfulfilled until the remaining native checks in verification.md execute.
+run; WebView2 execution remains unverified. Current Linux format acceptance and
+the exact remaining Windows/Snap gates are recorded in
+[format-verification.md](format-verification.md).
 
 ## Host and locations
 
@@ -48,21 +51,68 @@ retain the active side on same-spread jumps, and honor resolved text ranges for
 selection, scroll and resume at zoom. `tools/fixed_layout_probe.mjs` exercises
 these navigation paths against the actual renderer with a controlled DOM; it
 does not establish native selection or layout acceptance.
-`fixed-layout.js` is the only modified vendored implementation file.
+The two modified vendor files are `epub.js` (manifest fallbacks, DTBook, EPUB 2
+MIME aliases and styled XML islands) and `fixed-layout.js` (these existing fixes, safe failed navigation and
+direction rebuilding). All other Foliate files remain at the recorded revision.
+
+EPUB 2 inspection accepts an OPF 2 package and reuses NCX, nested navigation,
+page lists, guide references and older metadata/cover handling. Image covers and
+XHTML cover pages are distinguished. UTF-8 and UTF-16 XML use the same decoding
+rules in inspection and rendering. Manifest fallback chains retain original
+spine CFIs while mapping navigation/resource destinations to the supported
+target; missing targets and cycles fail clearly. `dtbook.mjs` adapts EPUB-contained
+DTBook to sanitized XHTML while preserving its element tree, IDs, links, notes,
+images, stylesheet references and page markers. It does not open standalone DAISY.
+EPUB-contained `text/x-oeb1-document`/`text/x-oeb1-css` aliases are normalized;
+`fallback-style` XML islands retain their namespaces and IDs in a deterministic
+XHTML shell using the manifest stylesheet. This same tree drives search and CFI
+resolution. Normative fixture/schema checks and EPUBCheck profile exceptions
+are documented in [format-verification.md](format-verification.md).
+
+FB2 inspection/preparation validates FictionBook's namespace and decodes UTF-8,
+UTF-16 or Windows-1251. ZIP wrappers must contain exactly one eligible FB2 file.
+`fb2_book.dart` creates a bounded, sanitized, deterministic section tree once.
+`prepared_book.mjs` uses that exact tree for rendering, search, selection,
+narration and range resolution. The semantic format remains FB2. All emission
+paths share a version-1 FB2 locator with the stable `body:N/part:N` identity,
+section index and validated CFI. Footnote documents use the same structure and
+loader, including embedded images, backlinks and restoration of note annotations.
+
+CBZ and CBR share `comic_book.mjs` and Foliate's fixed-layout renderer. Only
+archive decoding differs. ZIP streams entries to owned files; a bundled UnRAR
+7.21 worker decodes RAR4/RAR5, including common solid archives. It is a separate,
+killable process with bounded memory/output and no archive-controlled extraction
+paths. License, unsupported profiles, measured limits and cancellation evidence
+are in [format-verification.md](format-verification.md). No external executable
+is searched on PATH, and no decoder is downloaded at runtime.
+
+Comic page identity is the SHA-256 of its original logical archive path, ordered
+by numeric runs and Unicode scalar values with an exact-name tie breaker. Case
+distinctions survive Windows caching. ComicInfo is optional; enumerated pages
+determine the count. Static JPEG, PNG and WebP are supported. Bad/unsupported
+pages fail rather than disappearing and renumbering saved annotations. Image
+orientation defines intrinsic dimensions and normalized region geometry. The
+reader explicitly revokes departed page Blob URLs, cancels pending loads and
+retains at most two full pages after navigation (old/new spreads coexist while
+loading). Thumbnail scheduling/cache bounds
+remain shared; only bounded thumbnail previews cross the native channel.
 
 PDF stores page identity/reference and PDF-coordinate position/selection
 geometry. Search maps normalized excerpts back to text-layer offsets. Resizing,
 zoom and rotation regenerate viewports without changing saved geometry. The
 annotation sidebar and Markdown export share a comparator using spine/CFI order
-or PDF page/text offsets. Actual rendered attachment, boundary selection and
+or PDF/comic page identity and text/region offsets. Actual rendered attachment, boundary selection and
 native accessibility require execution, not round-trip storage tests.
 
 ## Shared typography capabilities
 
 The active adapter reports behavior capabilities for font-family replacement and
 text metrics after inspecting the opened layout. Shared preferences and controls
-use those capabilities; loading/failed readers report none. Reflowable EPUB is
-the first capable renderer. Fixed-layout EPUB and PDF preserve original fonts.
+use those capabilities; loading/failed readers report none. Reflowable EPUB and
+FB2 support typography. Fixed-layout EPUB, PDF and comics preserve original fonts.
+Comic capabilities enable page navigation, thumbnails and region notes while
+disabling publication text search, selection, dictionary and narration. Comic
+view defaults are separate from PDF defaults; FB2 uses reflowable defaults.
 Native discovery, accurate raster previews, private local FontFace aliases,
 unavailable choices, persistence and reflow ownership are documented in
 [typography.md](typography.md). Font application adds no publication-controlled
@@ -70,7 +120,7 @@ file endpoint or remote permission and changes no vendored implementation.
 
 ## Local resource boundary
 
-The worker validates EPUB ZIP metadata, CRC and resource limits before publishing
+The worker validates publication/archive metadata, integrity and resource limits before publishing
 a disposable resource cache from the verified original. Original publication names remain in a manifest;
 physical resource filenames are SHA-256 hashes of those names, preserving case
 distinctions on Windows and avoiding encoded/reserved-path extraction. Foliate
@@ -97,10 +147,10 @@ checks; changing the manifest alone does not establish compatibility.
 ## Direct-file workspace integration
 
 Both native hosts receive `path` (the original publication), `cacheDirectory`
-(the owned disposable EPUB resource directory) and a reader `session`. They no
+(the owned disposable publication resource directory) and a reader `session`. They no
 longer derive cache locations from a private book-copy directory. `/publication`
 serves the original PDF; EPUB book-index/resource requests serve the verified
-cache. The adapter reports its session with every event so a replaced surface
+cache. FB2/comic book-index and resource requests use these same endpoints. The adapter reports its session with every event so a replaced surface
 cannot attach positions to the next book. Obsolete native initialization futures
 also cannot close or replace the active reader; WebView2 initialization is
 serialized and close cancels a pending result. Reading data remains keyed by content
@@ -126,7 +176,7 @@ permission. PDF fits use each page's intrinsic geometry/rotation.
 sizes, orientations and intrinsic rotation (4,593 bytes). Use it alongside
 text.pdf and image-only.pdf for fit/zoom/rotation checks. Executable pure geometry
 checks do not establish native text/canvas alignment. Native acceptance remains
-listed separately in verification.md.
+listed separately in [format-verification.md](format-verification.md).
 
 ## Selection search and online lookup
 

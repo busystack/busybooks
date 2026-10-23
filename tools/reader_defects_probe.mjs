@@ -10,7 +10,7 @@ const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('..
 function adapter(){
   const events=[]
   const content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
-  const context=vm.createContext({...typographyUtilities,URL,console,Uint8Array,setTimeout,validPage,requestAnimationFrame:f=>f(),
+  const context=vm.createContext({...typographyUtilities,AbortController,URL,console,Uint8Array,setTimeout,validPage,requestAnimationFrame:f=>f(),
     pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},
     document:{querySelectorAll:()=>[],querySelector:()=>content,addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}},
     window:{location:{href:'https://busybooks.local/?session=test'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}}})
@@ -78,4 +78,21 @@ for(const outcome of ['failure','cancelled']){
   assert.equal(vm.runInContext('pages[1].element.hidden',context),true)
   assert.equal(events.some(e=>e.type==='location'),false)
 }
-console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry and correlated Go To outcomes; controlled adapter APIs'}))
+for(const format of ['epub','fb2']){
+  const {context,events}=adapter(),cfi='epubcfi(/6/2!/4/2/1:0)'
+  const range={startContainer:{nodeType:1,parentElement:null,getAttribute:()=>null,getAttributeNS:()=>null}}
+  const sectionDocument={getSelection:()=>({rangeCount:1,isCollapsed:false,getRangeAt:()=>range,toString:()=>'A durable passage'})}
+  Object.assign(context,{format,range,cfi,performance:{now:()=>0},clearTimeout,Node:{ELEMENT_NODE:1},DOMParser:class{parseFromString(){return sectionDocument}},XMLSerializer:class{serializeToString(){return ''}},
+    publication:{book:{sections:[{identity:'body:0/part:0',createDocument:async()=>sectionDocument}]},renderer:{getContents:()=>[{index:0,doc:sectionDocument}]},
+      // The visible range already matches: no browser selectionchange is sent.
+      select:async()=>{},getProgressOf:()=>({}),getCFI:()=>cfi}})
+  vm.runInContext('activeFormat=format;selection=null;view=publication;safeDocument=x=>x;epubNavigation=()=>({index:0,anchor:()=>range});selectionRect=()=>({x:0,y:0,width:1,height:1})',context)
+  await vm.runInContext('gotoEpub({cfi,index:0});',context)
+  vm.runInContext('emitPassage(99)',context)
+  const selected=events.find(e=>e.type==='selection'),passage=events.find(e=>e.type==='passage')
+  assert.equal(selected.text,'A durable passage');assert.equal(passage.text,selected.text)
+  assert.equal(passage.anchor.cfi,cfi);assert.equal(passage.selected,true)
+  assert.equal(events.some(e=>e.settled),false,'programmatic return does not open a selection popover')
+  if(format==='fb2'){assert.equal(passage.anchor.kind,'fb2');assert.equal(passage.anchor.section,'body:0/part:0')}
+}
+console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated Go To outcomes and text assistance after returning from notes; controlled adapter APIs'}))

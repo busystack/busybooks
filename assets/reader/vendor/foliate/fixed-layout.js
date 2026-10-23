@@ -200,6 +200,8 @@ export class FixedLayout extends HTMLElement {
         }
     }
     open(book) {
+        // BusyBooks: rebuilding comic spread order must reload the active side.
+        this.#index = -1
         this.book = book
         const { rendition } = book
         this.spread = rendition?.spread
@@ -273,7 +275,6 @@ export class FixedLayout extends HTMLElement {
             this.#reportLocation(reason)
             return
         }
-        this.#index = index
         const spread = this.#spreads[index]
         if (spread.center) {
             const index = this.book.sections.indexOf(spread.center)
@@ -288,6 +289,8 @@ export class FixedLayout extends HTMLElement {
             const right = { index: indexR, src: srcR }
             await this.#showSpread({ left, right, side })
         }
+        // BusyBooks: a failed page load must not advance the active spread.
+        this.#index = index
         this.#reportLocation(reason)
     }
     async select(target) {

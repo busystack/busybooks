@@ -33,6 +33,10 @@ void checkZipEntryCount(InputStream input) {
     if (data.getUint32(offset, Endian.little) == 0x06054b50 &&
         offset + 22 + data.getUint16(offset + 20, Endian.little) ==
             tail.length) {
+      if (data.getUint16(offset + 4, Endian.little) != 0 ||
+          data.getUint16(offset + 6, Endian.little) != 0) {
+        throw const FormatException('Multipart ZIP archives are unsupported');
+      }
       if (data.getUint16(offset + 10, Endian.little) > 20000) {
         throw const FormatException('Archive has too many entries');
       }
@@ -45,6 +49,7 @@ void checkZipEntryCount(InputStream input) {
 void validateZipDirectory(
   ZipDirectory directory, {
   int maximumTotal = 1024 * 1024 * 1024,
+  int maximumEntry = 256 * 1024 * 1024,
 }) {
   if (directory.fileHeaders.length > 20000) {
     throw const FormatException('Archive has too many entries');
@@ -56,10 +61,15 @@ void validateZipDirectory(
     if (name.isEmpty ||
         name.contains('\\') ||
         name.contains(':') ||
+        name.contains('\u0000') ||
         name.startsWith('/') ||
         name.split('/').contains('..') ||
         p.posix.normalize(name) != name.replaceAll(RegExp(r'/$'), '') ||
-        ((header.externalFileAttributes >> 16) & 0xf000) == 0xa000 ||
+        ![
+          0,
+          0x8000,
+          0x4000,
+        ].contains((header.externalFileAttributes >> 16) & 0xf000) ||
         !names.add(name)) {
       throw const FormatException('Unsafe or duplicate archive path');
     }
@@ -69,8 +79,11 @@ void validateZipDirectory(
     if (![0, 8].contains(header.compressionMethod)) {
       throw const FormatException('Unsupported archive compression');
     }
+    if (name.endsWith('/') && header.uncompressedSize != 0) {
+      throw const FormatException('Archive directory entries must be empty');
+    }
     total += header.uncompressedSize;
-    if (header.uncompressedSize > 256 * 1024 * 1024 || total > maximumTotal) {
+    if (header.uncompressedSize > maximumEntry || total > maximumTotal) {
       throw const FormatException('Archive resource limit exceeded');
     }
   }
@@ -102,11 +115,14 @@ Uint8List readZipEntry(ZipFileHeader header) {
   return bytes;
 }
 
-Archive validatedArchive(Uint8List bytes) {
+Archive validatedArchive(
+  Uint8List bytes, {
+  int maximumTotal = 1024 * 1024 * 1024,
+}) {
   final input = InputMemoryStream(bytes);
   checkZipEntryCount(input);
   final directory = ZipDirectory()..read(input);
-  validateZipDirectory(directory);
+  validateZipDirectory(directory, maximumTotal: maximumTotal);
   final archive = Archive();
   for (final header in directory.fileHeaders) {
     final data = readZipEntry(header);

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-fictionbook+xml"><comment>FictionBook</comment><glob pattern="*.fb2"/></mime-type>
+  <mime-type type="application/x-zip-compressed-fb2"><comment>Compressed FictionBook</comment><glob pattern="*.fb2.zip"/><glob pattern="*.fbz"/></mime-type>
+  <mime-type type="application/vnd.comicbook+zip"><comment>ZIP comic book</comment><glob pattern="*.cbz"/></mime-type>
+  <mime-type type="application/vnd.comicbook-rar"><comment>RAR comic book</comment><glob pattern="*.cbr"/></mime-type>
+</mime-info>

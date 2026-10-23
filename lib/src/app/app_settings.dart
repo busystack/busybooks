@@ -122,7 +122,9 @@ class AppSettingsController extends Notifier<AppSettings> {
     String key,
     Map<String, dynamic> appearance,
   ) async {
-    if (key != 'reading' && key != 'pdfReading') throw ArgumentError.value(key);
+    if (key != 'reading' && key != 'pdfReading' && key != 'comicReading') {
+      throw ArgumentError.value(key);
+    }
     final before = state;
     final operation = update({key: normalizeReadingAppearance(appearance)});
     final snapshot = state;

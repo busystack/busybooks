@@ -25,6 +25,10 @@ const defaultPdfAppearance = <String, dynamic>{
   'flow': 'scrolled',
   'zoom': 'fit-width',
 };
+const defaultComicAppearance = <String, dynamic>{
+  ...defaultReadingAppearance,
+  'direction': 'auto',
+};
 const busyBooksSettingsDefaults = <String, dynamic>{
   'schema': 1,
   'theme': 'system',
@@ -34,6 +38,7 @@ const busyBooksSettingsDefaults = <String, dynamic>{
   'sidebar': true,
   'reading': defaultReadingAppearance,
   'pdfReading': defaultPdfAppearance,
+  'comicReading': defaultComicAppearance,
   'readerSidebar': false,
   'readerPanel': 'outline',
   'highlightColor': 'yellow',
@@ -63,6 +68,7 @@ Map<String, dynamic> normalizeReadingAppearance(Object? value) {
     }
   }
   for (final field in {
+    'direction': ['auto', 'ltr', 'rtl'],
     'align': ['start', 'justify', 'center'],
     'color': ['system', 'light', 'dark', 'sepia'],
     'flow': ['paginated', 'scrolled'],
@@ -106,6 +112,9 @@ Map<String, dynamic> normalizeAppPreferences(Map<String, dynamic> value) {
   result['pdfReading'] = value['pdfReading'] is Map
       ? normalizeReadingAppearance(value['pdfReading'])
       : {...defaultPdfAppearance};
+  result['comicReading'] = value['comicReading'] is Map
+      ? normalizeReadingAppearance(value['comicReading'])
+      : {...defaultComicAppearance};
   if ([
     'outline',
     'books',

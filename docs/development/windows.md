@@ -30,7 +30,13 @@ return of these Windows paths remain unverified until Windows execution.
 
 The build fetches Microsoft.Web.WebView2 SDK 1.0.3537.50 from NuGet. Install the
 Microsoft Evergreen WebView2 Runtime and Microsoft Visual C++ x64 runtime. Keep
-the complete Release directory together, including SQLite and plugin DLLs.
+the complete Release directory together, including SQLite, plugin DLLs and
+`busybooks_comic_archive.exe`. CMake builds the RAR-only helper from the local
+checksum-pinned UnRAR source archive and installs its full license and
+acknowledgements under `share/licenses/unrar`. No external decoder installation
+or runtime download is required. The Win32 helper uses wide paths, a memory-limited
+Job Object and the same bounded streaming callbacks as Linux; execution on a real
+Windows host remains a required gate.
 
 ```powershell
 flutter pub get --enforce-lockfile
@@ -48,7 +54,9 @@ build\windows\x64\runner\Release\busybooks.exe test\fixtures\reflowable.epub
 ```
 
 Run without an argument for Home. Create a collection using its action and
-open saved collections through Open Collection. Open EPUB/PDF files through any file entry point.
+open saved collections through Open Collection. Open PDF, EPUB 2/3, raw/wrapped
+FB2, CBZ and CBR through every file entry point. `.kepub.epub` follows EPUB;
+standalone `.kepub`, generic ZIP and generic RAR are not registered book formats.
 Test originals from two different directories and both internal/external
 references. For an offline distribution, supply the Microsoft-signed x64 runtime
 installers:
@@ -61,6 +69,9 @@ iscc packaging/windows/busybooks.iss
 The optional per-user Inno installer runs both installers before launch. Portable
 ZIP users install the runtimes first. File-association tasks are optional. Test
 only in disposable profiles/VMs; repository builds do not replace installations.
+Associations cover `.epub`, `.pdf`, `.fb2`, `.fbz`, `.cbz` and `.cbr`. Windows
+matches the final extension, so `.fb2.zip` uses Open Book, drops or command-line
+opening; BusyBooks does not claim generic `.zip` or `.rar` associations.
 
 ## Evidence boundary
 
@@ -76,8 +87,8 @@ were skipped. `a2036e5` corrected host dispatch, but that earlier local fix also
 had no Windows CI result. Neither result validates the new workspace changes.
 No push/rerun/publication was performed.
 
-Run the unchanged Windows CI job on the corrected commit, then execute the
-interactive matrix in verification.md: original-file opening without copies,
+Run the Windows CI job on the current commit, then execute the
+interactive matrix in [format-verification.md](format-verification.md): original-file opening without copies,
 independent collections/Recent, modified/missing files and identity-checked
 relocation, shared annotations and positions, reference-only backup/restore,
 WebView2 rendering/selection/locations, UI Automation text, keyboard/focus/modals,

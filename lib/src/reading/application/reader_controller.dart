@@ -13,6 +13,7 @@ import '../fonts/reading_font_service.dart';
 import '../../workspace/workspace_controller.dart';
 import '../../workspace/workspace_model.dart';
 import '../../library/domain/book.dart';
+import '../../library/data/record_validation.dart' show validateAnchor;
 import '../../library/domain/annotation_limits.dart';
 import '../domain/reading_navigation.dart';
 import '../domain/publication_outline.dart';
@@ -367,6 +368,9 @@ class ReaderController extends Notifier<ReaderState> {
       rethrow;
     }
     _openRevision++;
+    if (_preparationOwner != null) {
+      await ref.read(readingDataStoreProvider).call('cancelPrepare');
+    }
     _startupTimer?.cancel();
     if (!state.ready) {
       _session = 'suspended:${++_generation}';
@@ -377,6 +381,23 @@ class ReaderController extends Notifier<ReaderState> {
       await flush();
     } catch (_) {
       /* pending positions stay protected in this controller */
+    }
+  }
+
+  bool get textInteraction => book?.textInteraction == true;
+  bool get pageNavigation => book?.pageBased == true;
+  bool get regionNotes => book?.comic == true;
+  String get appearanceDefaultsKey => regionNotes
+      ? 'comicReading'
+      : book?.format == 'pdf'
+      ? 'pdfReading'
+      : 'reading';
+  Future<void> addNote() async {
+    if (regionNotes) {
+      await dismissPopover();
+      await send('beginRegion');
+    } else {
+      await showPopover('selection', extra: {'editing': true});
     }
   }
 
@@ -421,6 +442,20 @@ class ReaderController extends Notifier<ReaderState> {
   String? _sourcePath;
   int _generation = 0;
   int _openRevision = 0;
+  int? _preparationOwner;
+  int _preparationSerial = 0;
+  Future<dynamic> _preparePublication(Map<String, dynamic> args) async {
+    final store = ref.read(readingDataStoreProvider),
+        owner = ++_preparationSerial;
+    if (_preparationOwner != null) await store.call('cancelPrepare');
+    _preparationOwner = owner;
+    try {
+      return await store.call('prepare', args);
+    } finally {
+      if (_preparationOwner == owner) _preparationOwner = null;
+    }
+  }
+
   bool _routeVisible = false;
   final _sessionPrefix =
       '${DateTime.now().microsecondsSinceEpoch}${Random.secure().nextInt(0x100000000)}';
@@ -558,9 +593,7 @@ class ReaderController extends Notifier<ReaderState> {
   ];
   Map<String, dynamic> get appearance =>
       book?.appearance ??
-      (ref.read(appSettingsControllerProvider).data[book?.format == 'pdf'
-                  ? 'pdfReading'
-                  : 'reading']
+      (ref.read(appSettingsControllerProvider).data[appearanceDefaultsKey]
               as Map)
           .cast<String, dynamic>();
   AppLocalizations get _labels {
@@ -603,14 +636,11 @@ class ReaderController extends Notifier<ReaderState> {
         : (current.data['paths'] as List?)?.firstOrNull as String?;
     try {
       // Revalidate the original even when reusing a live renderer after routing.
-      final descriptor = await ref.read(readingDataStoreProvider).call(
-        'prepare',
-        {
-          'id': id,
-          'path': path,
-          'validationToken': current.data['validationToken'],
-        },
-      );
+      final descriptor = await _preparePublication({
+        'id': id,
+        'path': path,
+        'validationToken': current.data['validationToken'],
+      });
       if (revision != _openRevision) return;
       if (state.bookId == id && state.ready && _sourcePath == path) {
         await _appearanceTail;
@@ -659,7 +689,8 @@ class ReaderController extends Notifier<ReaderState> {
       if (panel == 'books' &&
               ref.read(workspaceControllerProvider).workspace?.isBook !=
                   false ||
-          panel == 'thumbnails' && current.format != 'pdf') {
+          panel == 'thumbnails' && !current.pageBased ||
+          panel == 'search' && !current.textInteraction) {
         panel = 'outline';
       }
       state = ReaderState(
@@ -670,7 +701,7 @@ class ReaderController extends Notifier<ReaderState> {
         query: remembered.query,
         matches: remembered.matches,
         currentMatch: remembered.currentMatch,
-        searchVisible: remembered.searchVisible,
+        searchVisible: current.textInteraction && remembered.searchVisible,
       );
       _sourcePath = path;
       _session = '$_sessionPrefix${++_generation}';
@@ -787,10 +818,7 @@ class ReaderController extends Notifier<ReaderState> {
     if (_sourcePath != path || state.bookId != id) return;
     final revision = _openRevision;
     try {
-      await ref.read(readingDataStoreProvider).call('prepare', {
-        'id': id,
-        'path': path,
-      });
+      await _preparePublication({'id': id, 'path': path});
     } catch (error) {
       if (revision != _openRevision) return;
       Object issue = error;
@@ -876,6 +904,8 @@ class ReaderController extends Notifier<ReaderState> {
               'navigationInterrupted': labels.navigationInterrupted,
               'footnote': labels.footnote,
               'loadingBook': labels.loadingBook,
+              'regionNote': labels.regionNote,
+              'regionInstructions': labels.regionInstructions,
             },
             'anchor': b.anchor,
             'appearance': initialAppearance,
@@ -984,6 +1014,15 @@ class ReaderController extends Notifier<ReaderState> {
             )
             .firstOrNull;
         if (a != null) await editAnnotation(a, rect: event['rect']);
+      case 'regionSelected':
+        if (!regionNotes || book == null || event['anchor'] is! Map) return;
+        validateAnchor(event['anchor'], book!.format);
+        if (event['anchor']['region'] == null) return;
+        state = state.copy(selection: event);
+        await showPopover(
+          'selection',
+          extra: {'editing': true, 'annotationKind': 'region'},
+        );
       case 'selection':
         state = state.copy(
           selection: event['anchor'] is Map ? event : null,
@@ -1310,8 +1349,9 @@ class ReaderController extends Notifier<ReaderState> {
 
   bool panelAvailable(String value) => switch (value) {
     'books' => ref.read(workspaceControllerProvider).workspace?.isBook == false,
-    'thumbnails' => book?.format == 'pdf',
-    'outline' || 'annotations' || 'search' => true,
+    'thumbnails' => pageNavigation,
+    'search' => textInteraction,
+    'outline' || 'annotations' => true,
     _ => false,
   };
   Future<void> panel(String value) async {
@@ -1384,6 +1424,7 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   void search(String query, {bool immediate = false}) {
+    if (regionNotes) return;
     _searchTimer?.cancel();
     final revision = ++_searchRevision;
     if (state.ready) unawaited(send('cancelSearch', {'queryId': revision}));
@@ -1442,7 +1483,7 @@ class ReaderController extends Notifier<ReaderState> {
   Set<int> _thumbnailWindow = {};
   void requestThumbnailWindow(Iterable<int> pages) {
     final next = pages.where((p) => p >= 0 && p < state.pages).take(12).toSet();
-    if (next.isNotEmpty && (!state.ready || book?.format != 'pdf')) return;
+    if (next.isNotEmpty && (!state.ready || !pageNavigation)) return;
     if (next.length == _thumbnailWindow.length &&
         next.containsAll(_thumbnailWindow)) {
       return;
@@ -1459,7 +1500,7 @@ class ReaderController extends Notifier<ReaderState> {
         .toSet();
 
     state = state.copy(thumbnailPending: needed);
-    if (!state.ready || book?.format != 'pdf') return;
+    if (!state.ready || !pageNavigation) return;
     unawaited(
       send('thumbnailWindow', {
         'pages': needed.toList(),
@@ -1702,6 +1743,8 @@ class ReaderController extends Notifier<ReaderState> {
             'appearance': appearance,
             'typography': typographyCapabilities.toJson(),
             'pdf': book?.format == 'pdf',
+            'pageNavigation': pageNavigation,
+            'comic': regionNotes,
             'pages': state.pages,
             'labels': state.labels,
             'toc': state.toc,
@@ -1852,7 +1895,9 @@ class ReaderController extends Notifier<ReaderState> {
         'id': 'annotation-$time',
         'kind': 'annotation',
         'bookId': state.bookId,
-        'annotationKind': 'highlight',
+        'annotationKind': _popoverSelection!['anchor']['region'] != null
+            ? 'region'
+            : 'highlight',
         'anchor': _popoverSelection!['anchor'],
         'text': _popoverSelection!['text'] ?? '',
         'note': '',
@@ -1948,7 +1993,9 @@ class ReaderController extends Notifier<ReaderState> {
           return; // A deleted editor cannot become a creation.
         }
         await annotation(
-          'highlight',
+          _popoverSelection?['anchor']?['region'] != null
+              ? 'region'
+              : 'highlight',
           color: event['color'] as String?,
           note: event['note'] as String? ?? '',
           passage: _popoverSelection,
@@ -2074,6 +2121,9 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> close() async {
     final revision = ++_openRevision;
+    if (_preparationOwner != null) {
+      await ref.read(readingDataStoreProvider).call('cancelPrepare');
+    }
     _rememberSidebar();
     requestThumbnailWindow(const []);
     final session = _session, presentation = _presentation;
@@ -2205,7 +2255,7 @@ class ReaderController extends Notifier<ReaderState> {
         _suspended) {
       return Future.error(StateError(_labels.fontApplyFailed));
     }
-    final key = book?.format == 'pdf' ? 'pdfReading' : 'reading';
+    final key = appearanceDefaultsKey;
     final value = (ref.read(appSettingsControllerProvider).data[key] as Map)
         .cast<String, dynamic>();
     return _queueAppearance(_session, state.bookId!, value, reset: true);
@@ -2219,7 +2269,7 @@ class ReaderController extends Notifier<ReaderState> {
     bool reset = false,
   }) {
     final revision = defaults ? _appearanceRevision : ++_appearanceRevision;
-    final defaultsKey = book?.format == 'pdf' ? 'pdfReading' : 'reading';
+    final defaultsKey = appearanceDefaultsKey;
     if (!defaults) {
       _appearanceIntent = (session: session, id: id, value: next);
       // Release superseded renderer waiters. The adapter independently cancels
@@ -2370,8 +2420,10 @@ class ReaderController extends Notifier<ReaderState> {
     String note = '',
     Map<String, dynamic>? passage,
   }) async {
-    final selected = kind == 'highlight' ? (passage ?? state.selection) : null;
-    if (kind == 'highlight' && selected == null) return;
+    final selected = kind == 'highlight' || kind == 'region'
+        ? (passage ?? state.selection)
+        : null;
+    if ((kind == 'highlight' || kind == 'region') && selected == null) return;
     final id = state.bookId,
         anchor = selected?['anchor'] ?? state.location['anchor'];
     final reference =

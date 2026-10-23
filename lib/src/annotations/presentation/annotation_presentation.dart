@@ -28,7 +28,7 @@ String annotationReference(
   Book? book,
 }) {
   final page = a.anchor['page'];
-  if (page is int && book?.format == 'pdf') {
+  if (page is int && book?.pageBased == true) {
     return describePublicationPage(
       context.l10n,
       PublicationPageReference.pdf(

@@ -2,6 +2,7 @@ import 'book_paths.dart';
 import 'cover_image.dart';
 import '../domain/annotation_limits.dart';
 import '../../core/typography.dart';
+import '../domain/book_format.dart';
 
 final bookIdentity = RegExp(r'^[a-f0-9]{64}$');
 final collectionIdentity = RegExp(r'^collection:[a-f0-9]{32}$');
@@ -37,7 +38,70 @@ void finiteNumber(
 
 void validateAnchor(dynamic value, String format) {
   if (value is! Map) invalid('anchor');
-  if (format == 'epub') {
+  if (format == 'fb2') {
+    if (value.containsKey('region') ||
+        value.containsKey('position') ||
+        value.containsKey('pageId')) {
+      invalid('FB2 text locator');
+    }
+    if (value['kind'] != 'fb2' ||
+        value['version'] != 1 ||
+        value['index'] is! int ||
+        value['index'] < 0 ||
+        value['index'] >= 10000 ||
+        value['section'] is! String ||
+        !RegExp(
+          r'^body:(?:0|[1-9]\d{0,5})/part:(?:0|[1-9]\d{0,3})$',
+        ).hasMatch(value['section'] as String)) {
+      invalid('FB2 locator');
+    }
+    validateAnchor({...value, 'kind': 'epub'}, 'epub');
+    final base = RegExp(
+      r'^epubcfi\(/6/(\d+)(?:\[|!|\))',
+    ).firstMatch(value['cfi'] as String);
+    if (base == null || int.parse(base[1]!) != (value['index'] + 1) * 2) {
+      invalid('FB2 section/CFI mismatch');
+    }
+  } else if (isComicFormat(format)) {
+    if (value['kind'] != 'comic' ||
+        value['format'] != format ||
+        value['version'] != 1 ||
+        value['page'] is! int ||
+        value['page'] < 0 ||
+        value['page'] >= 10000 ||
+        value['pageId'] is! String ||
+        !bookIdentity.hasMatch(value['pageId'] as String) ||
+        value.containsKey('cfi') ||
+        value.containsKey('index') ||
+        value.containsKey('segments')) {
+      invalid('comic locator');
+    }
+    if (value['position'] != null) {
+      final position = value['position'];
+      if (position is! List || position.length != 2) invalid('comic position');
+      for (final coordinate in position) {
+        finiteNumber(coordinate, 'comic position', min: 0, max: 1);
+      }
+    }
+    if (value['region'] != null) {
+      final region = value['region'];
+      if (region is! List || region.length != 4) invalid('image region');
+      for (final coordinate in region) {
+        finiteNumber(coordinate, 'image region', min: 0, max: 1);
+      }
+      if (region[2] <= 0 ||
+          region[3] <= 0 ||
+          region[0] + region[2] > 1.000000001 ||
+          region[1] + region[3] > 1.000000001) {
+        invalid('image region bounds');
+      }
+    }
+  } else if (format == 'epub') {
+    if (value.containsKey('region') ||
+        value.containsKey('position') ||
+        value.containsKey('pageId')) {
+      invalid('EPUB text locator');
+    }
     final cfi = value['cfi'];
     boundedText(cfi, 'EPUB CFI', limit: 32768, empty: false);
     if (value['kind'] != null && value['kind'] != 'epub') {
@@ -75,13 +139,23 @@ void validateAnchor(dynamic value, String format) {
     if (assertion || escaped) invalid('CFI assertion');
     final range = stripped.toString().split(',');
     if (range.length != 1 && range.length != 3) invalid('CFI range');
-    final pathPattern = RegExp(
-      r'^/[1-9]\d*(?:/[1-9]\d*)*(?::\d+)?(?:~\d+(?:\.\d+)?)?(?:@\d+(?:\.\d+)?:\d+(?:\.\d+)?)?(?:;s=[ab])?$',
-    );
-    for (final part in range) {
+    const steps = r'(?:/(?:0|[1-9]\d*))+';
+    const offset =
+        r'(?::\d+)?(?:~\d+(?:\.\d+)?)?(?:@\d+(?:\.\d+)?:\d+(?:\.\d+)?)?(?:;s=[ab])?';
+    final pathPattern = RegExp('^$steps$offset\$');
+    // CFI local_path permits an empty range endpoint (the common parent),
+    // offset-only endpoints, and virtual element step 0. Foliate emits these
+    // for real DOM ranges, including an FB2 body's title-only first section.
+    final relativePattern = RegExp('^(?:$steps)?$offset\$');
+    for (var rangeIndex = 0; rangeIndex < range.length; rangeIndex++) {
+      final part = range[rangeIndex];
       final paths = part.split('!');
-      if (paths.length > 2 || paths.any((p) => !pathPattern.hasMatch(p))) {
-        invalid('CFI path');
+      if (paths.length > 2) invalid('CFI path');
+      for (var pathIndex = 0; pathIndex < paths.length; pathIndex++) {
+        final pattern = rangeIndex > 0 && pathIndex == 0
+            ? relativePattern
+            : pathPattern;
+        if (!pattern.hasMatch(paths[pathIndex])) invalid('CFI path');
       }
       for (final match in RegExp(r'\d+(?:\.\d+)?').allMatches(part)) {
         if ((num.tryParse(match[0]!) ?? 1000000001) > 1000000000) {
@@ -102,7 +176,10 @@ void validateAnchor(dynamic value, String format) {
     if (value['page'] is! int ||
         value['page'] < 0 ||
         value['page'] > 1000000 ||
-        value.containsKey('cfi')) {
+        value.containsKey('cfi') ||
+        value.containsKey('region') ||
+        value.containsKey('pageId') ||
+        value.containsKey('section')) {
       invalid('PDF page');
     }
     if (value['y'] != null) {
@@ -203,6 +280,7 @@ void validateBookAppearance(dynamic appearance) {
     }
   }
   for (final entry in {
+    'direction': ['auto', 'ltr', 'rtl'],
     'align': ['start', 'justify', 'center'],
     'color': ['system', 'light', 'dark', 'sepia'],
     'flow': ['paginated', 'scrolled'],
@@ -232,8 +310,14 @@ void validateBookAppearance(dynamic appearance) {
 void validateBook(Map value) {
   if (value['id'] is! String ||
       !bookIdentity.hasMatch(value['id']) ||
-      !['epub', 'pdf'].contains(value['format'])) {
+      !supportedBookFormats.contains(value['format'])) {
     invalid('book identity');
+  }
+  if (value['originalSuffix'] != null &&
+      (!bookSuffixes.contains(value['originalSuffix']) ||
+          bookFormatForPath('book.${value['originalSuffix']}') !=
+              value['format'])) {
+    invalid('original representation');
   }
   for (final field in ['read', 'added', 'membershipOrder']) {
     if (value[field] != null) validateTimestamp(value[field], field);
@@ -280,12 +364,19 @@ void validateBook(Map value) {
   if (value['pages'] != null &&
       (value['pages'] is! int ||
           value['pages'] < 0 ||
-          value['pages'] > 1000000)) {
+          value['pages'] >
+              (isComicFormat(value['format']) ? 10000 : 1000000))) {
     invalid('page count');
+  }
+  if (isComicFormat(value['format']) &&
+      value['direction'] != null &&
+      !['ltr', 'rtl'].contains(value['direction'])) {
+    invalid('comic reading direction');
   }
   if (value['pageLabels'] != null) {
     if (value['pageLabels'] is! List ||
-        (value['pageLabels'] as List).length > 1000000) {
+        (value['pageLabels'] as List).length >
+            (isComicFormat(value['format']) ? 10000 : 1000000)) {
       invalid('page labels');
     }
     for (final label in value['pageLabels']) {
@@ -335,10 +426,20 @@ void validateAnnotation(Map value, Map book) {
   if (value['id'] is! String ||
       !annotationIdentity.hasMatch(value['id']) ||
       value['bookId'] != book['id'] ||
-      !['highlight', 'bookmark'].contains(value['annotationKind'])) {
+      !['highlight', 'bookmark', 'region'].contains(value['annotationKind'])) {
     invalid('annotation identity/type');
   }
   validateAnchor(value['anchor'], book['format']);
+  if (isComicFormat(book['format'] as String?)) {
+    if (value['annotationKind'] == 'highlight' ||
+        value['text'] != '' ||
+        (value['annotationKind'] == 'region') !=
+            (value['anchor']['region'] != null)) {
+      invalid('comic annotation semantics');
+    }
+  } else if (value['annotationKind'] == 'region') {
+    invalid('region publication');
+  }
   for (final field in ['text', 'note']) {
     boundedText(value[field], field, limit: maxAnnotationTextLength);
   }

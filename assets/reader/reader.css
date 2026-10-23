@@ -20,3 +20,4 @@ dialog.footnote{box-sizing:border-box;max-width:min(720px,90vw);max-height:80vh;
 dialog.footnote article{max-width:100%}
 
 #content.loading{display:grid;place-items:center;font:menu}
+#region-hint{position:fixed;inset:12px 12px auto;padding:10px;background:var(--canvas,#fff);color:var(--foreground,#242424);border:1px solid var(--accent,#3584e4);font:menu;pointer-events:none;z-index:10}

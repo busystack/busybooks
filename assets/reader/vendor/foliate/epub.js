@@ -1,4 +1,5 @@
 import * as CFI from './epubcfi.js'
+import { adaptXMLIsland } from '../../dtbook.mjs'
 
 const NS = {
     CONTAINER: 'urn:oasis:names:tc:opendocument:xmlns:container',
@@ -118,6 +119,16 @@ const pathRelative = (from, to) => {
 }
 
 const pathDirname = str => str.slice(0, str.lastIndexOf('/') + 1)
+
+// BusyBooks: the same adapted tree must drive rendering, search and CFIs.
+const parseContentDocument = (text, item) => {
+    if (item.islandStyle) text = adaptXMLIsland(text,
+        pathRelative(pathDirname(item.href), item.islandStyle), item.requiredNamespace)
+    const doc = new DOMParser().parseFromString(text, item.mediaType)
+    for (const el of doc.querySelectorAll('style[type="text/x-oeb1-css"],link[type="text/x-oeb1-css"]'))
+        el.setAttribute('type', MIME.CSS)
+    return doc
+}
 
 // replace asynchronously and sequentially
 // same technique as https://stackoverflow.com/a/48032528
@@ -640,9 +651,14 @@ class Resources {
         const $$itemref = $$($spine, 'itemref')
 
         this.manifest = $$($manifest, 'item')
-            .map(getAttributes('href', 'id', 'media-type', 'properties', 'media-overlay'))
+            .map(getAttributes('href', 'id', 'media-type', 'properties', 'media-overlay', 'fallback', 'fallback-style', 'required-namespace'))
             .map(item => {
                 item.href = resolveHref(item.href)
+                if (opf.documentElement.getAttribute('version')?.startsWith('2.')) {
+                    if (item.mediaType === 'text/x-oeb1-document') item.mediaType = MIME.XHTML
+                    if (item.mediaType === 'text/x-oeb1-css') item.mediaType = MIME.CSS
+                }
+                if (item.mediaType === "application/x-dtbook+xml") item.mediaType = MIME.XHTML
                 item.properties = item.properties?.split(/\s/)
                 return item
             })
@@ -675,6 +691,25 @@ class Resources {
                 ?.find(ref => ref.type.includes('cover'))?.href)
 
         this.cfis = CFI.fromElements($$itemref)
+    }
+    // BusyBooks: preserve the original spine/CFI identity while resolving the
+    // first supported manifest resource. Missing targets and cycles are errors.
+    resolveFallback(item) {
+        const seen = new Set()
+        while (item) {
+            if (seen.has(item.id)) throw Error('Cyclic EPUB manifest fallback')
+            seen.add(item.id)
+            if ([MIME.XHTML, MIME.HTML, MIME.SVG, 'image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(item.mediaType)) return item
+            if (item.fallbackStyle) {
+                const style = this.getItemByID(item.fallbackStyle)
+                if (!style || style.mediaType !== MIME.CSS || !item.requiredNamespace)
+                    throw Error('Invalid EPUB XML island fallback stylesheet')
+                return { ...item, mediaType: MIME.XHTML, islandStyle: style.href }
+            }
+            if (!item.fallback) throw Error('Unsupported EPUB content without a fallback: ' + item.mediaType)
+            item = this.getItemByID(item.fallback)
+        }
+        throw Error('Missing EPUB manifest fallback target')
     }
     getItemByID(id) {
         return this.manifestById.get(id)
@@ -713,6 +748,7 @@ class Loader {
         this.loadBlob = loadBlob
         this.manifest = resources.manifest
         this.assets = resources.manifest
+        this.resolveFallback = resources.resolveFallback.bind(resources)
         // needed only when replacing in (X)HTML w/o parsing (see below)
         //.filter(({ mediaType }) => ![MIME.XHTML, MIME.HTML].includes(mediaType))
     }
@@ -762,6 +798,7 @@ class Loader {
     // load manifest item, recursively loading all resources as needed
     async loadItem(item, parents = []) {
         if (!item) return null
+        if ((item.fallback || item.fallbackStyle) && ![MIME.XHTML, MIME.HTML, MIME.CSS, MIME.SVG, 'image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(item.mediaType) && !/^(?:font\/|application\/(?:vnd.ms-opentype|font-))/.test(item.mediaType)) item = this.resolveFallback(item)
         const { href, mediaType } = item
 
         const isScript = MIME.JS.test(item.mediaType)
@@ -812,7 +849,7 @@ class Loader {
 
         // parse and replace in HTML
         if ([MIME.XHTML, MIME.HTML, MIME.SVG].includes(mediaType)) {
-            let doc = new DOMParser().parseFromString(str, mediaType)
+            let doc = parseContentDocument(str, item)
             // change to HTML if it's not valid XHTML
             if (mediaType === MIME.XHTML && (doc.querySelector('parsererror')
             || !doc.documentElement?.namespaceURI)) {
@@ -978,13 +1015,16 @@ ${doc.querySelector('parsererror').innerText}`)
         this.transformTarget = this.#loader.eventTarget
         this.sections = this.resources.spine.map((spineItem, index) => {
             const { idref, linear, properties = [] } = spineItem
-            const item = this.resources.getItemByID(idref)
+            const original = this.resources.getItemByID(idref)
+            const item = this.resources.resolveFallback(original)
             if (!item) {
                 console.warn(`Could not find item with ID "${idref}" in manifest`)
                 return null
             }
             return {
                 id: item.href,
+                sourceHref: original.href,
+                contentHref: item.href,
                 load: () => this.#loader.loadItem(item),
                 unload: () => this.#loader.unloadItem(item),
                 createDocument: () => this.loadDocument(item),
@@ -1037,7 +1077,7 @@ ${doc.querySelector('parsererror').innerText}`)
     }
     async loadDocument(item) {
         const str = await this.loadText(item.href)
-        return this.parser.parseFromString(str, item.mediaType)
+        return parseContentDocument(str, item)
     }
     getMediaOverlay() {
         return new MediaOverlay(this, this.#loadXML.bind(this))
@@ -1049,12 +1089,17 @@ ${doc.querySelector('parsererror').innerText}`)
         const [path, hash] = href.split('#')
         const item = this.resources.getItemByHref(decodeURI(path))
         if (!item) return null
-        const index = this.resources.spine.findIndex(({ idref }) => idref === item.id)
+        const target = item.fallback || item.fallbackStyle ? this.resources.resolveFallback(item) : item
+        const index = this.sections.findIndex(section => section.sourceHref === item.href || section.contentHref === target.href)
+        if (index < 0) return null
         const anchor = hash ? doc => getHTMLFragment(doc, hash) : () => 0
         return { index, anchor }
     }
     splitTOCHref(href) {
-        return href?.split('#') ?? []
+        const [path, hash] = href?.split('#') ?? []
+        const item = this.resources.getItemByHref(path)
+        const target = item?.fallback || item?.fallbackStyle ? this.resources.resolveFallback(item) : item
+        return [target?.href ?? path, hash]
     }
     getTOCFragment(doc, id) {
         return doc.getElementById(id)
