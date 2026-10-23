@@ -1,8 +1,8 @@
 # BusyBooks
 
-An offline EPUB 3 and PDF reader for Linux and Windows, with independently
-openable books and database collections. Apache-2.0. Application identity:
-`io.busystack.busybooks`.
+A book reader for Linux and Windows.
+
+Features:
 
 - **Open Book** reads an original EPUB/PDF directly from its filesystem location.
 - **Create Collection** asks for a name and opens a database collection.
@@ -18,45 +18,6 @@ openable books and database collections. Apache-2.0. Application identity:
 A book can belong to multiple collections or none. Positions, annotations and
 appearance follow its SHA-256 identity. Collection removal leaves original files
 and reading data intact. There are no filesystem collection workspaces or imports.
-
-The reader uses one header with Home and compact Previous / location / Next
-navigation. The location opens Go To; the BusyMark-style sidebar view selector
-chooses the active panel. Outline is an expandable
-publication tree with destination page labels; PDF Thumbnails load real page
-previews on demand. Annotations provides filtered quick access to the same
-saved passages and protected notes as Notebook. Search Results uses the single
-header search field; Books stays scoped to an active collection. Selection actions and
-reading appearance use owned Flutter popovers above the publication. The shared
-Main Menu keeps book actions available in Notebook and when header controls
-need more space. Reading/Notebook switching uses the header View selector;
-Main Menu offers a View submenu only while that selector is hidden. It provides
-typography/layout controls, annotations and Markdown/original export. Search in This Book uses the complete selected word or phrase in the existing
-header search and Search Results panel without moving the current passage.
-Look Up shows concise, selectable Wiktionary definitions inside the reader after
-explicit online consent. Open Full Entry deliberately opens the source in the browser. Read-aloud uses installed Speech
-Dispatcher voices on Linux and Windows SAPI voices on Windows.
-
-In Appearance, **Font family** opens a searchable list of local installed families
-and the existing generic categories, with a regular/bold/italic sample. Browsing
-previews a candidate; activating it applies it to the current reflowable book.
-Choosing a family turns off Publisher appearance. Turning Publisher appearance
-back on restores publication styling and remembers your custom family. PDF and
-fixed-layout typography keep their original fonts. Save as Reading Defaults is
-explicit; Settings offers shared Reflowable Reading Defaults and separate PDF
-defaults. Reset Book Appearance removes only that book's override. A saved font
-that is unavailable is retained and explained while a local default is used.
-Fonts are not imported, downloaded or included in reading-data backups. See the
-[typography behavior and platform record](docs/development/typography.md).
-
-Flutter owns application chrome. Theme, controls, commands, settings, Home and
-workspace composition follow BusyMark. Foliate.js renders EPUB and PDF.js renders
-PDF in native WebKitGTK / WebView2 content surfaces.
-
-**Native acceptance remains incomplete.** Filesystem/reading-data workflows and
-headless Flutter tests have executable coverage. Interactive rendering,
-accessibility, speech, installation and Windows acceptance require the checks in
-[verification.md](docs/development/verification.md). Earlier CI results do not
-establish these native outcomes.
 
 ## Build and run
 
@@ -102,13 +63,6 @@ cache on Linux:
 env -u PUB_CACHE flutter pub get --offline --enforce-lockfile
 ```
 
-This repairs expired package paths without changing dependency versions.
-
-After changing Linux runner code, stop the application completely and run it
-again in the IDE. Hot reload and hot restart do not rebuild the native runner.
-The native input regression can be run with
-`xvfb-run -a dbus-run-session -- bash tools/probe_linux_input.sh`.
-
 Current data lives in `reading-data.sqlite`; backups contain reading data and
 references, excluding original books. Historical `library.sqlite` files and
 managed book copies are left untouched and are not inspected. They have no
@@ -122,10 +76,4 @@ reading-data database. See [storage.md](docs/development/storage.md).
 - [Shared typography and local fonts](docs/development/typography.md)
 - [Reader engines and content boundary](docs/development/readers.md)
 - [Books, database collections, backup and recovery](docs/development/storage.md)
-- [Verification and blocked native checks](docs/development/verification.md)
 - [Third-party sources](NOTICE) and licenses under `assets/reader/vendor`
-
-Only DRM-free EPUB 3 and PDF are accepted. EPUB 2, protected books, OCR,
-conversion, accounts, synchronization and stores remain outside scope. An
-image-only PDF supports reading and page bookmarks; absent text is identified.
-Application translations are English and German.
