@@ -1,0 +1,135 @@
+{
+  "status": "passed",
+  "artifact": "build/distributions/busybooks-0.1.0-linux-x64.tar.gz",
+  "sha256": "0a079dbc30ef9a189cfb7a11e2b31feadd352e643024d87e1f834f5ac6c809f6",
+  "bytes": 15755544,
+  "entries": 328,
+  "packagedHelperMatchesQualification": true,
+  "licensesAndReaderAssetsMatchSource": true,
+  "publicationAndProfileFilesIncluded": false,
+  "implementationCommit": "3089ecc4d0f848e3d3d3626546f831f0210fe71c",
+  "portableRuntime": {
+    "status": "passed",
+    "profile": "Disposable CC0 fixture profiles; extracted artifact launched from a different directory",
+    "books": 17,
+    "forwardedRelativePaths": 16,
+    "decoderOverride": false,
+    "openings": [
+      {
+        "fixture": "epub2.epub",
+        "format": "epub",
+        "openedAndSavedMs": 2241,
+        "forwarded": false
+      },
+      {
+        "fixture": "epub2-utf16.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1125,
+        "forwarded": true
+      },
+      {
+        "fixture": "epub2-dtbook.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1104,
+        "forwarded": true
+      },
+      {
+        "fixture": "representative.kepub.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1101,
+        "forwarded": true
+      },
+      {
+        "fixture": "epub2-mime-aliases.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1307,
+        "forwarded": true
+      },
+      {
+        "fixture": "epub2-xml-island.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1062,
+        "forwarded": true
+      },
+      {
+        "fixture": "reflowable.kepub.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1319,
+        "forwarded": true
+      },
+      {
+        "fixture": "fiction-utf16.fb2",
+        "format": "fb2",
+        "openedAndSavedMs": 1120,
+        "forwarded": true
+      },
+      {
+        "fixture": "Wrapped.FB2.ZIP",
+        "format": "fb2",
+        "openedAndSavedMs": 1052,
+        "forwarded": true
+      },
+      {
+        "fixture": "fiction.fbz",
+        "format": "fb2",
+        "openedAndSavedMs": 194,
+        "forwarded": true
+      },
+      {
+        "fixture": "comic-deflated.cbz",
+        "format": "cbz",
+        "openedAndSavedMs": 1166,
+        "forwarded": true
+      },
+      {
+        "fixture": "comic-rar4-solid.cbr",
+        "format": "cbr",
+        "openedAndSavedMs": 1096,
+        "forwarded": true
+      },
+      {
+        "fixture": "comic-rar5-solid.cbr",
+        "format": "cbr",
+        "openedAndSavedMs": 1047,
+        "forwarded": true
+      },
+      {
+        "fixture": "reflowable.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1102,
+        "forwarded": true
+      },
+      {
+        "fixture": "fixed-layout.epub",
+        "format": "epub",
+        "openedAndSavedMs": 1224,
+        "forwarded": true
+      },
+      {
+        "fixture": "text.pdf",
+        "format": "pdf",
+        "openedAndSavedMs": 1608,
+        "forwarded": true
+      },
+      {
+        "fixture": "image-only.pdf",
+        "format": "pdf",
+        "openedAndSavedMs": 1660,
+        "forwarded": true
+      }
+    ],
+    "mimeTypes": {
+      "Book.Fb2": "application/x-fictionbook+xml",
+      "Book.FB2.ZiP": "application/x-zip-compressed-fb2",
+      "Book.FbZ": "application/x-zip-compressed-fb2",
+      "Book.CbZ": "application/vnd.comicbook+zip",
+      "Book.CbR": "application/vnd.comicbook-rar",
+      "ordinary.zip": "application/zip",
+      "ordinary.rar": "application/vnd.rar"
+    }
+  },
+  "unverifiedReleaseGates": [
+    "Windows WebView2 build/installed acceptance",
+    "Installed strict Snap"
+  ]
+}

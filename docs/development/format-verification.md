@@ -5,6 +5,10 @@ This record covers the 2026-10-23 implementation based on
 [format-results.json](format-results.json). Local raw logs and screenshots live
 under `evidence/formats-20261023/` (ignored build evidence). Fixture provenance
 and byte hashes are in [test/fixtures/formats](../../test/fixtures/formats/PROVENANCE.md).
+The portable artifact checksum and its 17 successful openings after extraction
+to another directory are recorded separately in
+[format-package-results.json](format-package-results.json), avoiding a checksum
+reference to the archive that would contain that same record.
 
 ## Supported profile
 
