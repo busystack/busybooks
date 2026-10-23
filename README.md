@@ -49,6 +49,7 @@ bash tools/probe_linux_typography.sh
 flutter build linux --release
 BUSYBOOKS_COMIC_DECODER="$PWD/build/linux/x64/release/bundle/busybooks_comic_archive" dart run tools/format_probe.dart
 bash tools/probe_linux_formats.sh
+bash tools/probe_linux_format_review.sh
 BUSYBOOKS_PROFILE="$(mktemp -d /tmp/busybooks-demo-XXXXXX)" build/linux/x64/release/bundle/busybooks test/fixtures/reflowable.epub
 ```
 
@@ -82,5 +83,6 @@ reading-data database. See [storage.md](docs/development/storage.md).
 - [Shared typography and local fonts](docs/development/typography.md)
 - [Reader engines and content boundary](docs/development/readers.md)
 - [Format profiles, limits and executed verification](docs/development/format-verification.md)
+- [Format review corrections and regression evidence](docs/development/format-review-verification.md)
 - [Books, database collections, backup and recovery](docs/development/storage.md)
 - [Third-party sources](NOTICE) and licenses under `assets/reader/vendor` and `native/vendor`

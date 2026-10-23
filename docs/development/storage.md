@@ -44,7 +44,7 @@ metadata plus the verified current path preserves the actual export suffix.
 Compressed exports reproduce the complete original ZIP bytes. New format values
 are JSON records in schema 2; no SQL migration or historical importer is needed.
 
-Disposable `cache/fb2-v1` and `cache/comic-v1` representations contain controlled
+Disposable `cache/fb2-v2` and `cache/comic-v2` representations contain controlled
 resource indices and SHA-256 physical filenames. Versioned interpretation and
 stable logical paths preserve case-distinct archive names on Windows. Preparation
 publishes a complete validated directory and writes its index last. FB2-generated
@@ -53,6 +53,12 @@ All original bytes, extracted pages, generated HTML, thumbnails and caches remai
 excluded from backup. Source and decompression limits for the new formats are
 listed in [format-verification.md](format-verification.md); EPUB/backup limits
 are unchanged.
+
+The v2 cache paths regenerate earlier prepared contents/page lists after the
+[format review corrections](format-review-verification.md). Descriptor and
+durable locator versions remain 1; originals, content hashes and existing text
+CFI paths are unchanged. Startup also cleans interrupted staging in the old
+cache directories.
 
 Known paths are references, including foreign-platform paths. Accessibility is
 separate from verified identity. Locate checks the full SHA-256 and updates the
@@ -68,6 +74,10 @@ and hashed logical page identity. Optional within-page position and region
 rectangles use normalized oriented intrinsic-image coordinates. Regions require
 finite positive geometry wholly within one page; text/format mismatches are
 rejected. Bookmark deduplication is page-wide and independent of region notes.
+Comic locators admit only their versioned image fields; incompatible PDF/text
+fields and unknown keys are rejected before restore writes. Comic ordering
+ends within its own branch, so formerly accepted stray PDF fields cannot break
+Notebook lists or Markdown export.
 Notebook ordering and Markdown references use these semantic locations. This metadata remains
 reading data; regenerable page previews are not another persistence authority.
 

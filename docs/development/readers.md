@@ -28,6 +28,8 @@ full application workflows. Windows tests failed before compilation in that
 run; WebView2 execution remains unverified. Current Linux format acceptance and
 the exact remaining Windows/Snap gates are recorded in
 [format-verification.md](format-verification.md).
+The five subsequent review corrections and their fresh native evidence are in
+[format-review-verification.md](format-review-verification.md).
 
 ## Host and locations
 
@@ -52,8 +54,11 @@ selection, scroll and resume at zoom. `tools/fixed_layout_probe.mjs` exercises
 these navigation paths against the actual renderer with a controlled DOM; it
 does not establish native selection or layout acceptance.
 The two modified vendor files are `epub.js` (manifest fallbacks, DTBook, EPUB 2
-MIME aliases and styled XML islands) and `fixed-layout.js` (these existing fixes, safe failed navigation and
-direction rebuilding). All other Foliate files remain at the recorded revision.
+MIME aliases, styled XML islands and distinct spine/resource fallback endpoints)
+and `fixed-layout.js` (these existing fixes, safe failed navigation, direction
+rebuilding and overflow-safe spread centering). Auto margins center fitting
+pages; overflowing pages retain a reachable physical starting edge in both
+reading directions. All other Foliate files remain at the recorded revision.
 
 EPUB 2 inspection accepts an OPF 2 package and reuses NCX, nested navigation,
 page lists, guide references and older metadata/cover handling. Image covers and
@@ -68,6 +73,9 @@ EPUB-contained `text/x-oeb1-document`/`text/x-oeb1-css` aliases are normalized;
 XHTML shell using the manifest stylesheet. This same tree drives search and CFI
 resolution. Normative fixture/schema checks and EPUBCheck profile exceptions
 are documented in [format-verification.md](format-verification.md).
+Spine resolution continues through intermediate raster images to a content
+document; embedded-resource resolution can still stop at those images. The
+PDF → PNG → XHTML fixture checks original spine CFIs and navigation aliases.
 
 FB2 inspection/preparation validates FictionBook's namespace and decodes UTF-8,
 UTF-16 or Windows-1251. ZIP wrappers must contain exactly one eligible FB2 file.
@@ -77,6 +85,9 @@ narration and range resolution. The semantic format remains FB2. All emission
 paths share a version-1 FB2 locator with the stable `body:N/part:N` identity,
 section index and validated CFI. Footnote documents use the same structure and
 loader, including embedded images, backlinks and restoration of note annotations.
+Sections without source IDs receive deterministic, collision-free IDs in both
+the canonical XHTML and contents tree. This adds attributes without changing
+the element/text structure, so existing version-1 CFIs remain valid.
 
 CBZ and CBR share `comic_book.mjs` and Foliate's fixed-layout renderer. Only
 archive decoding differs. ZIP streams entries to owned files; a bundled UnRAR
@@ -96,6 +107,9 @@ reader explicitly revokes departed page Blob URLs, cancels pending loads and
 retains at most two full pages after navigation (old/new spreads coexist while
 loading). Thumbnail scheduling/cache bounds
 remain shared; only bounded thumbnail previews cross the native channel.
+Recognized filesystem metadata (`__MACOSX` paths, `._*` sidecars and `.DS_Store`)
+is excluded before page ordering and ComicInfo index application. Archive path,
+integrity and output-limit checks still cover those entries.
 
 PDF stores page identity/reference and PDF-coordinate position/selection
 geometry. Search maps normalized excerpts back to text-layer offsets. Resizing,

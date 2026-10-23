@@ -1,5 +1,9 @@
 # Format expansion: profiles and verification
 
+The subsequent five review corrections, rebuilt package and fresh test results
+are recorded in [format-review-verification.md](format-review-verification.md).
+The original execution records below remain historical evidence.
+
 This record covers the 2026-10-23 implementation based on
 `79af51228cd32e3b5669135a52e6120aa6498207`. Executed results are recorded in
 [format-results.json](format-results.json). Local raw logs and screenshots live
@@ -147,7 +151,7 @@ archives are rejected.
 Opening validates/hashes the complete original before trusting a warm cache.
 The stat-bound single-use inspection token avoids duplicate work only within
 that owned sequence. Expected identity is checked before preparation. Versioned
-`fb2-v1`/`comic-v1` caches publish complete staging before the index; interrupted
+`fb2-v2`/`comic-v2` caches publish complete staging before the index; interrupted
 owned staging is cleaned on startup. Worker cancellation, native session IDs and
 controller revisions reject replaced/late results. RAR cancellation kills an
 active solid decoder while bytes are still being produced.
