@@ -1,0 +1,22 @@
+@import './vendor/pdfjs/text_layer_builder.css';
+html,body,#content{height:100%;margin:0;width:100%;overflow:hidden}
+body{background:var(--canvas,transparent);color:var(--foreground,#242424)}
+foliate-view{display:block;height:100%;width:100%}
+#content.pdf{overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.pdf-page{position:relative;background:white;margin:16px auto;box-shadow:0 1px 4px #0005;overflow:hidden;flex:none}
+.pdf-page canvas{position:absolute;inset:0;width:100%;height:100%;filter:var(--page-tint,none)}
+.textLayer{position:absolute;inset:0;overflow:hidden;line-height:1;text-align:initial;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0}
+.textLayer :is(span,br){color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0 0}
+.textLayer ::selection{background:var(--selection,#3384e477)}
+.annotation-mark{position:absolute;pointer-events:none;opacity:.3;mix-blend-mode:multiply}
+.pdf-link{position:absolute;cursor:pointer;background:transparent}
+.pdf-link:focus-visible,.pdf-page:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+dialog img{max-width:90vw;max-height:90vh}
+dialog{border:0;padding:0;background:transparent}
+dialog::backdrop{background:#0009}
+foliate-view::part(filter){filter:var(--page-tint,none)}
+@media(forced-colors:active){.annotation-mark{outline:2px solid Highlight}.textLayer ::selection{background:Highlight}}
+dialog.footnote{box-sizing:border-box;max-width:min(720px,90vw);max-height:80vh;overflow:auto;padding:24px;background:var(--book-bg,white);color:var(--book-foreground,#242424);font:1.1rem/1.5 serif}
+dialog.footnote article{max-width:100%}
+
+#content.loading{display:grid;place-items:center;font:menu}

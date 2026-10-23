@@ -1,0 +1,86 @@
+{
+  "scope": "Worker initial collection metadata delivery and per-book annotation delivery only. Excludes Flutter/native rendering, subsequent accessibility batches and application interaction.",
+  "baselineRevision": "f397a47",
+  "measuredImplementationRevision": "37d861e",
+  "runtime": "Bundled Dart 3.13.4 JIT; official Flutter 3.47.5; SQLite WAL/synchronous FULL",
+  "dateUtc": "2026-10-20",
+  "hardware": {
+    "cpu": "Intel Core i9-9900K @ 3.60GHz",
+    "logicalCpus": 16,
+    "memoryGiB": 46
+  },
+  "method": {
+    "repetitions": 5,
+    "collectionBooks": 120,
+    "baseFixture": "long.pdf",
+    "baseFixtureBytes": 198821,
+    "annotationBooks": 10,
+    "totalAnnotations": 10000,
+    "annotationsPerQueriedBook": 1000,
+    "cacheScope": "warm repeated requests within a disposable profile",
+    "limitation": "Variable host load; these are local component measurements, not application responsiveness."
+  },
+  "before": {
+    "scope": "worker data delivery only; excludes Flutter/native presentation",
+    "version": "baseline",
+    "collectionBooks": 120,
+    "fixtureBytes": 198821,
+    "annotationBooks": 10,
+    "totalAnnotations": 10000,
+    "repetitions": 5,
+    "collectionOpenMs": [
+      1447.309,
+      1655.49,
+      1370.591,
+      1328.057,
+      976.992
+    ],
+    "bookAnnotationsReadMs": [
+      55.865,
+      56.955,
+      89.613,
+      56.023,
+      89.154
+    ]
+  },
+  "after": {
+    "scope": "worker data delivery only; excludes Flutter/native presentation",
+    "version": "current",
+    "collectionBooks": 120,
+    "fixtureBytes": 198821,
+    "annotationBooks": 10,
+    "totalAnnotations": 10000,
+    "repetitions": 5,
+    "collectionOpenMs": [
+      15.502,
+      12.065,
+      13.465,
+      11.8,
+      9.728
+    ],
+    "bookAnnotationsReadMs": [
+      7.055,
+      6.937,
+      7.218,
+      4.964,
+      4.765
+    ]
+  },
+  "mediansMs": {
+    "collectionBefore": 1370.591,
+    "collectionAfter": 12.065,
+    "annotationsBefore": 56.955,
+    "annotationsAfter": 6.937
+  },
+  "application": {
+    "coldOpen": null,
+    "resume": null,
+    "firstPassage": null,
+    "navigation": null,
+    "search": null,
+    "collection": null,
+    "notebook": null,
+    "blocker": "Desktop and session-bus Unix socket connections denied with errno 1; no Windows execution environment."
+  },
+  "evidenceDirectory": "/mnt/Media/busystack/busybooks-verification-20261020"
+}

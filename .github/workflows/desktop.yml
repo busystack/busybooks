@@ -1,0 +1,54 @@
+name: Desktop verification
+on: [push, pull_request]
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libhandy-1-dev libwebkit2gtk-4.1-dev libspeechd2 speech-dispatcher-espeak-ng libxtst6 xvfb dbus-x11
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.5'
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: dart format --output=none --set-exit-if-changed lib test tools
+      - run: flutter analyze
+      - run: flutter test
+      - run: dart run tools/storage_probe.dart
+      - run: dart run tools/move_volume_probe.dart /tmp /dev/shm
+      - run: dart run tools/cache_probe.dart
+      - run: dart run tools/annotation_order_probe.dart
+      - run: flutter build linux --release
+      - run: node tools/reader_logic_probe.mjs
+      - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_input.sh
+      - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_engines.sh
+      - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_typography.sh
+      - uses: actions/upload-artifact@v6
+        with:
+          name: busybooks-linux-release
+          path: build/linux/x64/release/bundle/
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.5'
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter gen-l10n
+      - run: flutter analyze
+      - run: flutter test
+      - run: dart run tools/storage_probe.dart
+      - run: dart run tools/cache_probe.dart
+      - run: dart run tools/annotation_order_probe.dart
+      - run: flutter build windows --release
+      - run: cmake -S tools/native_font_probe -B build/native-font-probe
+      - run: cmake --build build/native-font-probe --config Release
+      - run: ./build/native-font-probe/Release/busybooks_native_font_probe.exe
+      - run: node tools/reader_logic_probe.mjs
+      - uses: actions/upload-artifact@v6
+        with:
+          name: busybooks-windows-release
+          path: build/windows/x64/runner/Release/

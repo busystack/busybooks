@@ -1,0 +1,53 @@
+name: busybooks
+description: A local-first EPUB 3 and PDF reader with collections and a private Notebook for Linux and Windows.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: '>=3.12.1 <4.0.0'
+  flutter: 3.47.5
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  archive: 4.3.0
+  crypto: ^3.0.6
+  dbus: ^0.7.13
+  file_selector: ^1.1.0
+  ffi: ^2.2.0
+  flutter_riverpod: ^3.3.2
+  flutter_svg: ^2.3.0
+  go_router: ^17.3.0
+  html: 0.15.7
+  intl: ^0.20.0
+  image: ^4.10.1
+  path: ^1.9.0
+  path_provider: ^2.1.0
+  sqlite3: ^3.7.0
+  ubuntu_localizations: ^0.5.2+3
+  url_launcher: ^6.3.2
+  window_manager: ^0.5.1
+  xml: ^7.0.1
+  yaru: ^10.1.0
+dev_dependencies:
+  file_selector_platform_interface: ^2.7.0
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  generate: true
+  uses-material-design: true
+  assets:
+    - assets/branding/
+    - assets/reader/
+    - assets/reader/vendor/foliate/
+    - assets/reader/vendor/pdfjs/
+    - assets/reader/vendor/pdfjs/cmaps/
+    - assets/reader/vendor/pdfjs/standard_fonts/
+    - assets/reader/vendor/pdfjs/wasm/
+    - assets/reader/vendor/pdfjs/iccs/
+hooks:
+  user_defines:
+    sqlite3:
+      source:
+        linux: system

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=BusyBooks
+Comment=Local-first EPUB 3 and PDF reader with collections and Notebook
+Exec=busybooks %F
+Icon=io.busystack.busybooks
+Terminal=false
+Categories=Office;Viewer;Literature;
+MimeType=application/epub+zip;application/pdf;
+StartupNotify=true
+StartupWMClass=io.busystack.busybooks

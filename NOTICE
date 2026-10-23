@@ -1,0 +1,27 @@
+BusyBooks
+Copyright 2026 BusyStack
+
+Includes application foundation adapted from BusyMark.
+BusyMark Copyright 2026 BusyStack, Apache License 2.0.
+https://github.com/busystack/busymark
+
+BusyMark attribution retained from the reference NOTICE:
+This product includes software developed by BusyStack.
+The BusyMark name and logo are identifying marks of BusyStack.
+This license does not grant permission to use the BusyMark name or logo to
+imply endorsement, sponsorship, or official status for modified versions.
+No Typst or BusyMark editor toolchain is included in BusyBooks.
+
+Foliate.js, Copyright John Factotum and contributors, MIT.
+https://github.com/johnfactotum/foliate-js
+PDF.js, Copyright Mozilla Foundation and contributors, Apache-2.0.
+https://github.com/mozilla/pdf.js
+Additional PDF font/CMap/WASM/ICC attributions and complete licenses are
+retained alongside the resources in assets/reader/vendor/pdfjs.
+Flutter/Dart package notices are generated into the Flutter asset bundle.
+Test fixtures include Noto Serif under the accompanying FONT-LICENSE,
+also embedded in each generated EPUB. Fixture text/artwork is CC0.
+WebKitGTK, GTK, libhandy, SQLite and Speech Dispatcher are system runtime
+components on Linux; their upstream/distribution licenses continue to apply.
+WebView2 and Visual C++ runtime redistribution uses official Microsoft
+installers supplied to the Windows packaging tool.

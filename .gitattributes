@@ -1,0 +1,11 @@
+# Opaque publication/font/decoder resources must remain byte-for-byte intact.
+*.pdf binary
+*.epub binary
+*.bcmap binary
+*.pfb binary
+*.otf binary
+*.ttf binary
+*.wasm binary
+*.icc binary
+# Preserve upstream source/license whitespace in pinned vendored distributions.
+assets/reader/vendor/** -whitespace

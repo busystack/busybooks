@@ -1,0 +1,79 @@
+name: busybooks
+title: BusyBooks
+version: '0.1.0'
+summary: Local-first EPUB 3 and PDF reader with Notebook
+description: |
+  Open DRM-free EPUB 3 and PDF files directly. Read offline and organize
+  named database collections using book identities. Preserve bookmarks,
+  highlights, notes and positions. Back up reading data and collections;
+  original book files stay in their own filesystem locations.
+license: Apache-2.0
+base: core24
+grade: devel
+confinement: strict
+icon: assets/branding/busybooks_logo.svg
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+plugs:
+  browser-support:
+    interface: browser-support
+    allow-sandbox: false
+slots:
+  busybooks-dbus:
+    interface: dbus
+    bus: session
+    name: io.busystack.busybooks
+apps:
+  busybooks:
+    command: busybooks
+    desktop: share/applications/io.busystack.busybooks.desktop
+    common-id: io.busystack.busybooks
+    extensions: [gnome]
+    slots: [busybooks-dbus]
+    plugs: [browser-support, desktop, desktop-legacy, audio-playback, gsettings, opengl, wayland, x11, home, network, removable-media]
+    environment:
+      GDK_BACKEND: wayland,x11
+      XDG_CACHE_HOME: $SNAP_USER_DATA/.cache
+      XDG_CONFIG_HOME: $SNAP_USER_DATA/.config
+      XDG_DATA_HOME: $SNAP_USER_DATA/.local/share
+parts:
+  busybooks:
+    plugin: flutter
+    build-attributes: [enable-patchelf]
+    source: .
+    flutter-target: lib/main.dart
+    flutter-channel: stable
+    build-environment:
+      - BUSYBOOKS_FLUTTER_VERSION: '3.47.5'
+    build-packages: [git, curl, unzip, xz-utils, clang, cmake, ninja-build, pkg-config, libgtk-3-dev, libhandy-1-dev, libwebkit2gtk-4.1-dev]
+    stage-packages: [libwebkit2gtk-4.1-0, libhandy-1-0, libsqlite3-0, libspeechd2, speech-dispatcher, speech-dispatcher-espeak-ng, fonts-noto-core, fonts-noto-cjk, yaru-theme-gtk, yaru-theme-icon]
+    override-build: |
+      set -eu
+      rm -rf "$CRAFT_PART_BUILD/build" "$CRAFT_PART_BUILD/.dart_tool" "$CRAFT_PART_BUILD/linux/flutter/ephemeral"
+      build_sdk="$CRAFT_PART_BUILD/flutter-distro"
+      build_sdk_version="$(git -C "$build_sdk" describe --tags --exact-match HEAD 2>/dev/null || true)"
+      if [ ! -x "$build_sdk/bin/flutter" ] || [ "$build_sdk_version" != "$BUSYBOOKS_FLUTTER_VERSION" ]; then
+        rm -rf "$build_sdk"
+        git clone --depth 1 --branch "$BUSYBOOKS_FLUTTER_VERSION" https://github.com/flutter/flutter.git "$build_sdk"
+      fi
+      test "$(git -C "$build_sdk" describe --tags --exact-match HEAD)" = "$BUSYBOOKS_FLUTTER_VERSION"
+      export CI=true
+      export PUB_CACHE="$CRAFT_PART_BUILD/.busybooks-pub-cache"
+      "$build_sdk/bin/flutter" --no-version-check precache --linux
+      "$build_sdk/bin/flutter" --no-version-check pub get --enforce-lockfile
+      "$build_sdk/bin/flutter" --no-version-check gen-l10n
+      "$build_sdk/bin/flutter" --no-version-check build linux --release --no-pub --target lib/main.dart
+      cp -r build/linux/*/release/bundle/* "$CRAFT_PART_INSTALL/"
+  desktop-integration:
+    after: [busybooks]
+    plugin: nil
+    build-packages: [patchelf]
+    override-prime: |
+      craftctl default
+      # Preserve GNOME/Mesa runtime precedence, following BusyMark's correction.
+      for bundled_elf in "$CRAFT_PRIME/busybooks" "$CRAFT_PRIME/lib"/*.so; do
+        existing_rpath="$(patchelf --print-rpath "$bundled_elf")"
+        if [ -n "$existing_rpath" ]; then patchelf --set-rpath "$existing_rpath" "$bundled_elf"; fi
+      done
