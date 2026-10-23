@@ -5,7 +5,8 @@ int compareAnnotationLocations(Map first, Map second) {
     (b['page'] ?? b['index'] ?? 0) as num,
   );
   if (page != 0) return page;
-  if (a['kind'] == 'comic' && b['kind'] == 'comic') {
+  if (a['kind'] == 'comic' || b['kind'] == 'comic') {
+    if (a['kind'] != b['kind']) return a['kind'] == 'comic' ? 1 : -1;
     final ra = a['region'] as List?, rb = b['region'] as List?;
     if (ra == null && rb != null) return -1;
     if (ra != null && rb == null) return 1;
@@ -15,6 +16,10 @@ int compareAnnotationLocations(Map first, Map second) {
       final horizontal = (ra[0] as num).compareTo(rb[0] as num);
       if (horizontal != 0) return horizontal;
     }
+    // Image locations never have PDF coordinates, even in older malformed data.
+    return (first['created'] as num? ?? 0).compareTo(
+      second['created'] as num? ?? 0,
+    );
   }
   if (a['page'] != null && b['page'] != null) {
     final left = (a['segments'] as List?)?.firstOrNull as Map?;

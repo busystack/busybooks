@@ -196,6 +196,36 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
       });
     }
   }
+  // Add attributes only: existing version-1 CFI paths/text offsets stay valid.
+  // Reserve every source ID first so generated destinations cannot collide with
+  // an ID authored later in the document (including binary/description IDs).
+  final usedIds = doc.descendants
+      .whereType<XmlElement>()
+      .map((node) => node.getAttribute('id'))
+      .whereType<String>()
+      .toSet();
+  final sectionIds = Map<XmlElement, String>.identity();
+  for (final (index, section) in sections.indexed) {
+    final source = section['source'] as XmlElement;
+    var ordinal = 0;
+    for (final node in [
+      source,
+      ...source.descendants.whereType<XmlElement>(),
+    ]) {
+      if (node.namespaceUri != fb2Namespace ||
+          node.name.local != 'section' ||
+          node.getAttribute('id') != null) {
+        continue;
+      }
+      final base = 'busybooks-section-$index-${ordinal++}';
+      var id = base, collision = 0;
+      while (!usedIds.add(id)) {
+        id = '$base-${++collision}';
+      }
+      sectionIds[node] = id;
+      destinations[id] = '${section['path']}#${Uri.encodeComponent(id)}';
+    }
+  }
   const tags = {
     'body': 'section',
     'section': 'section',
@@ -233,7 +263,7 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
     final attrs = <XmlAttribute>[
       XmlAttribute(XmlName.parts('class'), node.name.local),
     ];
-    final id = node.getAttribute('id');
+    final id = node.getAttribute('id') ?? sectionIds[node];
     if (id != null) attrs.add(XmlAttribute(XmlName.parts('id'), id));
     if (notes && node.name.local == 'section') {
       attrs.add(XmlAttribute(XmlName.parts('role'), 'doc-endnote'));
@@ -313,7 +343,8 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
     resources[section['path'] as String] = Uint8List.fromList(encoded);
     void outline(XmlElement node, List<Map<String, dynamic>> target) {
       if (node.name.local == 'section') {
-        final title = text(node, 'title'), id = node.getAttribute('id');
+        final title = text(node, 'title'),
+            id = node.getAttribute('id') ?? sectionIds[node];
         final children = <Map<String, dynamic>>[];
         for (final el in node.childElements) {
           if (el.name.local == 'section') outline(el, children);

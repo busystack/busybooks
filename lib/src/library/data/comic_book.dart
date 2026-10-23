@@ -229,6 +229,19 @@ Future<Map<String, dynamic>> extractComic(
   } else {
     throw const FormatException('Unsupported comic format');
   }
+  // Validate/decode archive entries first, including metadata CRCs and paths.
+  // Filesystem sidecars never participate in page or ComicInfo enumeration.
+  bool filesystemMetadata(Map<String, dynamic> entry) {
+    final name = entry['name'] as String, basename = p.posix.basename(name);
+    return name.split('/').contains('__MACOSX') ||
+        basename.startsWith('._') ||
+        basename == '.DS_Store';
+  }
+
+  for (final entry in entries.where(filesystemMetadata)) {
+    await File(p.join(stage.path, entry['file'] as String)).delete();
+  }
+  entries.removeWhere(filesystemMetadata);
   const unsupportedImages = [
     '.gif',
     '.bmp',

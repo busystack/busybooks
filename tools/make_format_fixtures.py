@@ -79,6 +79,14 @@ for name, dt in [('epub2', False), ('epub2-dtbook', True)]:
         zipbook(ROOT/'epub2-utf16.epub',utf16)
         zipbook(ROOT/'representative.kepub.epub',{**files,'OPS/first.xhtml':chapter.replace('A library passage','<span class="koboSpan" id="kobo.1.1">A library passage</span>')})
         zipbook(ROOT/'epub2-cover-page.epub',{**files,'OPS/book.opf':files['OPS/book.opf'].replace('content="cover-image"','content="cover-page"')})
+        raster={**files,'OPS/book.opf':files['OPS/book.opf'].replace('</manifest>','<item id="pdf-start" href="start.pdf" media-type="application/pdf" fallback="raster"/><item id="raster" href="raster.png" media-type="image/png" fallback="first"/></manifest>').replace('idref="first"','idref="pdf-start"'),
+            'OPS/start.pdf':(ROOT.parent/'text.pdf').read_bytes(),'OPS/raster.png':files['OPS/art/cover.png'],
+            'OPS/first.xhtml':chapter.replace('src="art/cover.png"','src="raster.png"').replace('href="#','href="start.pdf#'),
+            'OPS/toc.ncx':ncx.format(first='start.pdf')}
+        # Guide references must name an OPS Content Document directly. NCX
+        # destinations exercise the original non-OPS spine identity instead.
+        raster['OPS/book.opf']=raster['OPS/book.opf'].replace('href="first.xhtml#chapter"','href="second.xhtml#second"')
+        zipbook(ROOT/'epub2-raster-fallback.epub',raster)
         aliases={**files,'OPS/book.opf':files['OPS/book.opf'].replace('id="first" href="first.xhtml" media-type="application/xhtml+xml"','id="first" href="first.xhtml" media-type="text/x-oeb1-document" fallback="alias-xhtml"').replace('media-type="text/css"','media-type="text/x-oeb1-css"').replace('</manifest>','<item id="alias-xhtml" href="alias-fallback.xhtml" media-type="application/xhtml+xml"/></manifest>'),
             'OPS/alias-fallback.xhtml':chapter.replace('<a href="#note">Note</a>','Note').replace('<a href="#passage">backlink</a>','backlink'),
             'OPS/first.xhtml':chapter.replace('rel="stylesheet"','rel="stylesheet" type="text/x-oeb1-css"').replace('</head>','<style type="text/x-oeb1-css">p {padding-top:1px}</style></head>')}
@@ -120,6 +128,7 @@ for encoding, name in [('UTF-8','utf8'),('UTF-16','utf16'),('windows-1251','cp12
 (ROOT/'bad-encoding.fb2').write_text(fiction.format(encoding='KOI8-R',art=art))
 (ROOT/'bad-root.fb2').write_text('<FictionBook xmlns="urn:wrong"><body/></FictionBook>')
 (ROOT/'malformed.fb2').write_text('<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><body>')
+(ROOT/'fiction-idless.fb2').write_text('''<?xml version="1.0" encoding="UTF-8"?><FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><description><title-info><genre>prose</genre><author><nickname>BusyBooks Fixtures</nickname></author><book-title>FB2 Unnamed Chapters</book-title><lang>en</lang></title-info></description><body><section><title><p>Outer chapter</p></title><p id="passage">A library passage remains attached inside unnamed sections.</p><p id="busybooks-section-0-0">An authored ID deliberately collides with a generated candidate.</p><section><title><p>Nested one</p></title><p>A library passage in nested chapter one.</p></section><section><title><p>Nested two</p></title><p>A library passage in nested chapter two.</p></section></section></body></FictionBook>''')
 
 pages={'pages/Page1.jpg':image(600,900,'JPEG'),'pages/Page2.png':image(900,600),'pages/Page10.webp':image(600,800,'WEBP'),'pages/page02.png':image(500,850),'pages/Ä3.png':image(640,800),'pages/ä3.png':image(640,800),'pages/rotated4.jpg':image(640,480,'JPEG',6)}
 info='<ComicInfo><Title>Comic Library</Title><Writer>Fixture Writer</Writer><Penciller>Fixture Artist</Penciller><Series>Fixture Books</Series><Number>4</Number><LanguageISO>en</LanguageISO><Manga>YesAndRightToLeft</Manga><PageCount>999</PageCount><Pages><Page Image="0" Type="FrontCover" Bookmark="Cover"/><Page Image="1" DoublePage="true" Bookmark="Wide page"/></Pages></ComicInfo>'

@@ -693,13 +693,15 @@ class Resources {
         this.cfis = CFI.fromElements($$itemref)
     }
     // BusyBooks: preserve the original spine/CFI identity while resolving the
-    // first supported manifest resource. Missing targets and cycles are errors.
-    resolveFallback(item) {
+    // first supported manifest resource/content document. A raster can satisfy
+    // an embedded resource fallback but cannot terminate a spine-content chain.
+    resolveFallback(item, { spine = false } = {}) {
         const seen = new Set()
         while (item) {
             if (seen.has(item.id)) throw Error('Cyclic EPUB manifest fallback')
             seen.add(item.id)
-            if ([MIME.XHTML, MIME.HTML, MIME.SVG, 'image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(item.mediaType)) return item
+            if ([MIME.XHTML, MIME.HTML, MIME.SVG].includes(item.mediaType)
+                || !spine && ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(item.mediaType)) return item
             if (item.fallbackStyle) {
                 const style = this.getItemByID(item.fallbackStyle)
                 if (!style || style.mediaType !== MIME.CSS || !item.requiredNamespace)
@@ -710,6 +712,9 @@ class Resources {
             item = this.getItemByID(item.fallback)
         }
         throw Error('Missing EPUB manifest fallback target')
+    }
+    resolveSpineFallback(item) {
+        return this.resolveFallback(item, { spine: true })
     }
     getItemByID(id) {
         return this.manifestById.get(id)
@@ -1016,7 +1021,7 @@ ${doc.querySelector('parsererror').innerText}`)
         this.sections = this.resources.spine.map((spineItem, index) => {
             const { idref, linear, properties = [] } = spineItem
             const original = this.resources.getItemByID(idref)
-            const item = this.resources.resolveFallback(original)
+            const item = this.resources.resolveSpineFallback(original)
             if (!item) {
                 console.warn(`Could not find item with ID "${idref}" in manifest`)
                 return null
@@ -1089,7 +1094,7 @@ ${doc.querySelector('parsererror').innerText}`)
         const [path, hash] = href.split('#')
         const item = this.resources.getItemByHref(decodeURI(path))
         if (!item) return null
-        const target = item.fallback || item.fallbackStyle ? this.resources.resolveFallback(item) : item
+        const target = item.fallback || item.fallbackStyle ? this.resources.resolveSpineFallback(item) : item
         const index = this.sections.findIndex(section => section.sourceHref === item.href || section.contentHref === target.href)
         if (index < 0) return null
         const anchor = hash ? doc => getHTMLFragment(doc, hash) : () => 0
@@ -1098,7 +1103,7 @@ ${doc.querySelector('parsererror').innerText}`)
     splitTOCHref(href) {
         const [path, hash] = href?.split('#') ?? []
         const item = this.resources.getItemByHref(path)
-        const target = item?.fallback || item?.fallbackStyle ? this.resources.resolveFallback(item) : item
+        const target = item?.fallback || item?.fallbackStyle ? this.resources.resolveSpineFallback(item) : item
         return [target?.href ?? path, hash]
     }
     getTOCFragment(doc, id) {

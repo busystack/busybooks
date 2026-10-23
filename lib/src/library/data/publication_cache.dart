@@ -15,8 +15,8 @@ String publicationCachePath(String root, String format, String id) => p.join(
   format == 'epub'
       ? 'epub'
       : format == 'fb2'
-      ? 'fb2-v1'
-      : 'comic-v1',
+      ? 'fb2-v2'
+      : 'comic-v2',
   id,
 );
 

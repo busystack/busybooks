@@ -191,7 +191,7 @@ class _ReadingWorker {
     await lock!.lock(FileLock.exclusive);
     // The profile lock makes these interrupted staging resources exclusively
     // owned by this worker. Never follow links while cleaning them up.
-    for (final kind in ['epub', 'fb2-v1', 'comic-v1']) {
+    for (final kind in ['epub', 'fb2-v1', 'fb2-v2', 'comic-v1', 'comic-v2']) {
       final parent = Directory(p.join(root, 'cache', kind));
       if (await FileSystemEntity.isLink(p.join(root, 'cache')) ||
           await FileSystemEntity.isLink(parent.path)) {
@@ -519,7 +519,7 @@ class _ReadingWorker {
             );
           }
         },
-        comicStagingRoot: p.join(root, 'cache', 'comic-v1'),
+        comicStagingRoot: p.join(root, 'cache', 'comic-v2'),
         validatedStat: (stat) => inspectedStat = stat,
         retainComic: (prepared) => _inspectedComic = prepared,
         retainBytes: (bytes) {

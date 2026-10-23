@@ -20,6 +20,7 @@ root = Path(__file__).resolve().parents[1]
 binary = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / 'build/linux/x64/release/bundle/busybooks'
 names = [
     'formats/epub2.epub', 'formats/epub2-utf16.epub',
+    'formats/epub2-raster-fallback.epub', 'formats/fiction-idless.fb2',
     'formats/epub2-dtbook.epub', 'formats/representative.kepub.epub',
     'formats/epub2-mime-aliases.epub', 'formats/epub2-xml-island.epub',
     'formats/reflowable.kepub.epub',

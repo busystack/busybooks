@@ -15,7 +15,7 @@ retain an EPUB 3 navigation document or EPUB 3 manifest properties. The separate
 cycle/missing variants intentionally violate fallback requirements. Unit tests
 validate this structure. `check_epub2_fixtures.py` independently checks the XML
 trees against the official EPUB 2 Relax NG/DTD schemas in EPUBCheck 5.4.0
-(39 checks for seven fixtures). The UTF-16 XHTML fixture records EPUBCheck's
+(44 checks for eight fixtures). The UTF-16 XHTML fixture records EPUBCheck's
 UTF-8-only HTML lint; the stylesheet-only XML island records its missing-fallback
 lint. Both constructions are permitted by OPS/OPF 2.0.1 and independently pass
 the schemas. Deprecated MIME aliases produce expected warnings. See the exact
@@ -25,11 +25,18 @@ they are EPUB compatibility fixtures, without account integration or a separate
 renderer. DTBook uses the 2005-2 vocabulary; the UTF-16 fixture covers both byte
 orders. The styled XML island retains its authored namespace/DTD and supplies
 only a manifest `fallback-style` stylesheet. MIME aliases remain EPUB-contained.
+`epub2-raster-fallback.epub` adds a real PDF and PNG before the original XHTML
+in a spine fallback chain. NCX/page references target the original PDF spine
+identity; the guide directly names a content document. The XHTML also embeds
+the intermediate PNG, distinguishing content and resource resolution. This
+fixture passes EPUBCheck without errors or warnings.
 
 FB2 fixtures exercise UTF-8, UTF-16 and declared Windows-1251 with identical
 content; raw XML and both eligible ZIP suffixes; ordered authors, series and
 cover; nested sections, poems, citations, tables, images, additional note bodies
-and backlinks. Invalid fixtures cover malformed XML, the wrong namespace,
+and backlinks. `fiction-idless.fb2` has an unnamed outer section and two unnamed
+nested sections, plus an authored ID that collides with a generated candidate.
+Invalid fixtures cover malformed XML, the wrong namespace,
 unsupported encoding, ambiguous wrappers and empty wrappers.
 
 Comic fixtures contain numbered/nested, Unicode and case-distinct paths, JPEG,

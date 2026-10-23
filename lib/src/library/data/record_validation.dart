@@ -63,6 +63,18 @@ void validateAnchor(dynamic value, String format) {
       invalid('FB2 section/CFI mismatch');
     }
   } else if (isComicFormat(format)) {
+    const fields = {
+      'kind',
+      'version',
+      'format',
+      'page',
+      'pageId',
+      'position',
+      'region',
+    };
+    if (value.keys.any((key) => !fields.contains(key))) {
+      invalid('comic locator fields');
+    }
     if (value['kind'] != 'comic' ||
         value['format'] != format ||
         value['version'] != 1 ||

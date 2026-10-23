@@ -17,7 +17,7 @@ import zipfile
 
 jar = Path(sys.argv[1]).resolve()
 root = Path(__file__).resolve().parents[1]
-books = ['epub2.epub', 'epub2-cover-page.epub', 'epub2-dtbook.epub', 'epub2-mime-aliases.epub', 'epub2-xml-island.epub',
+books = ['epub2.epub', 'epub2-cover-page.epub', 'epub2-dtbook.epub', 'epub2-mime-aliases.epub', 'epub2-xml-island.epub', 'epub2-raster-fallback.epub',
          'representative.kepub.epub', 'epub2-utf16.epub']
 with tempfile.TemporaryDirectory(prefix='busybooks-epub-conformance-') as directory:
     owned = Path(directory)

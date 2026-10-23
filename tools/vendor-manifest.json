@@ -9,9 +9,9 @@
   "sha256": {
     "assets/reader/vendor/foliate/LICENSE": "e1f89c849cd60c2a9beb044784a30a2d6e11813800d44099915fcd9eca63dfe4",
     "assets/reader/vendor/foliate/README.md": "05cac7af6cb29881708883997b8b5f91924b85b595ed098ae0b6ef5b8afaea63",
-    "assets/reader/vendor/foliate/epub.js": "117659049874391253743f41fd490666e4a475dc59fe22268942aeba371ac0b4",
+    "assets/reader/vendor/foliate/epub.js": "068f48299c3bb6b88e93b4cf239c9721edf33ad641adc31dd6cde870bd9c8878",
     "assets/reader/vendor/foliate/epubcfi.js": "a95b746fa484590691ea9d82f520ac079773584e243b9bd910aaa3b2c8f00a06",
-    "assets/reader/vendor/foliate/fixed-layout.js": "7c9cbe2b54fdf6c276871050dfee5e8133527523942f91715c7e67658b6872f1",
+    "assets/reader/vendor/foliate/fixed-layout.js": "08f77650bcb9bf8c409e45558d434aad626c9bde41b1637f433718c7cd11068c",
     "assets/reader/vendor/foliate/overlayer.js": "5377b9c1c7840e00d1df886913d4b295a7db10e0f52107aa320292612a4cafec",
     "assets/reader/vendor/foliate/paginator.js": "30754962d6dd1f2d5ddec4216d889ea9eb4cf1dfe84b8e2ddc1aa3efcc8d7c4b",
     "assets/reader/vendor/foliate/progress.js": "84b0bbd3bc5b036d24cb54e6b0bf4f9c5393bab319cee37d00d71d6b2e10a2a7",
