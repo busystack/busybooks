@@ -266,6 +266,82 @@ class _ReadingWorker {
         database.execute('PRAGMA user_version=2');
       });
     }
+    _repairStoredComicPoints();
+  }
+
+  // Earlier version-1 comic validation accepted an unused PDF `point` field.
+  // Repair only persisted records, under the profile lock and before reads,
+  // edits or backup. Incoming records still use the strict validators unchanged.
+  void _repairStoredComicPoints() {
+    transaction(() {
+      var after = 0;
+      while (true) {
+        // String predicates only prefilter candidates, independent of JSON
+        // whitespace. Typed checks below decide whether a repair is safe.
+        final rows = database.select(
+          '''SELECT rowid,id,kind,book_id,json FROM records
+             WHERE rowid>? AND kind IN ('book','annotation')
+               AND instr(json,'"point"')>0 AND instr(json,'"comic"')>0
+             ORDER BY rowid LIMIT 32''',
+          [after],
+        );
+        if (rows.isEmpty) break;
+        after = rows.last['rowid'] as int;
+        for (final row in rows) {
+          Map<String, dynamic> value;
+          try {
+            final decoded = jsonDecode(row['json'] as String);
+            if (decoded is! Map || decoded['id'] != row['id']) continue;
+            value = decoded.cast<String, dynamic>();
+            final parent = row['kind'] == 'book'
+                ? value
+                : book(row['book_id'] as String);
+            if (parent == null ||
+                parent['format'] is! String ||
+                !isComicFormat(parent['format'] as String)) {
+              continue;
+            }
+            var changed = false;
+            void repairAnchor(Map target) {
+              final anchor = target['anchor'];
+              if (anchor is Map &&
+                  anchor['kind'] == 'comic' &&
+                  anchor['version'] == 1 &&
+                  anchor['format'] == parent['format'] &&
+                  anchor.containsKey('point')) {
+                target['anchor'] = {...anchor}..remove('point');
+                changed = true;
+              }
+            }
+
+            repairAnchor(value);
+            if (row['kind'] == 'book' && value['outline'] is List) {
+              value['outline'] = (value['outline'] as List).map((entry) {
+                if (entry is! Map) return entry;
+                final copy = {...entry};
+                repairAnchor(copy);
+                return copy;
+              }).toList();
+            }
+            if (!changed) continue;
+            if (row['kind'] == 'book') {
+              validateBook(value);
+            } else {
+              if (value['bookId'] != row['book_id']) continue;
+              validateAnnotation(value, parent);
+            }
+          } on FormatException {
+            // Removing an ignored field cannot repair invalid image identity,
+            // geometry or other data. Preserve such records without guessing.
+            continue;
+          }
+          database.execute('UPDATE records SET json=? WHERE rowid=?', [
+            jsonEncode(value),
+            row['rowid'],
+          ]);
+        }
+      }
+    });
   }
 
   List<Map<String, dynamic>> records([String? kind]) => database
