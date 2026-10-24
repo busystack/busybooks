@@ -148,7 +148,17 @@ if(NOT BUSYBOOKS_UPDATE_MIME_DATABASE)
   message(FATAL_ERROR "Install shared-mime-info (update-mime-database) to build BusyBooks")
 endif()
 install(CODE "
-  execute_process(COMMAND \"${BUSYBOOKS_UPDATE_MIME_DATABASE}\" \"${CMAKE_INSTALL_PREFIX}/share/mime\" RESULT_VARIABLE busybooks_mime_result)
+  # Compile the bundle's cache with its data directory visible to this process.
+  # Keep the caller's environment and desktop registration unchanged.
+  set(busybooks_xdg_data_dirs \"\$ENV{XDG_DATA_DIRS}\")
+  if(busybooks_xdg_data_dirs STREQUAL \"\")
+    set(busybooks_xdg_data_dirs \"/usr/local/share:/usr/share\")
+  endif()
+  execute_process(
+    COMMAND \"${CMAKE_COMMAND}\" -E env
+      \"XDG_DATA_DIRS=${CMAKE_INSTALL_PREFIX}/share:\${busybooks_xdg_data_dirs}\"
+      \"${BUSYBOOKS_UPDATE_MIME_DATABASE}\" \"${CMAKE_INSTALL_PREFIX}/share/mime\"
+    RESULT_VARIABLE busybooks_mime_result)
   if(NOT busybooks_mime_result EQUAL 0)
     message(FATAL_ERROR \"Could not compile BusyBooks MIME resources\")
   endif()
