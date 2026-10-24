@@ -20,6 +20,7 @@ import '../domain/publication_outline.dart';
 import '../domain/page_preview.dart';
 import 'reader_sidebar_state.dart';
 import '../domain/reader_action.dart';
+import '../domain/annotation_transfer.dart';
 import 'narration_controller.dart';
 import 'dictionary_service.dart';
 import '../../notebook/application/notebook_controller.dart';
@@ -442,6 +443,7 @@ class ReaderController extends Notifier<ReaderState> {
   String? _sourcePath;
   int _generation = 0;
   int _openRevision = 0;
+  int _annotationRevision = 0;
   int? _preparationOwner;
   int _preparationSerial = 0;
   Future<dynamic> _preparePublication(Map<String, dynamic> args) async {
@@ -893,6 +895,12 @@ class ReaderController extends Notifier<ReaderState> {
         if (b != null) {
           final initialAppearance = await _resolveAppearance(appearance);
           if (event['session'] != _session || _suspended) return;
+          final rendererAnnotations = _rendererAnnotations;
+          final inline = inlineAnnotations(rendererAnnotations);
+          if (!inline && !await _sendAnnotationSnapshot(rendererAnnotations)) {
+            return;
+          }
+          if (event['session'] != _session || _suspended) return;
           await send('open', {
             'format': b.format,
             'title': b.title,
@@ -910,7 +918,7 @@ class ReaderController extends Notifier<ReaderState> {
             'anchor': b.anchor,
             'appearance': initialAppearance,
             'chrome': _chrome,
-            'annotations': _rendererAnnotations,
+            if (inline) 'annotations': rendererAnnotations,
           });
         }
       case 'opened':
@@ -2468,8 +2476,20 @@ class ReaderController extends Notifier<ReaderState> {
         );
   }
 
-  Future<void> syncAnnotations() =>
-      send('annotations', {'value': _rendererAnnotations});
+  Future<bool> _sendAnnotationSnapshot(
+    List<Map<String, dynamic>> values,
+  ) async {
+    final session = _session, revision = ++_annotationRevision;
+    for (final batch in annotationTransfer(values, revision)) {
+      if (session != _session || revision != _annotationRevision) return false;
+      await send('annotations', batch);
+    }
+    return session == _session && revision == _annotationRevision;
+  }
+
+  Future<void> syncAnnotations() async {
+    await _sendAnnotationSnapshot(_rendererAnnotations);
+  }
 }
 
 final readerControllerProvider =

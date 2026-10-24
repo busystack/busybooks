@@ -5102,6 +5102,91 @@ void main() {
       await _readerAction(tester, f.dispose);
     },
   );
+  test(
+    'hundreds of annotations reopen through bounded commands after store restart',
+    () async {
+      var f = await _ReaderFixture.create('text.pdf', initialize: false);
+      var disposed = false;
+      final directory = f.directory;
+      try {
+        final workspace = f.container.read(
+          workspaceControllerProvider.notifier,
+        );
+        for (var i = 0; i < 400; i++) {
+          await workspace.saveAnnotation(
+            ReadingAnnotation({
+              'id': 'annotation-batch-$i',
+              'kind': 'annotation',
+              'bookId': f.state.bookId!,
+              'annotationKind': 'highlight',
+              'anchor': {
+                'page': 0,
+                'segments': [
+                  {
+                    'page': 0,
+                    'start': i,
+                    'text': 'passage $i',
+                    'boxes': [
+                      [10.0, 20.0, 30.0, 40.0],
+                    ],
+                  },
+                ],
+              },
+              'text': 'Saved quotation $i ${'漢' * 1200}',
+              'reference': 'Page 1',
+              'note': 'Private $i',
+              'color': 'yellow',
+              'created': i,
+            }),
+          );
+        }
+        final expected = [
+          for (final a in f.reader.annotations) {...a.data}..remove('note'),
+        ];
+        expect(utf8.encode(jsonEncode(expected)).length, greaterThan(1048576));
+        await f.dispose(deleteDirectory: false);
+        disposed = true;
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          profileDirectory: directory,
+          initialize: false,
+        );
+        disposed = false;
+        await f.finishColdOpen();
+        final messages = f.acceptedDispatches
+            .where(
+              (m) => m['action'] == 'annotations' && m['session'] == f.session,
+            )
+            .toList();
+        expect(messages.length, greaterThan(1));
+        expect(messages.last['complete'], isTrue);
+        expect(
+          jsonDecode(messages.map((m) => m['chunk'] as String).join()),
+          expected,
+        );
+        expect(
+          f.acceptedDispatches
+              .lastWhere((m) => m['action'] == 'open')
+              .containsKey('annotations'),
+          isFalse,
+        );
+        expect(f.dispatchFailures, 0);
+        expect(f.reader.annotations.length, 400);
+        expect(
+          (await f.store.call('annotations', f.state.bookId) as List).length,
+          400,
+        );
+        await f.reader.syncAnnotations();
+        expect(f.dispatchFailures, 0);
+      } finally {
+        if (!disposed) {
+          await f.dispose();
+        } else if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      }
+    },
+  );
   for (final format in ['epub', 'pdf']) {
     final fixture = format == 'pdf' ? 'text.pdf' : 'reflowable.epub';
     for (final restart in ['reader close', 'fresh controllers and store']) {

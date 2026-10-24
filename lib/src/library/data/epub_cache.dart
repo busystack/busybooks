@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:crypto/crypto.dart';
 import '../../core/atomic_file_writer.dart';
 import '../../import_export/data/archive_guard.dart';
+import 'cache_resources.dart';
 
 // A disposable byte-for-byte resource cache, not a converted publication.
 // Foliate consumes its documented loader interface with original EPUB paths.
@@ -25,6 +26,7 @@ Future<void> prepareEpubCache(
     p.join(root, 'cache'),
     parent.path,
     p.join(parent.path, id),
+    p.join(parent.path, '$id.json'),
   ]) {
     if (await FileSystemEntity.isLink(path)) {
       throw const FileSystemException(
@@ -60,10 +62,19 @@ Future<void> prepareEpubCache(
   }
   if (!force && await index.exists() && await target.exists()) {
     try {
+      if (await index.length() > 16 * 1024 * 1024) {
+        throw const FormatException(
+          'Publication resource index limit exceeded',
+        );
+      }
       final metadata = jsonDecode(await index.readAsString()) as Map;
       if (metadata['version'] == 2 &&
           metadata['id'] == id &&
-          metadata['resources'] is Map) {
+          await completeCachedResources(
+            target,
+            metadata['resources'],
+            cancelled: cancelled,
+          )) {
         await checkOriginal();
         return;
       }

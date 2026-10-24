@@ -8,6 +8,7 @@ import '../domain/book_format.dart';
 import 'comic_book.dart';
 import 'epub_cache.dart';
 import 'fb2_book.dart';
+import 'cache_resources.dart';
 
 String publicationCachePath(String root, String format, String id) => p.join(
   root,
@@ -47,6 +48,18 @@ Future<String> preparePublicationCache(
     throw const FormatException('Invalid preparation descriptor');
   }
   final original = File(sourcePath), before = await original.stat();
+  Future<void> checkOriginal() async {
+    final after = await original.stat();
+    if (after.type != FileSystemEntityType.file ||
+        before.size != after.size ||
+        before.modified != after.modified ||
+        before.changed != after.changed) {
+      throw const FileSystemException(
+        'Original changed during cache preparation',
+      );
+    }
+  }
+
   if (before.type != FileSystemEntityType.file ||
       before.size > maximumBookBytes(format)) {
     throw const FileSystemException(
@@ -84,30 +97,17 @@ Future<String> preparePublicationCache(
       if (data['version'] == 1 &&
           data['id'] == id &&
           data['format'] == format &&
-          data['resources'] is Map) {
-        var complete = true;
-        for (final entry in (data['resources'] as Map).values) {
-          if (entry is! Map ||
-              entry['file'] is! String ||
-              !RegExp(r'^[a-f0-9]{64}$').hasMatch(entry['file'] as String)) {
-            complete = false;
-            break;
-          }
-          final file = File(p.join(target.path, entry['file'] as String));
-          if (await FileSystemEntity.isLink(file.path) ||
-              !await file.exists() ||
-              await file.length() != entry['size']) {
-            complete = false;
-            break;
-          }
+          await completeCachedResources(
+            target,
+            data['resources'],
+            cancelled: cancelled,
+          )) {
+        await checkOriginal();
+        if (verifiedComic?['directory'] case final String path) {
+          final old = Directory(path);
+          if (await old.exists()) await old.delete(recursive: true);
         }
-        if (complete) {
-          if (verifiedComic?['directory'] case final String path) {
-            final old = Directory(path);
-            if (await old.exists()) await old.delete(recursive: true);
-          }
-          return target.path;
-        }
+        return target.path;
       }
     } catch (_) {
       /* Regenerate interrupted or damaged disposable resources. */
@@ -144,14 +144,7 @@ Future<String> preparePublicationCache(
           await extractComic(sourcePath, format, staging, cancelled);
       descriptor = Map<String, dynamic>.of(descriptor)..remove('directory');
     }
-    final after = await original.stat();
-    if (before.size != after.size ||
-        before.modified != after.modified ||
-        before.changed != after.changed) {
-      throw const FileSystemException(
-        'Original changed during cache preparation',
-      );
-    }
+    await checkOriginal();
     if (cancelled()) throw const FormatException('Book preparation cancelled');
     final encoded = utf8.encode(
       jsonEncode({...descriptor, 'version': 1, 'id': id, 'format': format}),

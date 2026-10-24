@@ -4,18 +4,20 @@
   "pdfjsRevision": "527964698",
   "modifiedVendorFiles": [
     "assets/reader/vendor/foliate/epub.js",
-    "assets/reader/vendor/foliate/fixed-layout.js"
+    "assets/reader/vendor/foliate/fixed-layout.js",
+    "assets/reader/vendor/foliate/paginator.js",
+    "assets/reader/vendor/foliate/search.js"
   ],
   "sha256": {
     "assets/reader/vendor/foliate/LICENSE": "e1f89c849cd60c2a9beb044784a30a2d6e11813800d44099915fcd9eca63dfe4",
     "assets/reader/vendor/foliate/README.md": "05cac7af6cb29881708883997b8b5f91924b85b595ed098ae0b6ef5b8afaea63",
-    "assets/reader/vendor/foliate/epub.js": "068f48299c3bb6b88e93b4cf239c9721edf33ad641adc31dd6cde870bd9c8878",
+    "assets/reader/vendor/foliate/epub.js": "0f69ae0c84586c907cf027fa9cf62276aa02d8c25cc2409948237f6306d1dc77",
     "assets/reader/vendor/foliate/epubcfi.js": "a95b746fa484590691ea9d82f520ac079773584e243b9bd910aaa3b2c8f00a06",
-    "assets/reader/vendor/foliate/fixed-layout.js": "08f77650bcb9bf8c409e45558d434aad626c9bde41b1637f433718c7cd11068c",
+    "assets/reader/vendor/foliate/fixed-layout.js": "1eca49a8da69707b079c96b7261efb8f3a91e6b519ba693b3b51f7280751098e",
     "assets/reader/vendor/foliate/overlayer.js": "5377b9c1c7840e00d1df886913d4b295a7db10e0f52107aa320292612a4cafec",
-    "assets/reader/vendor/foliate/paginator.js": "30754962d6dd1f2d5ddec4216d889ea9eb4cf1dfe84b8e2ddc1aa3efcc8d7c4b",
+    "assets/reader/vendor/foliate/paginator.js": "aff9fe1e1a08727171123d36ac74ba152c5355da437d1eddc8178160fee3fc8b",
     "assets/reader/vendor/foliate/progress.js": "84b0bbd3bc5b036d24cb54e6b0bf4f9c5393bab319cee37d00d71d6b2e10a2a7",
-    "assets/reader/vendor/foliate/search.js": "f29c0d671b5ac2385845da43103d25cf1e49a60a4dc14b5f826d2444cd01c86b",
+    "assets/reader/vendor/foliate/search.js": "8f4cdd61263904e01b23fe203f297b211aec34645d1594b471a2d8bab65ab074",
     "assets/reader/vendor/foliate/text-walker.js": "1112fee10fb142d3740d604ace067b39424b46e85c2b6447f6dcb3c28c8be3e2",
     "assets/reader/vendor/foliate/tts.js": "c80c7d0baabbc810fcfd482185672bcd9320a21ce4b0acaaa0f69359d9bb5b06",
     "assets/reader/vendor/foliate/view.js": "52a2cc975d54d25852b5f3b75f220dd0058d551478c72b0bd0d57b282aa99569",

@@ -24,6 +24,30 @@ let noteView=null,noteGeneration=0
 let typography=noTypography,localFont={family:'serif',faces:[]},fontSignature='',lastEpubRelocation=null,pinnedTypographyLocation=null
 const typographyWork=new TypographyWork()
 let appearanceOperation=Promise.resolve(),programmaticSelections=new WeakMap()
+let annotationOperation=Promise.resolve(),annotationRevision=-1,annotationTransfer=null
+function receiveAnnotations(command){
+    const revision=command.revision??annotationRevision+1
+    if(revision<annotationRevision)return
+    let value=command.value
+    if(typeof command.chunk==='string'){
+        if(command.offset===0){annotationRevision=revision;annotationTransfer={revision,size:0,chunks:[]}}
+        const transfer=annotationTransfer
+        if(!transfer||transfer.revision!==revision)return
+        if(command.offset!==transfer.size)throw Error('Incomplete annotation transfer')
+        transfer.chunks.push(command.chunk);transfer.size+=command.chunk.length
+        if(!command.complete)return
+        value=JSON.parse(transfer.chunks.join(''))
+    }
+    if(!Array.isArray(value))throw Error('Invalid annotation snapshot')
+    annotationRevision=revision;annotationTransfer=null
+    const operation=annotationOperation.catch(()=>{}).then(async()=>{
+        if(revision!==annotationRevision)return
+        if(view)for(const a of annotations)if(a.anchor?.cfi)await view.deleteAnnotation({value:a.anchor.cfi})
+        annotations=value
+        if(view){await paintEpub();if(noteView)await paintNote()}else if(pdf)paintPdf()
+    })
+    annotationOperation=operation;return operation
+}
 function userNavigation(){typographyWork.navigate();pinnedTypographyLocation=null;programmaticSelections=new WeakMap()}
 function reportEpubLocation(data){
     lastEpubRelocation=data
@@ -31,7 +55,7 @@ function reportEpubLocation(data){
     const pin=pinnedTypographyLocation
     reportLocation(pin&&pin.view===view?{...data,anchor:pin.anchor,progress:pin.progress}:data)
 }
-let activeFormat='epub',comicTail=Promise.resolve(),regionSelection=null
+let activeFormat='epub',navigationTail=Promise.resolve(),regionSelection=null
 const isComic=()=>activeFormat==='cbz'||activeFormat==='cbr'
 function textAnchor(cfi,index){
     const resolved=index??view.resolveCFI(cfi)?.index
@@ -130,7 +154,7 @@ function reportNavigation(){
     emit('navigation',{speechNext:isComic()?false:view?(view.isFixedLayout?index<view.book.sections.length-1:!view.renderer.atEnd):index<(pdf?.numPages??0)-1,back:isComic()?historyIndex>0:view?view.history.canGoBack:historyIndex>0,forward:isComic()?historyIndex<history.length-1:view?view.history.canGoForward:historyIndex<history.length-1,previous:view?(view.isFixedLayout?index>0:!view.renderer.atStart):index>0,next:view?(view.isFixedLayout?shown<view.book.sections.length-1:!view.renderer.atEnd):index+(prefs.spread?1:0)<(pdf?.numPages??0)-1})
 }
 function remember() {
-    if(isComic()&&location.anchor?.page!=null)location={...location,anchor:comicAnchor(view.book,location.anchor.page,{position:comicPosition()??[0,0]})}
+    if(isComic())captureComicLocation()
     if (historyIndex < 0 || JSON.stringify(history[historyIndex]) !== JSON.stringify(location.anchor)) {
         history.splice(historyIndex+1);history.push(structuredClone(location.anchor));historyIndex = history.length-1
     }
@@ -200,11 +224,21 @@ async function verifyComicPage(){
     for(const {doc} of parts){const img=doc.querySelector('img');await img?.decode();if(current!==view||!img?.naturalWidth||!img.getBoundingClientRect().width)throw Error('Comic page failed to decode or lay out')}
     await nextFrame()
 }
-function comicPosition(){
-    const part=view?.renderer.getContents().find(x=>x.index===location.anchor?.page),img=part?.doc.querySelector('img'),frame=part?.doc.defaultView.frameElement
-    if(!img||!frame)return undefined
-    const bounds=frame.getBoundingClientRect(),viewport=view.renderer.getBoundingClientRect()
-    return [Math.max(0,Math.min(1,(viewport.left-bounds.left)/bounds.width)),Math.max(0,Math.min(1,(viewport.top-bounds.top)/bounds.height))]
+function captureComicLocation(){
+    if(!view||location.anchor?.page==null)return
+    const viewport=view.renderer.getBoundingClientRect()
+    const parts=view.renderer.getContents().flatMap(part=>{
+        const frame=part.doc.defaultView?.frameElement,bounds=frame?.getBoundingClientRect()
+        if(!bounds?.width||!bounds.height||!part.doc.querySelector('img'))return []
+        const x=Math.max(0,Math.min(bounds.width,viewport.left-bounds.left)),y=Math.max(0,Math.min(bounds.height,viewport.top-bounds.top))
+        const distance=(bounds.left+x-viewport.left)**2+(bounds.top+y-viewport.top)**2
+        return [{index:part.index,position:[x/bounds.width,y/bounds.height],distance}]
+    })
+    // The viewport origin may have moved onto the companion page. Keep that
+    // page's identity with its coordinates instead of clipping the old page.
+    parts.sort((a,b)=>a.distance-b.distance||Number(b.index===location.anchor.page)-Number(a.index===location.anchor.page)||a.index-b.index)
+    const part=parts[0];if(!part)return
+    location={...location,anchor:comicAnchor(view.book,part.index,{position:part.position}),progress:(part.index+1)/view.book.sections.length,reference:`${strings.page} ${part.index+1}`}
 }
 function restoreComicPosition(anchor){
     const part=view?.renderer.getContents().find(x=>x.index===(anchor?.page??location.anchor?.page)),frame=part?.doc.defaultView.frameElement
@@ -363,7 +397,7 @@ async function mountFoliate(book,config){
         userNavigation();emit('navigationJump');remember()
         const a=e.detail.a,type=a.getAttributeNS('http://www.idpf.org/2007/ops','type')??a.getAttribute('epub:type')??''
         if(type.split(/\s+/).includes('noteref')||a.getAttribute('role')==='doc-noteref'){
-            e.preventDefault();showFootnote(e.detail.href,location.anchor?.index??0).catch(error=>emit('navigationError',{message:String(error)}))
+            e.preventDefault();showFootnote(e.detail.href,location.anchor?.index??0,null,a).catch(error=>emit('navigationError',{message:String(error)}))
         }
     })
     view.addEventListener('create-overlay',()=>paintEpub())
@@ -380,12 +414,14 @@ async function mountFoliate(book,config){
     const saved=isComic()?{index:config.anchor?.page??0}:config.anchor?.cfi?epubNavigation(config.anchor):null
     if(saved&&!saved.anchor){await view.renderer.goTo(saved);view.history.pushState(saved.index)}
     else await view.init({lastLocation:config.anchor?.cfi,showTextStart:!config.anchor?.cfi})
+    if(!view.renderer.getContents().some(({doc})=>doc?.documentElement&&!doc.querySelector('parsererror')))
+        throw Error('Publication did not produce a readable first document')
     await applyAppearance(config.appearance??{})
-    annotations=config.annotations??[];await paintEpub()
-    if(isComic()){await verifyComicPage();restoreComicPosition(config.anchor);paintRegions();remember();view.renderer.addEventListener('scroll',()=>{clearTimeout(window.comicScrollTimer);window.comicScrollTimer=setTimeout(()=>reportLocation({...location,anchor:comicAnchor(book,location.anchor.page,{position:comicPosition()??[0,0]})}),200)},{passive:true})}
+    annotations=config.annotations??annotations;await paintEpub()
+    if(isComic()){await verifyComicPage();restoreComicPosition(config.anchor);paintRegions();remember();view.renderer.addEventListener('scroll',()=>{clearTimeout(window.comicScrollTimer);window.comicScrollTimer=setTimeout(()=>{captureComicLocation();reportLocation(location)},200)},{passive:true})}
     const owner=session;requestAnimationFrame(()=>setTimeout(()=>enrichEpubOutline(book,owner).catch(error=>{if(owner===session&&view?.book===book)emit('metadata',{outlineFailed:true});emit('diagnostic',{stage:'outline',message:'Publication outline unavailable'})}),0))
 }
-async function showFootnote(href,sourceIndex,selectedCFI){
+async function showFootnote(href,sourceIndex,selectedCFI,sourceLink=null){
     const epoch=++noteGeneration
     for(const old of document.querySelectorAll('dialog.footnote[open]'))old.close()
     const resolved=await view.resolveNavigation(href),section=view.book.sections[resolved.index]
@@ -433,9 +469,14 @@ async function showFootnote(href,sourceIndex,selectedCFI){
         const href=section.resolveHref(a.getAttribute('href')),type=a.getAttributeNS('http://www.idpf.org/2007/ops','type')??a.getAttribute('epub:type')??''
         if(type.split(/\s+/).includes('backlink')||a.getAttribute('role')==='doc-backlink')return
         if(view.book.isExternal(href)){emit('external',{url:href});return}
-        // Backlinks to the referring section close the note at the exact
-        // original passage; cross-references elsewhere remain navigable.
-        try{const target=await view.resolveNavigation(href);if(target.index!==sourceIndex){emit('navigationJump');remember();await view.goTo(href)}}
+        try{
+            const target=await view.resolveNavigation(href)
+            if(sourceLink&&target?.index===sourceIndex){
+                const destination=target.anchor?.(sourceLink.ownerDocument)
+                if(destination===sourceLink||destination===sourceLink.parentElement&&destination?.localName==='sup')return
+            }
+            emit('navigationJump');remember();await view.goTo(href)
+        }
         catch(error){emit('navigationError',{message:String(error)})}
     })
     if(epoch!==noteGeneration){close();return}
@@ -522,7 +563,7 @@ function css(p) {
 }
 function bookSpread(book){return book?.rendition?.spread}
 async function applyAppearance(p,restoring=null){
-    if(isComic()&&location.anchor?.page!=null)location={...location,anchor:comicAnchor(view.book,location.anchor.page,{position:comicPosition()??[0,0]})}
+    if(isComic())captureComicLocation()
     const owner=view,previousWork=typographyWork.active,work=typographyWork.begin(location.anchor),original=location
     work.selections=restoring?.selections??(previousWork?.navigation===work.navigation?previousWork.selections:captureEpubSelections())
     work.previous=restoring??previousWork?.previous??{prefs,localFont,fontSignature}
@@ -607,7 +648,7 @@ async function openPdf(config){
     // malformed optional entries must not hold first-page readiness hostage.
     const details={pages:pdf.numPages,labels,fixed:true}
     emit('metadata',details)
-    annotations=config.annotations??[];prefs=config.appearance??{};css(prefs)
+    annotations=config.annotations??annotations;prefs=config.appearance??{};css(prefs)
     let layout=relayoutPdf(config.anchor??{page:0,y:0}),usable=await layout
     while(!usable&&pdfLayout&&pdfLayout!==layout){layout=pdfLayout;usable=await layout}
     if(!usable)return false
@@ -700,10 +741,10 @@ async function destinationAnchor(dest,position){
     return anchor
 }
 function pdfAnchor(index,y=0){
-    const p=pages[index],point=p.viewport?.convertToPdfPoint(0,Math.max(0,y)*p.element.offsetHeight)
+    const p=pages[index],point=p.viewport?.convertToPdfPoint(Math.max(0,content.scrollLeft-p.element.offsetLeft),Math.max(0,y)*p.element.offsetHeight)
     return {page:index,ref:p.ref,y, ...(point?{point}:{})}
 }
-let observer, layoutGeneration=0, renderRunning=0
+let observer, layoutGeneration=0, pdfNavigationGeneration=0, renderRunning=0
 const renderQueue=[],renderTasks=new Set(),geometry=new Map()
 function stopRendering(){
     for(const task of renderTasks)task.cancel()
@@ -736,29 +777,31 @@ function trimPages(){
         p.element.replaceChildren();p.rendering=null;p.text=null;geometry.get(i)?.cleanup()
     }
 }
-let pdfLayout
+let pdfLayout,pdfViewport
 function relayoutPdf(anchor){return pdfLayout=layoutPdf(anchor)}
 async function layoutPdf(anchor){
     const epoch=++layoutGeneration;layingOut=true;navigatingPage=anchor?.page??0
-    stopRendering();observer?.disconnect();content.replaceChildren();pages=[]
-    const initial=await pdf.getPage((anchor?.page??0)+1)
-    if(epoch!==layoutGeneration)return false
-    geometry.set(initial.pageNumber-1,initial)
-    const fallback=initial.getViewport({scale:1,rotation:(initial.rotate+(prefs.rotation??0))%360})
-    content.style.display=prefs.spread?'flex':'block';content.style.flexWrap='wrap';content.style.alignContent='start';content.style.justifyContent='center'
-    for(let i=0;i<pdf.numPages;i++){
-        const known=geometry.get(i)
-        const base=known?.getViewport({scale:1,rotation:(known.rotate+(prefs.rotation??0))%360})??fallback
-        const scale=fitScale(base.width,base.height,content.clientWidth,content.clientHeight,prefs.zoom,prefs.spread)
-        const el=document.createElement('section');el.className='pdf-page';el.tabIndex=0;el.setAttribute('aria-label',pdfReference(i));el.style.width=`${base.width*scale}px`;el.style.height=`${base.height*scale}px`;el.dataset.index=i
-        if(prefs.flow!=='scrolled'&&i!==(anchor?.page??0)&&!(prefs.spread&&i===(anchor?.page??0)+1))el.hidden=true
-        content.append(el);pages.push({element:el,scale,epoch})
-    }
-    observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
-    for(const p of pages)observer.observe(p.element)
-    const rendered=await queuePage(anchor?.page??0,epoch)
-    if(!rendered||epoch!==layoutGeneration)return false
-    const positioned=await gotoPdf(anchor??{page:0},epoch);layingOut=false;return positioned!==false&&epoch===layoutGeneration
+    try{
+        stopRendering();observer?.disconnect();content.replaceChildren();pages=[]
+        const initial=await pdf.getPage((anchor?.page??0)+1)
+        if(epoch!==layoutGeneration)return false
+        geometry.set(initial.pageNumber-1,initial)
+        const fallback=initial.getViewport({scale:1,rotation:(initial.rotate+(prefs.rotation??0))%360})
+        content.style.display=prefs.spread?'flex':'block';content.style.flexWrap='wrap';content.style.alignContent='start';content.style.justifyContent='center'
+        for(let i=0;i<pdf.numPages;i++){
+            const known=geometry.get(i)
+            const base=known?.getViewport({scale:1,rotation:(known.rotate+(prefs.rotation??0))%360})??fallback
+            const scale=fitScale(base.width,base.height,content.clientWidth,content.clientHeight,prefs.zoom,prefs.spread)
+            const el=document.createElement('section');el.className='pdf-page';el.tabIndex=0;el.setAttribute('aria-label',pdfReference(i));el.style.width=`${base.width*scale}px`;el.style.height=`${base.height*scale}px`;el.dataset.index=i
+            if(prefs.flow!=='scrolled'&&i!==(anchor?.page??0)&&!(prefs.spread&&i===(anchor?.page??0)+1))el.hidden=true
+            content.append(el);pages.push({element:el,scale,epoch})
+        }
+        observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
+        for(const p of pages)observer.observe(p.element)
+        const rendered=await queuePage(anchor?.page??0,epoch)
+        if(!rendered||epoch!==layoutGeneration)return false
+        const positioned=await gotoPdf(anchor??{page:0},epoch);return positioned!==false&&epoch===layoutGeneration
+    }finally{if(epoch===layoutGeneration){layingOut=false;pdfViewport=[content.clientWidth,content.clientHeight]}}
 }
 async function renderPage(index,epoch){
     const data=pages[index];if(!data||data.epoch!==epoch)return
@@ -792,7 +835,7 @@ async function renderPage(index,epoch){
             e.preventDefault()
             try{
                 if(a.url)emit('external',{url:a.url})
-                else {emit('navigationJump');remember();await gotoPdf(await destinationAnchor(a.dest));remember()}
+                else {emit('navigationJump');await queueNavigation(async()=>{userNavigation();remember();await gotoPdf(await destinationAnchor(a.dest));remember()})}
             }catch(error){emit('navigationError',{message:String(error)})}
         })
         el.append(link)
@@ -803,14 +846,18 @@ async function renderPage(index,epoch){
 async function gotoPdf(anchor,epoch=layoutGeneration){
     const index=typeof anchor==='number'?anchor:anchor.page
     if(!validPage(index,pdf.numPages)){emit('navigationError',{message:strings.invalidPage});return false}
+    const navigation=++pdfNavigationGeneration,current=()=>navigation===pdfNavigationGeneration&&epoch===layoutGeneration
     navigatingPage=index
-    let rendered;try{rendered=await queuePage(index,epoch)}catch(error){navigatingPage=null;throw error}
-    if(!rendered||epoch!==layoutGeneration){navigatingPage=null;return false}const p=pages[index];if(!p){navigatingPage=null;return false}
+    let rendered;try{rendered=await queuePage(index,epoch)}catch(error){if(current())navigatingPage=null;throw error}
+    if(!current())return false
+    if(!rendered){navigatingPage=null;return false}const p=pages[index];if(!p){navigatingPage=null;return false}
     if(prefs.flow!=='scrolled')for(let i=0;i<pages.length;i++)pages[i].element.hidden=i!==index&&!(prefs.spread&&i===index+1)
     const pdfPoint=anchor.point??(anchor.rect?[anchor.rect[0],anchor.rect[3]]:null)
     const point=pdfPoint&&p.viewport?p.viewport.convertToViewportPoint(...pdfPoint):null
     const top=point?point[1]:(anchor.y??0)*p.element.offsetHeight
-    if(point)content.scrollLeft=Math.max(0,p.element.offsetLeft+point[0]-content.clientWidth*.25)
+    // Persisted anchors include y and describe the viewport origin. Explicit
+    // document destinations retain their reading inset.
+    content.scrollLeft=point?Math.max(0,p.element.offsetLeft+point[0]-(anchor.y==null?content.clientWidth*.25:0)):0
     content.scrollTop=p.element.offsetTop+Math.max(0,top)
     suppressSelectionUntil=performance.now()+600
     if(anchor.textOffset!=null)selectPdfText(index,anchor.textOffset,anchor.textLength??1)
@@ -945,7 +992,12 @@ document.addEventListener('keydown',keys)
 content.addEventListener('pointerdown',userNavigation,{passive:true})
 content.addEventListener('wheel',userNavigation,{passive:true})
 content.addEventListener('touchstart',userNavigation,{passive:true})
-new ResizeObserver(()=>{if(pdf){clearTimeout(window.pdfResizeTimer);window.pdfResizeTimer=setTimeout(()=>relayoutPdf(location.anchor).catch(error=>emit('navigationError',{message:String(error)})),150)}}).observe(content)
+new ResizeObserver(()=>{if(pdf){clearTimeout(window.pdfResizeTimer);window.pdfResizeTimer=setTimeout(()=>queueNavigation(async()=>{
+    // Layout itself changes scrollbars. Only rebuild for a new settled viewport,
+    // and let earlier navigation finish before capturing its current anchor.
+    if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight)return
+    await relayoutPdf(location.anchor)
+}).catch(error=>emit('navigationError',{message:String(error)})),150)}}).observe(content)
 function emitPassage(request,ignoreSelection=false){
     if(isComic()){emit('passage',{request,text:'',anchor:location.anchor,reference:location.reference,selected:false});return}
         let passage=ignoreSelection?null:selection
@@ -956,8 +1008,14 @@ function emitPassage(request,ignoreSelection=false){
         }}
     emit('passage',{...(passage??{text:location.text??'',anchor:location.anchor,reference:location.reference}),request,selected:!ignoreSelection&&selection!=null})
 }
+function queueNavigation(operation){
+    const work=navigationTail.catch(()=>{}).then(operation);navigationTail=work;return work
+}
 async function dispatch(c){
-    if(isComic()&&['goto','back','forward','next','previous','appearance','cancelAppearance'].includes(c.action)){const work=comicTail.catch(()=>{}).then(()=>dispatchCommand(c));comicTail=work;return work}
+    if(c.session!=null&&c.session!==session)return
+    if((isComic()||activeFormat==='pdf')&&['goto','back','forward','next','previous','advanceSpeech','appearance','cancelAppearance','flush'].includes(c.action)){
+        return queueNavigation(()=>dispatchCommand(c))
+    }
     return dispatchCommand(c)
 }
 async function dispatchCommand(c){
@@ -965,7 +1023,7 @@ async function dispatchCommand(c){
     try{
     if(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){cancelRegion();userNavigation();noteGeneration++;for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close()}
     switch(c.action){
-    case 'open':activeFormat=c.format;typography=noTypography;theme(c.chrome??{});strings=c.labels??{};content.className='loading';content.textContent=strings.loadingBook??'';content.setAttribute('aria-busy','true');content.setAttribute('aria-label',c.title??'');prefs=c.appearance??{};if(c.format==='pdf'){if(await openPdf(c)===false)return}else if(['epub','fb2','cbz','cbr'].includes(c.format))await openFoliate(c);else throw Error('Unsupported publication format');content.removeAttribute('aria-busy');emit('opened',{typography});break
+    case 'open':await annotationOperation;activeFormat=c.format;annotations=c.annotations??annotations;typography=noTypography;theme(c.chrome??{});strings=c.labels??{};content.className='loading';content.textContent=strings.loadingBook??'';content.setAttribute('aria-busy','true');content.setAttribute('aria-label',c.title??'');prefs=c.appearance??{};if(c.format==='pdf'){if(await openPdf(c)===false)return}else if(['epub','fb2','cbz','cbr'].includes(c.format))await openFoliate(c);else throw Error('Unsupported publication format');content.removeAttribute('aria-busy');emit('opened',{typography});break
     case 'beginRegion':beginRegion();break
     case 'chrome':theme(c.value);break
     case 'cancelAppearance':{
@@ -984,21 +1042,21 @@ async function dispatchCommand(c){
         break
     }
     case 'speaking':spokenAnchor=c.anchor;await paintSpeaking();break
-    case 'next':if(view)await view.next();else await gotoPdf({page:(location.anchor?.page??0)+(prefs.spread?2:1)});break
-    case 'previous':if(view)await view.prev();else await gotoPdf({page:(location.anchor?.page??0)-(prefs.spread?2:1)});break
+    case 'next':if(view)await view.next();else await gotoPdf({page:Math.min(pdf.numPages-1,(location.anchor?.page??0)+(prefs.spread?2:1))});break
+    case 'previous':if(view)await view.prev();else await gotoPdf({page:Math.max(0,(location.anchor?.page??0)-(prefs.spread?2:1))});break
     case 'goto':{const owner=session;remember();if(view){await gotoEpub(c.anchor);if(isComic())remember();}else {const usable=await gotoPdf(c.anchor);if(usable===false)throw Error(strings.navigationInterrupted);remember()}if(c.request!=null&&owner===session)emit('navigationResult',{request:c.request});break}
     case 'back':if(isComic()){if(historyIndex>0){historyIndex--;await gotoEpub(history[historyIndex])}}else if(view)view.history.back();else if(historyIndex>0){historyIndex--;await gotoPdf(history[historyIndex])}break
     case 'forward':if(isComic()){if(historyIndex<history.length-1){historyIndex++;await gotoEpub(history[historyIndex])}}else if(view)view.history.forward();else if(historyIndex<history.length-1){historyIndex++;await gotoPdf(history[historyIndex])}break
     case 'search':await requestSearch(c.query,c.queryId);break
     case 'cancelSearch':generation++;view?.clearSearch();break
-    case 'annotations':if(view)for(const a of annotations)if(a.anchor?.cfi)view.deleteAnnotation({value:a.anchor.cfi});annotations=c.value;view?await paintEpub():paintPdf();break
+    case 'annotations':await receiveAnnotations(c);break
     case 'passage':emitPassage(c.request);break
     case 'advanceSpeech':if(view){if(view.isFixedLayout)await view.goTo((location.anchor?.index??0)+1);else await view.next();}else await gotoPdf({page:(location.anchor?.page??0)+1});emitPassage(c.request,true);break
     case 'focus':if(view)view.renderer.focusView();else content.focus();break
     case 'outline':if(view)await enrichEpubOutline(view.book,session);else if(pdf)await enrichPdfOutline().catch(()=>emit('metadata',{outlineFailed:true}));break
     case 'thumbnailWindow':setThumbnailWindow(c.pages,c.request);break
     case 'thumbnail':if((pdf||isComic())&&validPage(c.page,pdf?.numPages??view.book.sections.length))queueThumbnail(c.page,c.request);break
-    case 'flush':await appearanceOperation;if(isComic())location={...location,anchor:comicAnchor(view.book,location.anchor.page,{position:comicPosition()??[0,0]})};emit('location',location);emit('flushed',{request:c.request});break
+    case 'flush':await appearanceOperation;await annotationOperation;if(isComic())captureComicLocation();else if(pdf&&location.anchor?.page!=null){const index=location.anchor.page,p=pages[index];if(p)location={...location,anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight)}}emit('location',location);emit('flushed',{request:c.request});break
     }}catch(e){if(isComic()&&view?.book?.releaseExcept)view.book.releaseExcept(new Set(view.renderer.getContents().map(x=>x.index)));if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e)})}
 }
 const thumbnails=[],thumbnailPending=new Map(),thumbnailTasks=new Map();let thumbnailRunning=0,thumbnailEpoch=0,thumbnailRequest=0

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:image/image.dart' as image;
 import 'package:xml/xml.dart';
+import 'image_header.dart';
 
 String? libraryCover(Uint8List bytes, String mime) {
   if (bytes.length > 4 * 1024 * 1024) return null;
@@ -31,15 +32,9 @@ String? libraryCover(Uint8List bytes, String mime) {
     if (safe.length > 128 * 1024) return null;
     return 'data:image/svg+xml;base64,${base64Encode(safe)}';
   }
-  final decoder = image.findDecoderForData(bytes),
-      info = decoder?.startDecode(bytes);
-  if (info == null ||
-      info.width <= 0 ||
-      info.height <= 0 ||
-      info.width * info.height > 16 * 1024 * 1024) {
-    return null;
-  }
-  final decoded = decoder!.decodeFrame(0);
+  final header = boundedImageInfo(bytes, maximumPixels: 16 * 1024 * 1024);
+  if (header == null) return null;
+  final decoded = header.decoder.decode(bytes, frame: 0);
   if (decoded == null) return null;
   final thumbnail = image.copyResize(
     decoded,

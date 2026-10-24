@@ -3,6 +3,13 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
+bool isArchiveMetadata(String name) => name
+    .split('/')
+    .any(
+      (part) =>
+          part == '__MACOSX' || part == '.DS_Store' || part.startsWith('._'),
+    );
+
 class _BoundedSink implements Sink<List<int>> {
   _BoundedSink(this.limit);
   final int limit;
@@ -24,8 +31,8 @@ class _BoundedSink implements Sink<List<int>> {
 // Check the count before the ZIP library allocates its central directory.
 void checkZipEntryCount(
   InputStream input, {
-  int? maximumMetadataBytes,
-  int? maximumNameBytes,
+  int maximumMetadataBytes = 16 * 1024 * 1024,
+  int maximumNameBytes = 4 * 1024 * 1024,
 }) {
   final size = input.length;
   final length = size.clamp(0, 65557);
@@ -50,25 +57,21 @@ void checkZipEntryCount(
           data.getUint16(offset + 6, Endian.little) != 0) {
         throw const FormatException('Multipart ZIP archives are unsupported');
       }
-      if (maximumMetadataBytes != null) {
-        _boundZipMetadata(
-          input,
-          size - length + offset,
-          data,
-          offset,
-          maximumMetadataBytes,
-          maximumNameBytes ?? maximumMetadataBytes,
-        );
-      } else if (data.getUint16(offset + 10, Endian.little) > 20000) {
-        throw const FormatException('Archive has too many entries');
-      }
+      _boundZipMetadata(
+        input,
+        size - length + offset,
+        data,
+        offset,
+        maximumMetadataBytes,
+        maximumNameBytes,
+      );
       return;
     }
   }
   throw const FormatException('Missing or damaged ZIP directory');
 }
 
-// Opt-in file-backed comic preflight. The library retains central and local
+// The library retains central and local
 // extra fields/filenames, so bounding only the EOCD count is insufficient.
 // Inspect fixed headers and bounded directory bytes before it allocates objects.
 void _boundZipMetadata(

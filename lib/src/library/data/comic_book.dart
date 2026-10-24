@@ -10,6 +10,7 @@ import '../../import_export/data/archive_guard.dart';
 import 'book_xml.dart';
 import 'cover_image.dart';
 import 'comic_image.dart';
+import 'image_header.dart';
 
 const comicEntryBytes = 64 * 1024 * 1024;
 const comicTotalBytes = 4 * 1024 * 1024 * 1024;
@@ -232,10 +233,7 @@ Future<Map<String, dynamic>> extractComic(
   // Validate/decode archive entries first, including metadata CRCs and paths.
   // Filesystem sidecars never participate in page or ComicInfo enumeration.
   bool filesystemMetadata(Map<String, dynamic> entry) {
-    final name = entry['name'] as String, basename = p.posix.basename(name);
-    return name.split('/').contains('__MACOSX') ||
-        basename.startsWith('._') ||
-        basename == '.DS_Store';
+    return isArchiveMetadata(entry['name'] as String);
   }
 
   for (final entry in entries.where(filesystemMetadata)) {
@@ -386,8 +384,13 @@ Future<Map<String, dynamic>> extractComic(
     final bytes = await File(
       p.join(stage.path, page['file'] as String),
     ).readAsBytes();
-    final decoder = image.findDecoderForData(bytes),
-        info = decoder?.startDecode(bytes);
+    final header = boundedImageInfo(bytes, maximumPixels: comicPixels);
+    if (header == null) {
+      throw FormatException(
+        'Comic page ${index + 1} is damaged or exceeds image limits (16000 per side, 32 million pixels)',
+      );
+    }
+    final decoder = header.decoder, info = header.info;
     if (decoder is! image.JpegDecoder &&
         decoder is! image.PngDecoder &&
         decoder is! image.WebPDecoder) {
@@ -395,21 +398,9 @@ Future<Map<String, dynamic>> extractComic(
         'Unsupported comic page image encoding: ${page['name']}',
       );
     }
-    if (info == null || info.width <= 0 || info.height <= 0) {
-      throw FormatException(
-        'Damaged or unsupported comic page ${index + 1}: ${page['name']}',
-      );
-    }
     if (info.numFrames > 1) {
       throw FormatException(
         'Animated comic pages are unsupported: ${page['name']}',
-      );
-    }
-    if (info.width > 16000 ||
-        info.height > 16000 ||
-        info.width * info.height > comicPixels) {
-      throw FormatException(
-        'Comic page ${index + 1} exceeds image limits (16000 per side, 32 million pixels)',
       );
     }
     // Browser image-orientation:from-image defines the persisted coordinate

@@ -3,13 +3,58 @@ const CONTEXT_LENGTH = 50
 
 const normalizeWhitespace = str => str.replace(/\s+/g, ' ')
 
+const textPosition = strs => {
+    const boundaries = [0]
+    for (const str of strs) boundaries.push(boundaries.at(-1) + str.length)
+    return (offset, end = false) => {
+        let low = 0, high = strs.length - 1
+        while (low < high) {
+            const mid = (low + high) >>> 1
+            if (end ? boundaries[mid + 1] < offset : boundaries[mid + 1] <= offset) low = mid + 1
+            else high = mid
+        }
+        return [low, offset - boundaries[low]]
+    }
+}
+
+const lowercasePosition = (text, lowered, locales) => {
+    if (text.length === lowered.length) return offset => offset
+    // Keep only length changes, rather than a pair of arrays for every code
+    // unit of a potentially large chapter. Graphemes preserve locale mappings
+    // involving combining marks, such as Turkish I + dot above.
+    const units = Intl?.Segmenter
+        ? new Intl.Segmenter(locales, { granularity: 'grapheme' }).segment(text)
+        : Array.from(text, segment => ({ segment }))
+    const changes = []
+    let original = 0, folded = 0
+    for (const { segment } of units) {
+        const length = segment.toLocaleLowerCase(locales).length
+        if (length !== segment.length)
+            changes.push({ start: folded, end: folded + length, original, next: original + segment.length })
+        original += segment.length
+        folded += length
+    }
+    return (offset, end = false) => {
+        let low = 0, high = changes.length
+        while (low < high) {
+            const mid = (low + high) >>> 1
+            if (end ? changes[mid].start < offset : changes[mid].start <= offset) low = mid + 1
+            else high = mid
+        }
+        const change = changes[low - 1]
+        if (!change) return offset
+        return offset < change.end ? end ? change.next : change.original
+            : offset + change.next - change.end
+    }
+}
+
 const makeExcerpt = (strs, { startIndex, startOffset, endIndex, endOffset }) => {
     const start = strs[startIndex]
     const end = strs[endIndex]
-    const match = start === end
+    const match = startIndex === endIndex
         ? start.slice(startOffset, endOffset)
         : start.slice(startOffset)
-            + strs.slice(start + 1, end).join('')
+            + strs.slice(startIndex + 1, endIndex).join('')
             + end.slice(0, endOffset)
     const trimmedStart = normalizeWhitespace(start.slice(0, startOffset)).trimStart()
     const trimmedEnd = normalizeWhitespace(end.slice(endOffset)).trimEnd()
@@ -27,19 +72,14 @@ const simpleSearch = function* (strs, query, options = {}) {
     const lowerHaystack = matchCase ? haystack : haystack.toLocaleLowerCase(locales)
     const needle = matchCase ? query : query.toLocaleLowerCase(locales)
     const needleLength = needle.length
+    const original = lowercasePosition(haystack, lowerHaystack, locales)
+    const position = textPosition(strs)
     let index = -1
-    let strIndex = -1
-    let sum = 0
     do {
         index = lowerHaystack.indexOf(needle, index + 1)
         if (index > -1) {
-            while (sum <= index) sum += strs[++strIndex].length
-            const startIndex = strIndex
-            const startOffset = index - (sum - strs[strIndex].length)
-            const end = index + needleLength
-            while (sum <= end) sum += strs[++strIndex].length
-            const endIndex = strIndex
-            const endOffset = end - (sum - strs[strIndex].length)
+            const [startIndex, startOffset] = position(original(index))
+            const [endIndex, endOffset] = position(original(index + needleLength, true), true)
             const range = { startIndex, startOffset, endIndex, endOffset }
             yield { range, excerpt: makeExcerpt(strs, range) }
         }
@@ -60,19 +100,15 @@ const segmenterSearch = function* (strs, query, options = {}) {
     const queryLength = Array.from(segmenter.segment(query)).length
 
     const substrArr = []
-    let strIndex = 0
-    let segments = segmenter.segment(strs[strIndex])[Symbol.iterator]()
-    main: while (strIndex < strs.length) {
+    // Segment the logical text, so inline markup cannot introduce word or
+    // grapheme boundaries. Map the resulting offsets back into the DOM nodes.
+    const position = textPosition(strs)
+    const segments = segmenter.segment(strs.join(''))[Symbol.iterator]()
+    main: while (true) {
         while (substrArr.length < queryLength) {
             const { done, value } = segments.next()
             if (done) {
-                // the current string is exhausted
-                // move on to the next string
-                strIndex++
-                if (strIndex < strs.length) {
-                    segments = segmenter.segment(strs[strIndex])[Symbol.iterator]()
-                    continue
-                } else break main
+                break main
             }
             const { index, segment } = value
             // ignore formatting characters
@@ -80,19 +116,17 @@ const segmenterSearch = function* (strs, query, options = {}) {
             // normalize whitespace
             if (/\s/u.test(segment)) {
                 if (!/\s/u.test(substrArr[substrArr.length - 1]?.segment))
-                    substrArr.push({ strIndex, index, segment: ' ' })
+                    substrArr.push({ index, segment: ' ', end: index + segment.length })
                 continue
             }
-            value.strIndex = strIndex
+            value.end = index + segment.length
             substrArr.push(value)
         }
         const substr = substrArr.map(x => x.segment).join('')
         if (collator.compare(query, substr) === 0) {
-            const endIndex = strIndex
             const lastSeg = substrArr[substrArr.length - 1]
-            const endOffset = lastSeg.index + lastSeg.segment.length
-            const startIndex = substrArr[0].strIndex
-            const startOffset = substrArr[0].index
+            const [endIndex, endOffset] = position(lastSeg.end, true)
+            const [startIndex, startOffset] = position(substrArr[0].index)
             const range = { startIndex, startOffset, endIndex, endOffset }
             yield { range, excerpt: makeExcerpt(strs, range) }
         }
@@ -100,12 +134,13 @@ const segmenterSearch = function* (strs, query, options = {}) {
     }
 }
 
-export const search = (strs, query, options) => {
+export const search = (strs, query, options = {}) => {
+    if (!strs.length || !query) return []
     const { granularity = 'grapheme', sensitivity = 'base' } = options
     if (!Intl?.Segmenter || granularity === 'grapheme'
     && (sensitivity === 'variant' || sensitivity === 'accent'))
         return simpleSearch(strs, query, options)
-    return segmenterSearch(strs, query, options)
+    return segmenterSearch(strs, query, { ...options, granularity, sensitivity })
 }
 
 export const searchMatcher = (textWalker, opts) => {

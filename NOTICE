@@ -14,9 +14,10 @@ No Typst or BusyMark editor toolchain is included in BusyBooks.
 
 Foliate.js, Copyright John Factotum and contributors, MIT.
 https://github.com/johnfactotum/foliate-js
-The pinned EPUB loader and fixed-layout renderer carry documented local
-corrections, including spine fallback resolution and overflow-safe centering;
-see tools/vendor-manifest.json and docs/development/readers.md.
+The pinned EPUB loader, renderers and search module carry documented local
+corrections for resource URLs, navigation, loading failures and search ranges;
+see tools/vendor-manifest.json, docs/development/readers.md and
+docs/development/format-review-corrections.json.
 PDF.js, Copyright Mozilla Foundation and contributors, Apache-2.0.
 https://github.com/mozilla/pdf.js
 Additional PDF font/CMap/WASM/ICC attributions and complete licenses are

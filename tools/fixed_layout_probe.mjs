@@ -34,7 +34,7 @@ try {
     document: { createElement: tag => new Element(tag) },
     CustomEvent: class extends Event { constructor(type, options) { super(type); this.detail = options.detail } },
   })
-  const { FixedLayout } = await import('../assets/reader/vendor/foliate/fixed-layout.js')
+  const { FixedLayout } = await import(process.env.BUSYBOOKS_FIXED_LAYOUT_SOURCE??new URL('../assets/reader/vendor/foliate/fixed-layout.js',import.meta.url))
   let selected = null, focused = null
   for (const id of ['cover', 'left', 'right']) documents.set(id, {
     documentElement: { localName: 'html' },
@@ -67,8 +67,18 @@ try {
   assert.equal(renderer.index, 1)
   renderer.focusView()
   assert.equal(focused, 'left')
+  for (const dir of ['ltr', 'rtl']) for (const spread of ['auto', 'none']) {
+    const sections = [...documents.keys()].map(id => ({pageSpread: 'center', load: async () => id}))
+    renderer.open({dir, rendition: {viewport: {width: 900, height: 600}}, sections})
+    renderer.spread = spread
+    for (const [index, section] of sections.entries()) {
+      assert.equal(renderer.getSpreadOf(section)?.index, index, 'Every centered page owns a spread')
+      await renderer.goTo({index})
+      assert.equal(renderer.index, index)
+    }
+  }
   renderer.destroy()
-  console.log(JSON.stringify({status: 'passed', checks: 12, scope: 'actual fixed-layout renderer with controlled DOM: same-spread identity, zoom target, anchor selection, scrolling and active-page focus; no native rendering acceptance'}))
+  console.log(JSON.stringify({status: 'passed', scope: 'actual fixed-layout renderer with controlled DOM: consecutive centered spreads, single/spread presentation, reading direction, same-spread identity, zoom target, anchor selection, scrolling and active-page focus; no native rendering acceptance'}))
 } finally {
   for (const [name, descriptor] of previous) {
     if (descriptor) Object.defineProperty(globalThis, name, descriptor)

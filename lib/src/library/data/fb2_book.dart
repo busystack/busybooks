@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:xml/xml.dart';
-import 'package:image/image.dart' as image;
 import '../../import_export/data/archive_guard.dart';
 import 'book_xml.dart';
 import 'cover_image.dart';
+import 'image_header.dart';
 
 const fb2Namespace = 'http://www.gribuser.ru/xml/fictionbook/2.0';
 const xlinkNamespace = 'http://www.w3.org/1999/xlink';
@@ -15,7 +15,10 @@ Uint8List unwrapFb2(Uint8List bytes, String suffix) {
   final archive = validatedArchive(bytes, maximumTotal: 64 * 1024 * 1024);
   final documents = archive.files
       .where(
-        (entry) => entry.isFile && entry.name.toLowerCase().endsWith('.fb2'),
+        (entry) =>
+            entry.isFile &&
+            !isArchiveMetadata(entry.name) &&
+            entry.name.toLowerCase().endsWith('.fb2'),
       )
       .toList();
   if (documents.length != 1) {
@@ -116,15 +119,8 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
     }
     try {
       final data = base64.decode(encoded);
-      final decoder = image.findDecoderForData(data),
-          info = decoder?.startDecode(data);
-      if (info == null ||
-          info.width <= 0 ||
-          info.height <= 0 ||
-          info.width > 16000 ||
-          info.height > 16000 ||
-          info.width * info.height > 32 * 1024 * 1024 ||
-          info.numFrames > 1) {
+      final header = boundedImageInfo(data);
+      if (header == null || header.info.numFrames > 1) {
         continue;
       }
       final path = 'binary/${images.length}';
@@ -142,9 +138,9 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
       .whereType<XmlElement>()
       .where((e) => e.name.local == 'image')
       .firstOrNull;
-  final coverId = coverImage
-      ?.getAttribute('href', namespaceUri: xlinkNamespace)
-      ?.replaceFirst('#', '');
+  final coverId = _fragmentId(
+    coverImage?.getAttribute('href', namespaceUri: xlinkNamespace),
+  );
   final cover = resources[images[coverId]];
   if (cover != null) {
     try {
@@ -272,7 +268,7 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
       final href =
           node.getAttribute('href', namespaceUri: xlinkNamespace) ?? '';
       final resolved = href.startsWith('#')
-          ? destinations[Uri.decodeComponent(href.substring(1))]
+          ? destinations[_fragmentId(href)]
           : Uri.tryParse(href)?.hasScheme == true
           ? href
           : null;
@@ -284,9 +280,9 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
       }
     }
     if (name == 'img') {
-      final id = node
-          .getAttribute('href', namespaceUri: xlinkNamespace)
-          ?.replaceFirst('#', '');
+      final id = _fragmentId(
+        node.getAttribute('href', namespaceUri: xlinkNamespace),
+      );
       final path = images[id];
       if (path == null) {
         return XmlElement(XmlName.parts('span'), [], [
@@ -362,4 +358,15 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
     outline(source, toc);
   }
   return PreparedFb2(metadata, sections, toc, resources);
+}
+
+String? _fragmentId(String? href) {
+  if (href == null || !href.startsWith('#')) return null;
+  try {
+    return Uri.decodeComponent(href.substring(1));
+  } on FormatException {
+    return null;
+  } on ArgumentError {
+    return null;
+  }
 }

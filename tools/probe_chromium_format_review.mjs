@@ -50,7 +50,7 @@ try{
         return reply.result.value
     }
     for(const [number,fixture] of fixtures.entries()){
-        const profile=path.join(owned,'profile-'+number),original=path.join(root,'test/fixtures/formats',fixture)
+        const profile=path.join(owned,'profile-'+number),original=path.isAbsolute(fixture)?fixture:path.join(root,'test/fixtures/formats',fixture)
         const prepared=spawnSync(process.env.BUSYBOOKS_DART_BIN??'dart',['run','tools/prepare_format_acceptance.dart',profile,original],{cwd:root,encoding:'utf8',env:{...process.env,BUSYBOOKS_COMIC_DECODER:process.env.BUSYBOOKS_COMIC_DECODER??path.join(root,'build/linux/x64/release/bundle/busybooks_comic_archive')}})
         assert.equal(prepared.status,0,prepared.stderr)
         const publication=JSON.parse(prepared.stdout)
@@ -62,10 +62,26 @@ try{
         await send('Page.addScriptToEvaluateOnNewDocument',{source:`window.probeEvents=[];window.nativeSavedProof=null;window.chrome.webview={postMessage:json=>window.probeEvents.push(JSON.parse(json))}`},sessionId)
         await send('Page.navigate',{url:'https://busybooks.local/index.html?session=review'},sessionId)
         await evaluate(sessionId,`(async()=>{for(let i=0;i<400;i++){if(window.probeEvents?.some(e=>e.type==='ready'))return;await new Promise(r=>setTimeout(r,25))}throw Error('Reader not ready')})()`)
+        if(process.env.BUSYBOOKS_REVIEW_ANNOTATIONS){
+            const records=JSON.parse(fs.readFileSync(process.env.BUSYBOOKS_REVIEW_ANNOTATIONS,'utf8')),encoded=JSON.stringify(records)
+            await evaluate(sessionId,`window.expectedAnnotationCount=${records.length}`)
+            for(let offset=0;offset<encoded.length;offset+=32768){
+                const end=Math.min(encoded.length,offset+32768),command={action:'annotations',revision:1,offset,chunk:encoded.slice(offset,end),complete:end===encoded.length}
+                assert(Buffer.byteLength(JSON.stringify(command))<1048576,'Every annotation command respects native hosts')
+                await evaluate(sessionId,`busybooks.dispatch(${JSON.stringify(command)})`)
+            }
+        }
         await evaluate(sessionId,`busybooks.dispatch(${JSON.stringify({action:'open',format:publication.format,appearance:{publisher:false,size:22},labels:{page:'Page',printPage:'Print page'}})})`)
         const opened=await evaluate(sessionId,`window.probeEvents.some(e=>e.type==='opened')`)
+        if(process.env.BUSYBOOKS_EXPECT_OPEN_ERROR){
+            assert(!opened,'Damaged first section must not announce readiness')
+            const errors=await evaluate(sessionId,`window.probeEvents.filter(e=>e.type==='error')`)
+            assert(errors.some(e=>e.message.includes(process.env.BUSYBOOKS_EXPECT_OPEN_ERROR)),JSON.stringify(errors))
+            console.log(JSON.stringify({engine:'Chromium',fixture,passed:true,check:'first-section rejection'}))
+            await send('Target.closeTarget',{targetId});publications.delete(sessionId);continue
+        }
         assert(opened,JSON.stringify(await evaluate(sessionId,'window.probeEvents')))
-        await evaluate(sessionId,fs.readFileSync(path.join(root,'tools/format_review_native_proof.js'),'utf8'))
+        await evaluate(sessionId,fs.readFileSync(process.env.BUSYBOOKS_REVIEW_PROOF??path.join(root,'tools/format_review_native_proof.js'),'utf8'))
         const result=await evaluate(sessionId,'window.reviewResult')
         assert(result?.passed,JSON.stringify(result))
         console.log(JSON.stringify({engine:'Chromium',fixture,...result}))
