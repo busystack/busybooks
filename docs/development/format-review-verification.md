@@ -1,5 +1,10 @@
 # Format review corrections
 
+The later stored-locator repair and its previous-version → edit → backup →
+restore evidence are recorded in
+[comic-locator-upgrade-verification.md](comic-locator-upgrade-verification.md).
+The results and portable artifact below predate that persistence correction.
+
 This follow-up starts from clean `feature/book-formats` commit `852bd74` and
 addresses the five reproduced defects. The original format implementation and
 package records remain in [format-verification.md](format-verification.md).

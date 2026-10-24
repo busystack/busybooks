@@ -78,6 +78,18 @@ Comic locators admit only their versioned image fields; incompatible PDF/text
 fields and unknown keys are rejected before restore writes. Comic ordering
 ends within its own branch, so formerly accepted stray PDF fields cannot break
 Notebook lists or Markdown export.
+
+Opening the current database also repairs the previously accepted, unused PDF
+`point` field on otherwise valid version-1 comic locators. The worker performs
+this idempotent repair in one transaction under the profile lock before serving
+any requests, including note/color edits or backup. It handles stored annotations,
+current positions and outline destinations in batches of 32 candidate rows,
+preserving identities, text and image geometry. PDF points, invalid geometry,
+other unknown fields and unknown locator versions are unchanged. Incoming
+backups still undergo strict validation and receive no such repair. No schema
+change or historical database/backup importer is introduced. See
+[upgrade verification](comic-locator-upgrade-verification.md).
+
 Notebook ordering and Markdown references use these semantic locations. This metadata remains
 reading data; regenerable page previews are not another persistence authority.
 
