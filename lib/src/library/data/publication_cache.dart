@@ -3,7 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import '../../core/atomic_file_writer.dart';
+import 'file_identity.dart';
+import 'pdf_snapshot.dart';
 import '../domain/book_format.dart';
 import 'comic_book.dart';
 import 'epub_cache.dart';
@@ -13,7 +14,9 @@ import 'cache_resources.dart';
 String publicationCachePath(String root, String format, String id) => p.join(
   root,
   'cache',
-  format == 'epub'
+  format == 'pdf'
+      ? 'pdf-v1'
+      : format == 'epub'
       ? 'epub'
       : format == 'fb2'
       ? 'fb2-v2'
@@ -31,13 +34,20 @@ Future<String> preparePublicationCache(
   bool force = false,
   required bool Function() cancelled,
 }) async {
-  if (format == 'pdf') return publicationCachePath(root, format, id);
+  if (format == 'pdf') {
+    return preparePdfSnapshot(
+      root,
+      id,
+      sourcePath,
+      force: force,
+      cancelled: cancelled,
+    );
+  }
   if (format == 'epub') {
     await prepareEpubCache(
       root,
       id,
       sourcePath: sourcePath,
-      verifiedBytes: verifiedBytes,
       force: force,
       cancelled: cancelled,
     );
@@ -47,13 +57,15 @@ Future<String> preparePublicationCache(
       (format != 'fb2' && !isComicFormat(format))) {
     throw const FormatException('Invalid preparation descriptor');
   }
-  final original = File(sourcePath), before = await original.stat();
+  final original = File(sourcePath), before = await File(sourcePath).stat();
+  final instance = fileInstance(sourcePath);
   Future<void> checkOriginal() async {
     final after = await original.stat();
     if (after.type != FileSystemEntityType.file ||
         before.size != after.size ||
         before.modified != after.modified ||
-        before.changed != after.changed) {
+        before.changed != after.changed ||
+        fileInstance(sourcePath) != instance) {
       throw const FileSystemException(
         'Original changed during cache preparation',
       );
@@ -78,6 +90,7 @@ Future<String> preparePublicationCache(
     parent.path,
     target.path,
     index.path,
+    '${index.path}.sha256',
   ]) {
     if (await FileSystemEntity.isLink(path)) {
       throw const FileSystemException(
@@ -88,20 +101,16 @@ Future<String> preparePublicationCache(
   await parent.create(recursive: true);
   if (!force && await index.exists() && await target.exists()) {
     try {
-      if (await index.length() > 16 * 1024 * 1024) {
-        throw const FormatException(
-          'Publication resource index limit exceeded',
-        );
-      }
-      final data = jsonDecode(await index.readAsString()) as Map;
-      if (data['version'] == 1 &&
-          data['id'] == id &&
-          data['format'] == format &&
+      final data = await readSealedCacheIndex(index);
+      if (data?['version'] == 2 &&
+          data?['id'] == id &&
+          data?['format'] == format &&
           await completeCachedResources(
             target,
-            data['resources'],
+            data?['resources'],
             cancelled: cancelled,
           )) {
+        await validatePreparedClosure(data!, target);
         await checkOriginal();
         if (verifiedComic?['directory'] case final String path) {
           final old = Directory(path);
@@ -130,7 +139,11 @@ Future<String> preparePublicationCache(
         }
         final filename = sha256.convert(utf8.encode(entry.key)).toString();
         await File(p.join(staging.path, filename)).writeAsBytes(entry.value);
-        resources[entry.key] = {'file': filename, 'size': entry.value.length};
+        resources[entry.key] = {
+          'file': filename,
+          'size': entry.value.length,
+          'sha256': sha256.convert(entry.value).toString(),
+        };
       }
       descriptor = {
         'sections': book.sections,
@@ -146,19 +159,11 @@ Future<String> preparePublicationCache(
     }
     await checkOriginal();
     if (cancelled()) throw const FormatException('Book preparation cancelled');
-    final encoded = utf8.encode(
-      jsonEncode({...descriptor, 'version': 1, 'id': id, 'format': format}),
-    );
-    if (encoded.length > 16 * 1024 * 1024) {
-      throw const FormatException('Publication resource index limit exceeded');
-    }
+    descriptor = {...descriptor, 'version': 2, 'id': id, 'format': format};
+    await validatePreparedClosure(descriptor, staging);
     if (await target.exists()) await target.delete(recursive: true);
     await staging.rename(target.path);
-    await const AtomicFileWriter().writeBytes(
-      index.path,
-      encoded,
-      overwrite: true,
-    );
+    await writeSealedCacheIndex(index, descriptor);
     return target.path;
   } finally {
     if (await staging.exists()) await staging.delete(recursive: true);

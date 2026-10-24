@@ -12,15 +12,50 @@ import * as pdfjs from './vendor/pdfjs/pdf.mjs'
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.mjs', import.meta.url).href
 const content = document.querySelector('#content')
 const session = new URL(window.location.href).searchParams.get('session') ?? 'probe'
-const emit = (type, data = {}) => {
-    const json = JSON.stringify({ type, session, ...data })
-    if (window.webkit?.messageHandlers?.busybooks) window.webkit.messageHandlers.busybooks.postMessage(json)
+const bridgePayloadCharacters=16*1024*1024,bridgeChunkCharacters=32*1024
+let bridgeRevision=0,commandTransfer=null,commandRevision=-1
+function postBridge(json){
+    if(window.webkit?.messageHandlers?.busybooks)window.webkit.messageHandlers.busybooks.postMessage(json)
     else window.chrome?.webview?.postMessage(json)
-    if (window.busybooksProbe) window.busybooksProbe({type,session,...data})
+}
+function emit(type,data={}){
+    const message={type,session,...data},json=JSON.stringify(message)
+    if(json.length>bridgePayloadCharacters){postBridge(JSON.stringify({type:'bridgeError',session,direction:'event',message:'Reader bridge payload limit exceeded'}));return false}
+    if(utf8Length(json)<=131072)postBridge(json)
+    else {
+        const revision=++bridgeRevision
+        for(let offset=0;offset<json.length;offset+=bridgeChunkCharacters){
+            const end=Math.min(json.length,offset+bridgeChunkCharacters)
+            postBridge(JSON.stringify({type:'bridgeChunk',session,bridgeRevision:revision,offset,total:json.length,chunk:json.slice(offset,end),complete:end===json.length}))
+        }
+    }
+    if(window.busybooksProbe)window.busybooksProbe(message)
+    return true
+}
+function receiveCommand(frame){
+    if(frame.action!=='bridgeChunk'){
+        if(commandTransfer){commandTransfer=null;throw Error('Incomplete reader bridge transfer')}
+        return frame
+    }
+    const {bridgeRevision:revision,offset,total,chunk,complete}=frame
+    const invalid=()=>{commandTransfer=null;throw Error('Invalid reader bridge transfer')}
+    if(!Number.isSafeInteger(revision)||revision<0||!Number.isSafeInteger(offset)||!Number.isSafeInteger(total)||
+        total<1||total>bridgePayloadCharacters||typeof chunk!=='string'||!chunk.length||chunk.length>bridgeChunkCharacters||typeof complete!=='boolean')invalid()
+    if(revision<commandRevision||revision===commandRevision&&!commandTransfer)return null
+    if(offset===0){if(revision<=commandRevision||commandTransfer)invalid();commandRevision=revision;commandTransfer={revision,total,size:0,chunks:[]}}
+    const transfer=commandTransfer
+    if(!transfer||revision!==transfer.revision||offset!==transfer.size||total!==transfer.total||transfer.size+chunk.length>total)invalid()
+    transfer.chunks.push(chunk);transfer.size+=chunk.length
+    if(complete!==(transfer.size===total))invalid()
+    if(!complete)return null
+    commandTransfer=null
+    const command=JSON.parse(transfer.chunks.join(''))
+    if(command.session!==session||command.action==='bridgeChunk')invalid()
+    return command
 }
 let strings={}, chrome={}, spokenAnchor=null, currentRange=null, view, pdf, prefs = {}, location = {}, selection = null, annotations = [], pages = [], labels = []
 const fixedContents=new WeakMap()
-let noteView=null,noteGeneration=0
+let noteView=null,noteGeneration=0,cacheFailureReported=false
 let typography=noTypography,localFont={family:'serif',faces:[]},fontSignature='',lastEpubRelocation=null,pinnedTypographyLocation=null
 const typographyWork=new TypographyWork()
 let appearanceOperation=Promise.resolve(),programmaticSelections=new WeakMap()
@@ -144,8 +179,9 @@ async function enrichEpubOutline(book,owner){
     },revision,owner)
 }
 function reportLocation(data) {
-    location = data
-    emit('location', data)
+    const {text,...position}=data
+    location = position
+    emit('location', position)
     reportNavigation()
 }
 function reportNavigation(){
@@ -160,11 +196,16 @@ function remember() {
     }
     reportNavigation()
 }
+function cacheResourceFailure(error){
+    if(error?.name==='AbortError')throw error
+    if(!cacheFailureReported){cacheFailureReported=true;emit('error',{message:String(error),cacheFailure:true})}
+    throw Object.assign(error instanceof Error?error:Error(String(error)),{cacheFailureReported:true})
+}
 function safeDocument(data) {
     // Book documents are never script-capable application contexts. CSP also blocks
     // network requests; sanitize before EPUB resources become Blob URLs.
     const doc = new DOMParser().parseFromString(data,'application/xhtml+xml')
-    if (doc.querySelector('parsererror')) throw Error('Invalid publication XHTML')
+    if (doc.querySelector('parsererror')) cacheResourceFailure(Error('Invalid publication XHTML'))
     for (const el of doc.querySelectorAll('script,iframe,object,embed,form,base,meta[http-equiv],link[rel="preload"],link[rel="modulepreload"]')) el.remove()
     for (const el of doc.querySelectorAll('*')) for (const attr of [...el.attributes]) {
         if (/^on/i.test(attr.name) || /^(?:javascript|vbscript):/i.test(attr.value.trim())) el.removeAttribute(attr.name)
@@ -197,16 +238,24 @@ async function openFoliate(config) {
     const resource=name=>'book/'+sizes[name].file
     const load=async(name,options)=>{
         if(!Object.hasOwn(sizes,name))return null
-        const response=await fetch(resource(name),options)
-        if(!response.ok)throw Error('Publication resource is unavailable')
-        const buffer=await response.arrayBuffer()
-        if(buffer.byteLength!==sizes[name].size)throw Error('Publication resource size does not match its index')
-        return buffer
+        try{
+            const response=await fetch(resource(name),options)
+            if(!response.ok)throw Error('Publication resource is unavailable')
+            const buffer=await response.arrayBuffer()
+            if(buffer.byteLength!==sizes[name].size)throw Error('Publication resource size does not match its index')
+            const expected=sizes[name].sha256
+            if(typeof expected!=='string'||!/^([a-f0-9]{64})$/.test(expected))throw Error('Publication resource digest is missing')
+            const digest=await crypto.subtle.digest('SHA-256',buffer)
+            const actual=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('')
+            if(actual!==expected)throw Error('Publication resource digest does not match its index')
+            return buffer
+        }catch(error){cacheResourceFailure(error)}
     }
     const loadText=async(name,options)=>{
         const buffer=await load(name,options);if(buffer==null)return null
         const data=new Uint8Array(buffer)
-        return adaptDTBook(new TextDecoder(data[0]===255&&data[1]===254||data[0]===60&&data[1]===0?'utf-16le':data[0]===254&&data[1]===255||data[0]===0&&data[1]===60?'utf-16be':'utf-8',{fatal:true}).decode(data))
+        try{return adaptDTBook(new TextDecoder(data[0]===255&&data[1]===254||data[0]===60&&data[1]===0?'utf-16le':data[0]===254&&data[1]===255||data[0]===0&&data[1]===60?'utf-16be':'utf-8',{fatal:true}).decode(data))}
+        catch(error){cacheResourceFailure(error)}
     }
     const loader={loadText,loadBlob:async(name,type,options)=>{const buffer=await load(name,options);return buffer==null?null:new Blob([buffer],{type:type??''})},getSize:name=>sizes[name]?.size??0}
     let book
@@ -861,7 +910,7 @@ async function gotoPdf(anchor,epoch=layoutGeneration){
     content.scrollTop=p.element.offsetTop+Math.max(0,top)
     suppressSelectionUntil=performance.now()+600
     if(anchor.textOffset!=null)selectPdfText(index,anchor.textOffset,anchor.textLength??1)
-    else if(anchor.segments?.length)selectPdfText(index,anchor.segments[0].start,anchor.segments[0].text.length)
+    else if(anchor.segments?.length)selectPdfText(index,anchor.segments[0].start,anchor.segments[0].length??anchor.segments[0].text?.length??1)
     reportLocation({anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight),progress:(index+1)/pdf.numPages,reference:pdfReference(index),text:p.text??'',chapter:'',tocHref:pdfTocHref(index),tocId:pdfTocId(anchor),noText:p.text!=null&&!p.text.trim()});navigatingPage=null;return true
 }
 function pdfText(items){
@@ -908,7 +957,7 @@ function pdfSelection(){
         if(piece.compareBoundaryPoints(Range.END_TO_END,all)>0)piece.setEnd(all.endContainer,all.endOffset)
         const rect=p.element.getBoundingClientRect(),boxes=[...piece.getClientRects()].filter(x=>x.width&&x.height).map(x=>[...p.viewport.convertToPdfPoint(x.left-rect.left,x.top-rect.top),...p.viewport.convertToPdfPoint(x.right-rect.left,x.bottom-rect.top)])
         const before=all.cloneRange();before.setEnd(piece.startContainer,piece.startOffset)
-        segments.push({page:i,ref:p.ref,boxes,start:before.toString().length,text:piece.toString()})
+        segments.push({page:i,ref:p.ref,boxes,start:before.toString().length,length:piece.toString().length})
     }
     if(!segments.length)return
     selected({text:s.toString(),anchor:{page:segments[0].page,segments},reference:pdfReference(segments[0].page),order:segments[0].page},r)
@@ -1004,7 +1053,7 @@ function emitPassage(request,ignoreSelection=false){
         if(!passage&&view){const index=view.resolveCFI(location.anchor.cfi)?.index??0;let range=currentRange;if(!range){const doc=view.renderer.getContents().find(x=>x.index===index)?.doc;if(doc){range=doc.createRange();range.selectNodeContents(doc.body??doc.documentElement)}}if(range)passage={text:range.toString(),anchor:textAnchor(view.getCFI(index,range),index),reference:location.reference}}
         if(!passage&&pdf){const index=location.anchor?.page??0,p=pages[index],layer=p?.element.querySelector('.textLayer');if(layer){
             const rect=p.element.getBoundingClientRect(),top=Math.max(rect.top,content.getBoundingClientRect().top),spans=[...layer.querySelectorAll('span')].filter(s=>s.getBoundingClientRect().bottom>=top),text=spans.map(s=>s.textContent).join(' '),boxes=spans.map(s=>s.getBoundingClientRect()).map(r=>[...p.viewport.convertToPdfPoint(r.left-rect.left,r.top-rect.top),...p.viewport.convertToPdfPoint(r.right-rect.left,r.bottom-rect.top)])
-            passage={text,anchor:{page:index,segments:[{page:index,boxes,start:0,text}]},reference:location.reference}
+            passage={text,anchor:{page:index,segments:[{page:index,boxes,start:0,length:text.length}]},reference:location.reference}
         }}
     emit('passage',{...(passage??{text:location.text??'',anchor:location.anchor,reference:location.reference}),request,selected:!ignoreSelection&&selection!=null})
 }
@@ -1013,6 +1062,7 @@ function queueNavigation(operation){
 }
 async function dispatch(c){
     if(c.session!=null&&c.session!==session)return
+    try{c=receiveCommand(c);if(!c)return}catch(error){emit('bridgeError',{direction:'command',message:String(error)});return}
     if((isComic()||activeFormat==='pdf')&&['goto','back','forward','next','previous','advanceSpeech','appearance','cancelAppearance','flush'].includes(c.action)){
         return queueNavigation(()=>dispatchCommand(c))
     }
@@ -1023,7 +1073,7 @@ async function dispatchCommand(c){
     try{
     if(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){cancelRegion();userNavigation();noteGeneration++;for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close()}
     switch(c.action){
-    case 'open':await annotationOperation;activeFormat=c.format;annotations=c.annotations??annotations;typography=noTypography;theme(c.chrome??{});strings=c.labels??{};content.className='loading';content.textContent=strings.loadingBook??'';content.setAttribute('aria-busy','true');content.setAttribute('aria-label',c.title??'');prefs=c.appearance??{};if(c.format==='pdf'){if(await openPdf(c)===false)return}else if(['epub','fb2','cbz','cbr'].includes(c.format))await openFoliate(c);else throw Error('Unsupported publication format');content.removeAttribute('aria-busy');emit('opened',{typography});break
+    case 'open':await annotationOperation;cacheFailureReported=false;activeFormat=c.format;annotations=c.annotations??annotations;typography=noTypography;theme(c.chrome??{});strings=c.labels??{};content.className='loading';content.textContent=strings.loadingBook??'';content.setAttribute('aria-busy','true');content.setAttribute('aria-label',c.title??'');prefs=c.appearance??{};if(c.format==='pdf'){if(await openPdf(c)===false)return}else if(['epub','fb2','cbz','cbr'].includes(c.format))await openFoliate(c);else throw Error('Unsupported publication format');content.removeAttribute('aria-busy');emit('opened',{typography});break
     case 'beginRegion':beginRegion();break
     case 'chrome':theme(c.value);break
     case 'cancelAppearance':{
@@ -1057,7 +1107,7 @@ async function dispatchCommand(c){
     case 'thumbnailWindow':setThumbnailWindow(c.pages,c.request);break
     case 'thumbnail':if((pdf||isComic())&&validPage(c.page,pdf?.numPages??view.book.sections.length))queueThumbnail(c.page,c.request);break
     case 'flush':await appearanceOperation;await annotationOperation;if(isComic())captureComicLocation();else if(pdf&&location.anchor?.page!=null){const index=location.anchor.page,p=pages[index];if(p)location={...location,anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight)}}emit('location',location);emit('flushed',{request:c.request});break
-    }}catch(e){if(isComic()&&view?.book?.releaseExcept)view.book.releaseExcept(new Set(view.renderer.getContents().map(x=>x.index)));if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e)})}
+    }}catch(e){if(isComic()&&view?.book?.releaseExcept)view.book.releaseExcept(new Set(view.renderer.getContents().map(x=>x.index)));if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});if(e.cacheFailureReported||c.action==='open'&&cacheFailureReported)return;emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e),cacheFailure:c.action==='open'&&c.format!=='pdf'})}
 }
 const thumbnails=[],thumbnailPending=new Map(),thumbnailTasks=new Map();let thumbnailRunning=0,thumbnailEpoch=0,thumbnailRequest=0
 function setThumbnailWindow(indices,request){

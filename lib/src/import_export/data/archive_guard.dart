@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 bool isArchiveMetadata(String name) => name
@@ -258,7 +259,7 @@ Uint8List readZipEntry(ZipFileHeader header) {
   if (source == null || source.filename != header.filename) {
     throw const FormatException('Inconsistent archive directory');
   }
-  final input = source.getStream(decompress: false);
+  final input = source.getStream(decompress: false)..setPosition(0);
   final sink = _BoundedSink(header.uncompressedSize);
   if (header.compressionMethod == 8) {
     final decoder = ZLibCodec(raw: true).decoder.startChunkedConversion(sink);
@@ -297,4 +298,141 @@ Archive validatedArchive(
     );
   }
   return archive;
+}
+
+/// A bounded directory over file-backed compressed input. Entry contents are
+/// read only on demand; cache preparation never materializes a whole archive.
+class FileBackedZip {
+  FileBackedZip._(this._input, this.entries);
+  final InputFileStream _input;
+  final Map<String, ZipFileHeader> entries;
+
+  static Future<FileBackedZip> open(
+    String path, {
+    int maximumTotal = 1024 * 1024 * 1024,
+    int maximumEntry = 256 * 1024 * 1024,
+  }) async {
+    final input = InputFileStream(path);
+    try {
+      checkZipEntryCount(input);
+      final directory = ZipDirectory()..read(input);
+      validateZipDirectory(
+        directory,
+        maximumTotal: maximumTotal,
+        maximumEntry: maximumEntry,
+      );
+      return FileBackedZip._(input, {
+        for (final header in directory.fileHeaders) header.filename: header,
+      });
+    } catch (_) {
+      await input.close();
+      rethrow;
+    }
+  }
+
+  Uint8List? read(String name, {int maximumBytes = 4 * 1024 * 1024}) {
+    final entry = entries[name];
+    if (entry == null || entry.filename.endsWith('/')) return null;
+    if (entry.uncompressedSize > maximumBytes) {
+      throw const FormatException(
+        'Publication metadata resource limit exceeded',
+      );
+    }
+    return readZipEntry(entry);
+  }
+
+  ZipMetadataEntry? findFile(String name) {
+    final header = entries[name];
+    return header == null || name.endsWith('/')
+        ? null
+        : ZipMetadataEntry(header);
+  }
+
+  Future<void> close() => _input.close();
+}
+
+class _DigestResult implements Sink<Digest> {
+  Digest? value;
+  @override
+  void add(Digest data) => value = data;
+  @override
+  void close() {}
+}
+
+Future<String> fileSha256(File file, bool Function() cancelled) async {
+  final result = _DigestResult();
+  final digest = sha256.startChunkedConversion(result);
+  await for (final bytes in file.openRead()) {
+    if (cancelled()) throw const FormatException('Book preparation cancelled');
+    digest.add(bytes);
+  }
+  digest.close();
+  return result.value!.toString();
+}
+
+/// Write one resource with backpressure and bounded compressed input chunks.
+/// A small compressed chunk also bounds transient output for high-ratio DEFLATE.
+Future<String> streamZipEntry(
+  ZipFileHeader header,
+  File target,
+  bool Function() cancelled, {
+  int maximumBytes = 256 * 1024 * 1024,
+}) async {
+  final source = header.file;
+  if (source == null || source.filename != header.filename) {
+    throw const FormatException('Inconsistent archive directory');
+  }
+  final input = source.getStream(decompress: false)..setPosition(0);
+  Stream<List<int>> chunks() async* {
+    while (!input.isEOS) {
+      if (cancelled()) {
+        throw const FormatException('Book preparation cancelled');
+      }
+      final chunkBytes = header.compressionMethod == 8 ? 1024 : 65536;
+      yield input.readBytes(input.length.clamp(0, chunkBytes)).toUint8List();
+    }
+  }
+
+  final output = await target.open(mode: FileMode.write);
+  final result = _DigestResult();
+  final hasher = sha256.startChunkedConversion(result);
+  var size = 0, crc = 0;
+  try {
+    final stream = header.compressionMethod == 8
+        ? chunks().transform(ZLibCodec(raw: true).decoder)
+        : chunks();
+    await for (final bytes in stream) {
+      if (cancelled()) {
+        throw const FormatException('Book preparation cancelled');
+      }
+      size += bytes.length;
+      if (size > header.uncompressedSize || size > maximumBytes) {
+        throw const FormatException('Decompressed resource limit exceeded');
+      }
+      crc = getCrc32(bytes, crc);
+      hasher.add(bytes);
+      await output.writeFrom(bytes);
+    }
+    hasher.close();
+    if (size != header.uncompressedSize || crc != header.crc32) {
+      throw const FormatException('Damaged archive resource (CRC or size)');
+    }
+    return result.value!.toString();
+  } finally {
+    await output.close();
+  }
+}
+
+class ZipMetadataEntry {
+  ZipMetadataEntry(this._header);
+  final ZipFileHeader _header;
+  int get size => _header.uncompressedSize;
+  Uint8List get content {
+    if (size > 4 * 1024 * 1024) {
+      throw const FormatException(
+        'Publication metadata resource limit exceeded',
+      );
+    }
+    return readZipEntry(_header);
+  }
 }

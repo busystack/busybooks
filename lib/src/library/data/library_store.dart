@@ -191,7 +191,14 @@ class _ReadingWorker {
     await lock!.lock(FileLock.exclusive);
     // The profile lock makes these interrupted staging resources exclusively
     // owned by this worker. Never follow links while cleaning them up.
-    for (final kind in ['epub', 'fb2-v1', 'fb2-v2', 'comic-v1', 'comic-v2']) {
+    for (final kind in [
+      'epub',
+      'pdf-v1',
+      'fb2-v1',
+      'fb2-v2',
+      'comic-v1',
+      'comic-v2',
+    ]) {
       final parent = Directory(p.join(root, 'cache', kind));
       if (await FileSystemEntity.isLink(p.join(root, 'cache')) ||
           await FileSystemEntity.isLink(parent.path)) {
@@ -577,6 +584,7 @@ class _ReadingWorker {
     await _clearInspectedComic();
     late Map<String, dynamic> metadata;
     FileStat? inspectedStat;
+    String? inspectedInstance;
     try {
       metadata = await inspectBook(
         canonical,
@@ -597,6 +605,7 @@ class _ReadingWorker {
         },
         comicStagingRoot: p.join(root, 'cache', 'comic-v2'),
         validatedStat: (stat) => inspectedStat = stat,
+        validatedInstance: (instance) => inspectedInstance = instance,
         retainComic: (prepared) => _inspectedComic = prepared,
         retainBytes: (bytes) {
           _inspectedBytes = bytes;
@@ -676,6 +685,7 @@ class _ReadingWorker {
       'id': id,
       'path': canonical,
       'stat': inspectedStat!,
+      'instance': inspectedInstance!,
       'bytes': _inspectedBytes,
       'comic': _inspectedComic,
     };
@@ -993,6 +1003,8 @@ class _ReadingWorker {
         Map<String, dynamic>? value;
         Uint8List? trustedBytes;
         Map<String, dynamic>? trustedComic;
+        FileStat? trustedStat;
+        String? trustedInstance;
         if (validation != null &&
             validation['id'] == id &&
             validation['path'] == args['path']) {
@@ -1000,13 +1012,21 @@ class _ReadingWorker {
               after = await File(args['path'] as String).stat();
           if (before.size == after.size &&
               before.modified == after.modified &&
-              before.changed == after.changed) {
+              before.changed == after.changed &&
+              validation['instance'] == fileInstance(args['path'] as String)) {
             value = {...book(id)!, 'path': validation['path']};
+            trustedStat = before;
+            trustedInstance = validation['instance'] as String;
             trustedBytes = validation['bytes'] as Uint8List?;
             trustedComic = validation['comic'] as Map<String, dynamic>?;
           }
         }
-        value ??= await openBook(args['path'] as String, expected: id);
+        if (value == null) {
+          value = await openBook(args['path'] as String, expected: id);
+          final verified = _validated.remove(value['validationToken'])!;
+          trustedStat = verified['stat'] as FileStat;
+          trustedInstance = verified['instance'] as String;
+        }
         final cache = await preparePublicationCache(
           root,
           id,
@@ -1019,7 +1039,28 @@ class _ReadingWorker {
         );
         _inspectedBytes = null;
         await _clearInspectedComic();
-        return {'path': value['path'], 'cacheDirectory': cache};
+        final path = value['path'] as String;
+        final after = await File(path).stat();
+        if (after.type != FileSystemEntityType.file ||
+            after.size != trustedStat!.size ||
+            after.modified != trustedStat.modified ||
+            after.changed != trustedStat.changed ||
+            fileInstance(path) != trustedInstance) {
+          throw const FileSystemException(
+            'Original changed during preparation',
+          );
+        }
+        return {
+          'path': path,
+          'publicationPath': value['format'] == 'pdf'
+              ? p.join(cache, 'publication.pdf')
+              : path,
+          'cacheDirectory': cache,
+          'sourceInstance': trustedInstance,
+          'sourceSize': after.size,
+          'sourceModified': after.modified.microsecondsSinceEpoch,
+          'sourceChanged': after.changed.microsecondsSinceEpoch,
+        };
       case 'updateBook':
         final value = book(args['id'] as String);
         if (value == null) {

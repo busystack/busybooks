@@ -13,6 +13,8 @@ import '../fonts/reading_font_service.dart';
 import '../../workspace/workspace_controller.dart';
 import '../../workspace/workspace_model.dart';
 import '../../library/domain/book.dart';
+import '../../library/data/file_identity.dart';
+import '../domain/reader_bridge.dart';
 import '../../library/data/record_validation.dart' show validateAnchor;
 import '../../library/domain/annotation_limits.dart';
 import '../domain/reading_navigation.dart';
@@ -436,6 +438,11 @@ class ReaderController extends Notifier<ReaderState> {
         ),
   );
   Future<void> _eventTail = Future.value();
+  Future<void>? _commandTail;
+  final _bridgeAssembler = ReaderBridgeAssembler();
+  int _bridgeRevision = 0;
+  Object? _bridgeFailure;
+  bool _cacheRecoveryAttempted = false;
   Completer<void>? _flushing;
   Future<void>? _flushOperation;
   StreamSubscription<FileSystemEvent>? _fileWatch;
@@ -474,7 +481,7 @@ class ReaderController extends Notifier<ReaderState> {
         if (text.length > maxReaderPopoverActionBytes) {
           throw PlatformException(code: 'reader-action-size');
         }
-        final msg = (jsonDecode(text) as Map).cast<String, dynamic>();
+        var msg = (jsonDecode(text) as Map).cast<String, dynamic>();
         if (msg['session'] != _session) return;
         if (msg['type'] == 'popoverAction') {
           if (!validReaderPopoverAction(text)) {
@@ -484,8 +491,22 @@ class ReaderController extends Notifier<ReaderState> {
             });
             return;
           }
-        } else if (text.length > 1048576) {
-          return; // Preserve the publication renderer's existing event bound.
+        } else {
+          try {
+            if (text.length > readerBridgeFrameBytes ||
+                utf8.encode(text).length > readerBridgeFrameBytes) {
+              throw const FormatException('Reader bridge frame limit exceeded');
+            }
+            final assembled = _bridgeAssembler.accept(msg);
+            if (assembled == null) return;
+            msg = assembled;
+          } catch (error) {
+            msg = {
+              'type': 'bridgeError',
+              'session': _session,
+              'message': error.toString(),
+            };
+          }
         }
         if (msg['type'] == 'appearanceResult') {
           final pending = _appearanceResults.remove(msg['request']);
@@ -605,7 +626,19 @@ class ReaderController extends Notifier<ReaderState> {
     return lookupAppLocalizations(Locale(tag == 'de' ? 'de' : 'en'));
   }
 
-  Future<void> open(String id) async {
+  Future<void> retry(String id) async {
+    await close();
+    await _open(id, force: true);
+  }
+
+  Future<void> open(String id) => _open(id);
+
+  Future<void> _open(
+    String id, {
+    bool force = false,
+    bool cacheRecovery = false,
+  }) async {
+    if (!cacheRecovery) _cacheRecoveryAttempted = false;
     _suspended = false;
     final current = ref.read(workspaceControllerProvider).bookById(id);
     if (current == null) return;
@@ -642,6 +675,7 @@ class ReaderController extends Notifier<ReaderState> {
         'id': id,
         'path': path,
         'validationToken': current.data['validationToken'],
+        'force': force,
       });
       if (revision != _openRevision) return;
       if (state.bookId == id && state.ready && _sourcePath == path) {
@@ -708,6 +742,9 @@ class ReaderController extends Notifier<ReaderState> {
       _sourcePath = path;
       _session = '$_sessionPrefix${++_generation}';
       final session = _session;
+      _bridgeFailure = null;
+      await _watchOriginal(path!, id, revision, descriptor as Map);
+      if (revision != _openRevision) return;
       _startupTimer?.cancel();
       _startupTimer = Timer(ref.read(readerStartupTimeoutProvider), () {
         if (session == _session) {
@@ -715,14 +752,13 @@ class ReaderController extends Notifier<ReaderState> {
         }
       });
       await readerChannel.invokeMethod<void>('open', {
-        ...(descriptor as Map),
+        ...descriptor,
         'session': _session,
         'loadingQuery': Uri.encodeQueryComponent(_labels.loadingBook),
       });
       if (revision != _openRevision) return;
       await _applyVisibility();
       if (revision != _openRevision) return;
-      await _watchOriginal(path!, id, revision);
     } catch (error) {
       // A native initialization result can arrive after another open/close.
       // Its error belongs to the superseded surface, not the current book.
@@ -777,11 +813,29 @@ class ReaderController extends Notifier<ReaderState> {
     });
   }
 
-  Future<void> _watchOriginal(String path, String id, int revision) async {
+  Future<void> _watchOriginal(
+    String path,
+    String id,
+    int revision,
+    Map descriptor,
+  ) async {
     final original = File(path);
     var observed = await original.stat();
+    var instance = fileInstance(path);
     if (revision != _openRevision) return;
+    if (observed.type != FileSystemEntityType.file ||
+        descriptor['sourceInstance'] != instance ||
+        descriptor['sourceSize'] != observed.size ||
+        descriptor['sourceModified'] !=
+            observed.modified.microsecondsSinceEpoch ||
+        descriptor['sourceChanged'] !=
+            observed.changed.microsecondsSinceEpoch) {
+      throw const FileSystemException(
+        'Original changed before reader initialization',
+      );
+    }
     void changed() {
+      if (revision != _openRevision || _sourcePath != path) return;
       _fileCheck?.cancel();
       _fileCheck = Timer(
         const Duration(milliseconds: 250),
@@ -789,30 +843,52 @@ class ReaderController extends Notifier<ReaderState> {
       );
     }
 
-    // Some network/removable filesystems do not provide native watch events.
-    // Poll metadata there, then fingerprint any changed original in the worker.
-    void poll() {
-      if (_filePoll != null) return;
-      _filePoll = Timer.periodic(const Duration(seconds: 2), (_) async {
-        if (_sourcePath != path || state.bookId != id) return;
-        final stat = await original.stat();
+    Future<void> check() async {
+      if (_sourcePath != path ||
+          state.bookId != id ||
+          revision != _openRevision) {
+        return;
+      }
+      try {
+        final stat = await original.stat(), identity = fileInstance(path);
+        if (_sourcePath != path || revision != _openRevision) return;
         if (stat.type != observed.type ||
             stat.size != observed.size ||
-            stat.modified != observed.modified) {
+            stat.modified != observed.modified ||
+            stat.changed != observed.changed ||
+            identity != instance) {
           observed = stat;
+          instance = identity;
           changed();
         }
-      });
+      } catch (_) {
+        if (revision == _openRevision && _sourcePath == path) changed();
+      }
     }
 
-    if (observed.type != FileSystemEntityType.file) changed();
+    // Poll even when native watching is available: rename replacement can leave
+    // a watch attached to the old inode, and some filesystems omit events.
+    _filePoll = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(check()),
+    );
     try {
       _fileWatch = original.watch().listen(
         (_) => changed(),
-        onError: (Object _) => poll(),
+        onError: (Object _) => changed(),
       );
     } catch (_) {
-      poll();
+      /* The instance-aware poll remains active. */
+    }
+    // Close the setup window before handing any pathname to native code.
+    final stat = await original.stat();
+    if (fileInstance(path) != instance ||
+        stat.size != observed.size ||
+        stat.modified != observed.modified ||
+        stat.changed != observed.changed) {
+      throw const FileSystemException(
+        'Original changed while installing its watch',
+      );
     }
   }
 
@@ -945,6 +1021,7 @@ class ReaderController extends Notifier<ReaderState> {
               'state': book?.state == 'unread' ? 'reading' : book?.state,
             });
       case 'location':
+        _bridgeFailure = null;
         if (_suspended || state.error != null) return;
         if (event['anchor'] is Map) {
           state = state.copy(location: event);
@@ -1231,9 +1308,45 @@ class ReaderController extends Notifier<ReaderState> {
           thumbnails: next,
           thumbnailPending: {...state.thumbnailPending}..remove(page),
         );
+      case 'bridgeError':
+        final error = StateError(
+          event['message']?.toString() ?? 'Reader bridge delivery failed',
+        );
+        _bridgeFailure = error;
+        if (_flushing?.isCompleted == false) _flushing!.completeError(error);
+        state = state.copy(warning: error.toString());
       case 'flushed':
-        if (_flushing?.isCompleted == false) _flushing!.complete();
+        if (_flushing?.isCompleted == false) {
+          if (_bridgeFailure case final Object error) {
+            _flushing!.completeError(error);
+          } else {
+            _flushing!.complete();
+          }
+        }
       case 'error':
+        if (event['cacheFailure'] == true &&
+            book?.format != 'pdf' &&
+            !_cacheRecoveryAttempted) {
+          _cacheRecoveryAttempted = true;
+          _startupTimer?.cancel();
+          state = state.copy(ready: false, phase: 'recovering');
+          final session = _session,
+              id = state.bookId!,
+              revision = _openRevision;
+          // Run after this event settles; close drains the inbound event tail.
+          Timer(Duration.zero, () async {
+            if (_session != session || _openRevision != revision) return;
+            try {
+              await close();
+              await _open(id, force: true, cacheRecovery: true);
+            } catch (error) {
+              if (state.bookId == id) {
+                state = state.copy(error: error.toString());
+              }
+            }
+          });
+          return;
+        }
         _invalidateAppearanceWork();
         _startupTimer?.cancel();
         debugPrint('BusyBooks reader error: ${event['message']}');
@@ -1260,10 +1373,43 @@ class ReaderController extends Notifier<ReaderState> {
     if (['goto', 'back', 'forward', 'next', 'previous'].contains(action)) {
       _revealOnLocation = true;
     }
-    await readerChannel.invokeMethod<void>(
-      'dispatch',
-      jsonEncode({'action': action, ...args, 'session': session}),
+    final frames = readerBridgeFrames(
+      {'action': action, ...args, 'session': session},
+      ++_bridgeRevision,
+      command: true,
+    ).toList();
+    // Ordinary commands retain immediate submission. Only a multi-frame
+    // transfer owns the channel until all of its frames have been submitted.
+    if (frames.length == 1 && _commandTail == null) {
+      await readerChannel.invokeMethod<void>(
+        'dispatch',
+        jsonEncode(frames.single),
+      );
+      return;
+    }
+    Future<void> deliver() async {
+      for (final frame in frames) {
+        if (session != _session) return;
+        await readerChannel.invokeMethod<void>('dispatch', jsonEncode(frame));
+      }
+    }
+
+    final previous = _commandTail;
+    final operation = previous == null
+        ? deliver()
+        : previous.catchError((Object _) {}).then((_) => deliver());
+    _commandTail = operation;
+    void finished() {
+      if (identical(_commandTail, operation)) _commandTail = null;
+    }
+
+    unawaited(
+      operation.then(
+        (_) => finished(),
+        onError: (Object _, StackTrace _) => finished(),
+      ),
     );
+    await operation;
   }
 
   // Route visibility survives a native close/open on a retained reader route.

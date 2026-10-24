@@ -45,51 +45,6 @@ int compareComicPaths(String a, String b) {
   return length != 0 ? length : a.compareTo(b);
 }
 
-Future<void> _zipResource(
-  ZipFileHeader header,
-  File target,
-  bool Function() cancelled,
-) async {
-  final file = header.file;
-  if (file == null || file.filename != header.filename) {
-    throw const FormatException('Inconsistent comic ZIP directory');
-  }
-  final input = file.getStream(decompress: false);
-  Stream<List<int>> chunks() async* {
-    while (!input.isEOS) {
-      if (cancelled()) {
-        throw const FormatException('Comic preparation cancelled');
-      }
-      yield input.readBytes(input.length.clamp(0, 65536)).toUint8List();
-      await Future<void>.delayed(Duration.zero);
-    }
-  }
-
-  final output = await target.open(mode: FileMode.write);
-  var size = 0, crc = 0;
-  try {
-    final stream = header.compressionMethod == 8
-        ? chunks().transform(ZLibCodec(raw: true).decoder)
-        : chunks();
-    await for (final bytes in stream) {
-      size += bytes.length;
-      if (size > header.uncompressedSize || size > comicEntryBytes) {
-        throw const FormatException('Comic entry resource limit exceeded');
-      }
-      if (cancelled()) {
-        throw const FormatException('Comic preparation cancelled');
-      }
-      crc = getCrc32(bytes, crc);
-      await output.writeFrom(bytes);
-    }
-    if (size != header.uncompressedSize || crc != header.crc32) {
-      throw const FormatException('Damaged comic ZIP resource (CRC or size)');
-    }
-  } finally {
-    await output.close();
-  }
-}
-
 Future<List<Map<String, dynamic>>> _rarResources(
   String source,
   Directory stage,
@@ -202,10 +157,11 @@ Future<Map<String, dynamic>> extractComic(
         final filename = sha256
             .convert(utf8.encode(header.filename))
             .toString();
-        await _zipResource(
+        await streamZipEntry(
           header,
           File(p.join(stage.path, filename)),
           cancelled,
+          maximumBytes: comicEntryBytes,
         );
         entries.add({
           'name': header.filename,
@@ -426,7 +382,14 @@ Future<Map<String, dynamic>> extractComic(
     'pages': pages,
     'resources': {
       for (final entry in entries)
-        entry['name'] as String: {'file': entry['file'], 'size': entry['size']},
+        entry['name'] as String: {
+          'file': entry['file'],
+          'size': entry['size'],
+          'sha256': await fileSha256(
+            File(p.join(stage.path, entry['file'] as String)),
+            cancelled,
+          ),
+        },
     },
   };
 }

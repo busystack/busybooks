@@ -11,10 +11,19 @@ fixtures=("$review_root/fixtures/reader-review.epub" "$review_root/fixtures/read
 for fixture in "${fixtures[@]}"; do
   descriptor="$review_root/descriptor.json"
   "$review_dart" run tools/prepare_format_acceptance.dart "$review_root/profile-$(basename "$fixture")" "$fixture" > "$descriptor"
-  readarray -t fields < <(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["format"]);print(d["cacheDirectory"])' "$descriptor")
-  "$review_root/probe" "$fixture" "${fields[0]}" "$PWD/assets/reader" "${fields[1]}" "$PWD/tools/review_native_proof.js"
+  readarray -t fields < <(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["format"]);print(d["cacheDirectory"]);print(d["publicationPath"])' "$descriptor")
+  "$review_root/probe" "${fields[2]}" "${fields[0]}" "$PWD/assets/reader" "${fields[1]}" "$PWD/tools/review_native_proof.js"
 done
-fixture="$review_root/fixtures/missing-first.epub"
+# Verify the adapter boundary independently of the worker's stronger closure
+# check: remove a required first section from an otherwise valid prepared index.
+fixture="$review_root/fixtures/reader-review.epub"
 "$review_dart" run tools/prepare_format_acceptance.dart "$review_root/missing-profile" "$fixture" > "$review_root/descriptor.json"
 cache_directory=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["cacheDirectory"])' "$review_root/descriptor.json")
+python3 - "$cache_directory" <<'PYTHON'
+import json,sys
+index_path=sys.argv[1]+'.json'
+with open(index_path) as file: index=json.load(file)
+index['resources'].pop('OPS/chapter#2.xhtml')
+with open(index_path,'w') as file: json.dump(index,file)
+PYTHON
 "$review_root/probe" "$fixture" epub "$PWD/assets/reader" "$cache_directory" 'reject:Publication did not produce a readable first document'

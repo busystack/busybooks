@@ -8,7 +8,9 @@ import 'package:busybooks/src/library/data/epub_cache.dart';
 Future<void> main() async {
   final root = await Directory.systemTemp.createTemp('busybooks-cache-proof-');
   try {
-    final archive = Archive();
+    final archive = ZipDecoder().decodeBytes(
+      await File('test/fixtures/reflowable.epub').readAsBytes(),
+    );
     final names = ['EPUB/A.xhtml', 'EPUB/a.xhtml', '%2e%2e/outside', 'a%2Fb'];
     for (final name in names) {
       final bytes = utf8.encode('Content of $name');

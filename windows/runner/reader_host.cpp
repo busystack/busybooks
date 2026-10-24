@@ -60,8 +60,8 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       popover_->Hide();
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       auto string_arg=[map](const char* key)->const std::string* { if(!map)return nullptr;auto it=map->find(EncodableValue(key));return it==map->end()?nullptr:std::get_if<std::string>(&it->second); };
-      const auto* path=string_arg("path");const auto* cache=string_arg("cacheDirectory");
-      if(!path||!cache){result->Error("reader-path","Original and cache paths are required");return;}
+      const auto* path=string_arg("publicationPath");const auto* cache=string_arg("cacheDirectory");
+      if(!path||!cache){result->Error("reader-path","Publication and cache paths are required");return;}
       publication_=wide(*path);cache_directory_=wide(*cache);
       if(!std::filesystem::path(publication_).is_absolute()||!std::filesystem::path(cache_directory_).is_absolute()){result->Error("reader-path","Invalid absolute paths");return;}
       const auto* session=string_arg("session");
@@ -83,7 +83,8 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       HWND owner=GetAncestor(parent_,GA_ROOT);
       if(!visible_&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner)SetFocus(parent_);
     }else if(name=="dispatch"){
-      auto json=call.arguments()?std::get_if<std::string>(call.arguments()):nullptr;if(!web_||!json||json->size()>1048576){result->Error("reader-unavailable","Reader is unavailable");return;}
+      auto json=call.arguments()?std::get_if<std::string>(call.arguments()):nullptr;if(!web_||!json){result->Error("reader-unavailable","Reader is unavailable");return;}
+      if(json->size()>1048576){Event("{\"type\":\"bridgeError\",\"session\":\""+session_+"\",\"direction\":\"command\",\"message\":\"Reader bridge frame limit exceeded\"}");result->Error("reader-bridge-limit","Reader bridge frame limit exceeded");return;}
       auto script=wide("window.busybooks?.dispatch("+*json+")");web_->ExecuteScript(script.c_str(),nullptr);
     }else if(name=="close"){
       popover_->Hide();
@@ -175,7 +176,10 @@ void ReaderHost::Initialize(){
   }).Get());
   if(FAILED(hr)){initializing_=false;if(pending_){pending_->Error("webview-runtime","WebView2 Runtime is not available");pending_.reset();}}
 }
-void ReaderHost::Event(const std::string& json,std::size_t limit){if(json.size()<=limit)channel_->InvokeMethod("event",std::make_unique<EncodableValue>(json));}
+void ReaderHost::Event(const std::string& json,std::size_t limit){
+  if(json.size()>limit){Event("{\"type\":\"bridgeError\",\"session\":\""+session_+"\",\"direction\":\"event\",\"message\":\"Reader bridge frame limit exceeded\"}");return;}
+  channel_->InvokeMethod("event",std::make_unique<EncodableValue>(json));
+}
 void ReaderHost::FileOpened(const wchar_t* path){if(!path||!*path)return;std::wstring value(path);EncodableList paths;size_t start=0;while(start<value.size()){auto end=value.find(L'\n',start);auto file=value.substr(start,end==std::wstring::npos?std::wstring::npos:end-start);if(!file.empty()){if(input_ready_)paths.emplace_back(utf8(file.c_str()));else pending_files_.push_back(utf8(file.c_str()));}if(end==std::wstring::npos)break;start=end+1;}if(!paths.empty())input_->InvokeMethod("filesOpened",std::make_unique<EncodableValue>(paths));}
 void ReaderHost::FilesDropped(HDROP drop){EncodableList paths;UINT count=DragQueryFileW(drop,0xffffffff,nullptr,0);for(UINT i=0;i<count;i++){UINT n=DragQueryFileW(drop,i,nullptr,0);std::wstring path(n+1,0);DragQueryFileW(drop,i,path.data(),n+1);if(input_ready_)paths.emplace_back(utf8(path.c_str()));else pending_files_.push_back(utf8(path.c_str()));}DragFinish(drop);if(!paths.empty())input_->InvokeMethod("assetFilesDropped",std::make_unique<EncodableValue>(paths));}
 void ReaderHost::AppearanceChanged(){DWORD color=0;BOOL opaque=FALSE;if(SUCCEEDED(DwmGetColorizationColor(&color,&opaque)))desktop_->InvokeMethod("accentChanged",std::make_unique<EncodableValue>(static_cast<int64_t>(color|0xff000000)));}

@@ -21,7 +21,7 @@ String fileInstance(String path) {
       final data = buffer.asTypedList(256).buffer.asByteData();
       if (data.getUint16(28, Endian.host) & 0xf000 != 0x8000) {
         throw FileSystemException(
-          'Move requires a regular physical file',
+          'Book access requires a regular physical file',
           path,
         );
       }
@@ -74,7 +74,7 @@ String fileInstance(String path) {
       final data = buffer.asTypedList(52).buffer.asByteData();
       if (data.getUint32(0, Endian.host) & 0x410 != 0) {
         throw FileSystemException(
-          'Move requires a regular physical file',
+          'Book access requires a regular physical file',
           path,
         );
       }
@@ -87,7 +87,7 @@ String fileInstance(String path) {
       malloc.free(name);
     }
   }
-  throw UnsupportedError('Unsupported move platform');
+  throw UnsupportedError('Unsupported file identity platform');
 }
 
 void syncDirectory(String directory) {

@@ -401,8 +401,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   actionLabel: l.retry,
                   onAction: () async {
                     try {
-                      await _reader.close();
-                      await _reader.open(widget.id);
+                      await _reader.retry(widget.id);
                     } catch (e) {
                       if (context.mounted) await showError(context, e);
                     }

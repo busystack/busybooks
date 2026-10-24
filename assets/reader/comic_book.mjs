@@ -22,7 +22,7 @@ export async function decodeComicImage(blob,signal) {
     finally{signal?.removeEventListener('abort',abort)}
 }
 export function makeComicBook(index,loader) {
-    if(index.version!==1||!['cbz','cbr'].includes(index.format))throw Error('Unsupported comic cache version')
+    if(![1,2].includes(index.version)||!['cbz','cbr'].includes(index.format))throw Error('Unsupported comic cache version')
     const live=new Map(),pending=new Map(),controller=new AbortController()
     let closed=false
     const book={format:index.format,comic:true,metadata:index.metadata,dir:index.metadata?.direction??'ltr',rendition:{layout:'pre-paginated',spread:'both'}}

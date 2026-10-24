@@ -1,32 +1,26 @@
 import 'dart:typed_data';
 import 'package:image/image.dart' as image;
+import 'jpeg_markers.dart';
 
 // JPEG startDecode allocates coefficient planes. Inspect its frame header
 // directly; preparation only needs geometry, never those planes or pixels.
 image.JpegInfo? _jpegInfo(Uint8List bytes) {
   final data = ByteData.sublistView(bytes);
-  var offset = 2;
-  while (offset < bytes.length) {
-    if (bytes[offset++] != 0xff) return null;
-    while (offset < bytes.length && bytes[offset] == 0xff) {
-      offset++;
-    }
-    if (offset >= bytes.length) return null;
-    final marker = bytes[offset++];
-    if (marker == 0xda || marker == 0xd9 || marker == 0x00) return null;
-    if (marker == 0x01 || marker >= 0xd0 && marker <= 0xd7) continue;
-    if (offset + 2 > bytes.length) return null;
-    final length = data.getUint16(offset);
-    if (length < 2 || length > bytes.length - offset) return null;
-    if (marker == 0xc0 || marker == 0xc1 || marker == 0xc2) {
-      if (length < 8 || bytes[offset + 2] != 8) return null;
-      final components = bytes[offset + 7];
-      if (components < 1 || components > 4 || length != 8 + 3 * components) {
+  image.JpegInfo? info;
+  for (final marker in jpegMarkers(bytes)) {
+    if (marker.code == 0xda) return info;
+    if (marker.code == 0xc0 || marker.code == 0xc1 || marker.code == 0xc2) {
+      final offset = marker.offset;
+      if (marker.length < 6 || bytes[offset] != 8) return null;
+      final components = bytes[offset + 5];
+      if (components < 1 ||
+          components > 4 ||
+          marker.length != 6 + 3 * components) {
         return null;
       }
       final ids = <int>{};
       for (var i = 0; i < components; i++) {
-        final at = offset + 8 + 3 * i, sampling = bytes[at + 1];
+        final at = offset + 6 + 3 * i, sampling = bytes[at + 1];
         if (!ids.add(bytes[at]) ||
             (sampling >> 4) < 1 ||
             (sampling >> 4) > 4 ||
@@ -36,12 +30,12 @@ image.JpegInfo? _jpegInfo(Uint8List bytes) {
           return null;
         }
       }
-      return image.JpegInfo()
-        ..height = data.getUint16(offset + 3)
-        ..width = data.getUint16(offset + 5)
+      if (info != null) return null;
+      info = image.JpegInfo()
+        ..height = data.getUint16(offset + 1)
+        ..width = data.getUint16(offset + 3)
         ..numComponents = components;
     }
-    offset += length;
   }
   return null;
 }
@@ -79,9 +73,9 @@ image.JpegInfo? _jpegInfo(Uint8List bytes) {
         info.width * info.height > maximumPixels) {
       return null;
     }
-    if (decoder is image.JpegDecoder && !decoder.isValidFile(bytes)) {
-      return null;
-    }
+    // JPEG structure was checked by the shared marker scanner. The package's
+    // separate validator treats standalone markers as length-bearing segments.
+    // Initializing it here would also reintroduce inconsistent header parsing.
     return (decoder: decoder, info: info);
   } catch (_) {
     // Decoder libraries can throw RangeError as well as format exceptions for

@@ -37,7 +37,7 @@ try{
             const relative=decodeURIComponent(url.pathname.slice(1));let file
             if(relative==='favicon.ico'){await send('Fetch.fulfillRequest',{requestId,responseCode:204,body:''},message.sessionId);return}
             if(relative==='book-index')file=publication.cacheDirectory+'.json'
-            else if(relative==='publication')file=publication.path
+            else if(relative==='publication')file=publication.publicationPath
             else if(relative.startsWith('book/')){assert(/^[a-f0-9]{64}$/.test(relative.slice(5)));file=path.join(publication.cacheDirectory,relative.slice(5))}
             else {file=path.resolve(root,'assets/reader',relative);assert(file.startsWith(path.join(root,'assets/reader')+path.sep))}
             const type=/\.m?js$/.test(file)?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'application/octet-stream'
@@ -59,7 +59,7 @@ try{
         publications.set(sessionId,publication)
         await send('Page.enable',{},sessionId);await send('Runtime.enable',{},sessionId)
         await send('Fetch.enable',{patterns:[{urlPattern:'*'}]},sessionId)
-        await send('Page.addScriptToEvaluateOnNewDocument',{source:`window.probeEvents=[];window.nativeSavedProof=null;window.chrome.webview={postMessage:json=>window.probeEvents.push(JSON.parse(json))}`},sessionId)
+        await send('Page.addScriptToEvaluateOnNewDocument',{source:`window.probeEvents=[];window.nativeFrames=[];window.nativeSavedProof=null;window.busybooksProbe=event=>window.probeEvents.push(event);window.chrome.webview={postMessage:json=>window.nativeFrames.push(JSON.parse(json))}`},sessionId)
         await send('Page.navigate',{url:'https://busybooks.local/index.html?session=review'},sessionId)
         await evaluate(sessionId,`(async()=>{for(let i=0;i<400;i++){if(window.probeEvents?.some(e=>e.type==='ready'))return;await new Promise(r=>setTimeout(r,25))}throw Error('Reader not ready')})()`)
         if(process.env.BUSYBOOKS_REVIEW_ANNOTATIONS){

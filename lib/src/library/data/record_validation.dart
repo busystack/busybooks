@@ -241,7 +241,20 @@ void validateAnchor(dynamic value, String format) {
                 segment['page'] > 1000000)) {
           invalid('PDF segment page');
         }
-        boundedText(segment['text'], 'PDF passage', limit: 1000000);
+        // Older backups contain the passage itself. New anchors keep only
+        // its UTF-16 length; the annotation/selection owns the quotation.
+        if (segment['text'] != null) {
+          boundedText(segment['text'], 'PDF passage', limit: 1000000);
+        }
+        final length =
+            segment['length'] ?? (segment['text'] as String?)?.length;
+        if (length is! int ||
+            length < 0 ||
+            length > 1000000 ||
+            segment['text'] != null &&
+                length != (segment['text'] as String).length) {
+          invalid('PDF segment length');
+        }
         if (segment['boxes'] is! List ||
             (segment['boxes'] as List).length > 10000) {
           invalid('PDF boxes');

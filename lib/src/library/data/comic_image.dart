@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'jpeg_markers.dart';
 
 // Read only IFD0's orientation. Arbitrary EXIF subdirectories are never
 // traversed, and geometry inspection never decodes full-resolution pixels.
@@ -32,19 +33,17 @@ int comicOrientation(Uint8List bytes) {
 
   final data = ByteData.sublistView(bytes);
   if (bytes.length > 2 && bytes[0] == 255 && bytes[1] == 216) {
-    var at = 2;
-    while (at + 4 <= bytes.length) {
-      if (bytes[at] != 255) break;
-      final marker = bytes[at + 1];
-      if (marker == 0xda || marker == 0xd9) break;
-      final length = data.getUint16(at + 2, Endian.big);
-      if (length < 2 || at + 2 + length > bytes.length) break;
-      if (marker == 0xe1 &&
-          length > 8 &&
-          latin1.decode(bytes.sublist(at + 4, at + 10)) == 'Exif\u0000\u0000') {
-        return tiff(at + 10, length - 8);
+    try {
+      for (final marker in jpegMarkers(bytes)) {
+        if (marker.code == 0xe1 &&
+            marker.length >= 6 &&
+            latin1.decode(bytes.sublist(marker.offset, marker.offset + 6)) ==
+                'Exif\u0000\u0000') {
+          return tiff(marker.offset + 6, marker.length - 6);
+        }
       }
-      at += length + 2;
+    } on FormatException {
+      return 1;
     }
   } else if (bytes.length > 12) {
     final png = bytes[0] == 137 && bytes[1] == 80,
