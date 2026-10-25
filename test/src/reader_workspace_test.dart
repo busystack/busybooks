@@ -8583,26 +8583,31 @@ void _professionalWorkspaceTests() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
         id = f.state.bookId!;
-        for (var i = 0; i < 1200; i++) {
-          await f.store.call('putAnnotation', {
-            'id': 'annotation-large-$i',
-            'bookId': id,
-            'annotationKind': 'highlight',
-            'anchor': {'page': 0},
-            'text':
-                'Passage $i\n${'A variable-height saved line.\n' * (i % 36)}',
-            'note': 'Private note $i',
-            'reference': 'Page 1',
-            'color': 'yellow',
-            'created': i + 1,
-          });
-        }
-        await f.container
-            .read(workspaceControllerProvider.notifier)
-            .loadBook(id);
-        f.notes.revealAnnotation(id, 'annotation-large-0');
       });
       try {
+        // This fixture performs 1,200 durable writes. Keep disk preparation
+        // outside the popover/transition helper's deadline; reveal and layout
+        // retain their ordinary bounded pumps and all lazy-list assertions.
+        await tester.runAsync(() async {
+          for (var i = 0; i < 1200; i++) {
+            await f.store.call('putAnnotation', {
+              'id': 'annotation-large-$i',
+              'bookId': id,
+              'annotationKind': 'highlight',
+              'anchor': {'page': 0},
+              'text':
+                  'Passage $i\n${'A variable-height saved line.\n' * (i % 36)}',
+              'note': 'Private note $i',
+              'reference': 'Page 1',
+              'color': 'yellow',
+              'created': i + 1,
+            });
+          }
+          await f.container
+              .read(workspaceControllerProvider.notifier)
+              .loadBook(id);
+        });
+        f.notes.revealAnnotation(id, 'annotation-large-0');
         await _mountHeaderApplication(tester, f, '/notebook/$id');
         final editor = find.byKey(
           const ValueKey('notebook-note-annotation-large-0'),
