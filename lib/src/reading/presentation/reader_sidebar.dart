@@ -96,7 +96,7 @@ class ReadingSidebarHeader extends ConsumerWidget {
                   key: const ValueKey('reader-sidebar-view-menu'),
                   tooltip: context.l10n.sidebarViewMenu,
                   tooltipPositionDelegate: (info) =>
-                      _sidebarTooltipPosition(context, info),
+                      BusyBooksTooltipStyle.positionWithin(context, info),
                   icon: _panelIcon(selected, Directionality.of(context)),
                   transparent: true,
                   borderRadius: BusyBooksRadius.nativeHeaderButton,
@@ -1109,26 +1109,6 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
       },
     );
   }
-}
-
-Offset _sidebarTooltipPosition(
-  BuildContext context,
-  TooltipPositionContext info,
-) {
-  final box = context.findRenderObject() as RenderBox?;
-  if (box == null || !box.hasSize) return info.target;
-  final left = box.localToGlobal(Offset.zero).dx + BusyBooksSpacing.sm;
-  final right = left + box.size.width - BusyBooksSpacing.sm * 2;
-  return Offset(
-    (info.target.dx - info.tooltipSize.width / 2).clamp(
-      left,
-      math.max(left, right - info.tooltipSize.width),
-    ),
-    (info.target.dy + info.verticalOffset).clamp(
-      0.0,
-      math.max(0.0, info.overlaySize.height - info.tooltipSize.height),
-    ),
-  );
 }
 
 Future<void> _jump(

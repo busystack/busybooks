@@ -249,8 +249,10 @@ class _BookSearchSidebarState extends ConsumerState<BookSearchSidebar> {
                         controller.open(category: category),
                   ),
                 ),
-                BusyBooksCompactIconButton(
+                BusyBooksHeaderIconButton(
                   tooltip: l.closeSearch,
+                  tooltipPositionDelegate: (info) =>
+                      BusyBooksTooltipStyle.positionWithin(context, info),
                   icon: BusyBooksGlyphs.close,
                   onPressed: controller.close,
                 ),
@@ -384,21 +386,37 @@ class BookSearchSidebarHost extends ConsumerWidget {
     final active = ref.watch(
       bookSearchProvider(bookId).select((s) => s.active),
     );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ExcludeFocus(
-          excluding: active,
-          child: ExcludeSemantics(
+    ref.listen(bookSearchProvider(bookId).select((s) => s.active), (_, _) {
+      Tooltip.dismissAllToolTips();
+    });
+    final tooltipTheme = TooltipTheme.of(context);
+    return TooltipTheme(
+      data: tooltipTheme.copyWith(
+        constraints:
+            (tooltipTheme.constraints ?? BusyBooksTooltipStyle.constraints)
+                .copyWith(
+                  maxWidth: BusyBooksSizes.sidebarWidth - BusyBooksSpacing.md,
+                ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ExcludeFocus(
             excluding: active,
-            child: TickerMode(
-              enabled: !active,
-              child: Offstage(offstage: active, child: child),
+            child: ExcludeSemantics(
+              excluding: active,
+              child: TickerMode(
+                enabled: !active,
+                child: TooltipVisibility(
+                  visible: !active,
+                  child: Offstage(offstage: active, child: child),
+                ),
+              ),
             ),
           ),
-        ),
-        if (active) BookSearchSidebar(bookId: bookId),
-      ],
+          if (active) BookSearchSidebar(bookId: bookId),
+        ],
+      ),
     );
   }
 }

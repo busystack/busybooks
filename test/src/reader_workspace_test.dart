@@ -8103,6 +8103,52 @@ void main() {
 
 void _professionalWorkspaceTests() {
   testWidgets(
+    'search retires navigation tooltips and keeps Close Search above native content',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        await f.sidebarController.setOpen(true);
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpAndSettle();
+        final selector = find.descendant(
+          of: find.byKey(const ValueKey('reader-sidebar-view-menu')),
+          matching: find.byType(Tooltip),
+        );
+        tester.state<TooltipState>(selector).ensureTooltipVisible();
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('Sidebar View'), findsOneWidget);
+        await _readerAction(tester, f.searchController.open);
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('Sidebar View'), findsNothing);
+        final close = find.byWidgetPredicate(
+          (widget) => widget is Tooltip && widget.message == 'Close Search',
+        );
+        tester.state<TooltipState>(close).ensureTooltipVisible();
+        await tester.pump(const Duration(seconds: 1));
+        final bounds = tester.getRect(find.text('Close Search'));
+        final surface = tester.getRect(find.byType(BookSearchSidebar));
+        expect(bounds.left, greaterThanOrEqualTo(surface.left));
+        expect(bounds.right, lessThanOrEqualTo(surface.right));
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(find.text('Close Search'), findsNothing);
+        expect(f.sidebar.open, true);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  testWidgets(
     'Notebook shows the cached image region beside the complete private note',
     (tester) async {
       late _ReaderFixture f;

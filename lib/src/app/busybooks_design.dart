@@ -417,6 +417,31 @@ abstract final class BusyBooksLinuxPalette {
 /// Keeping the palette and shape here lets each toolkit retain its native
 /// layout, positioning, focus, and motion while presenting the same surface.
 abstract final class BusyBooksTooltipStyle {
+  /// Keep sidebar tooltips inside their Flutter surface, above native content.
+  static Offset positionWithin(
+    BuildContext context,
+    TooltipPositionContext info,
+  ) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize || !box.constraints.hasBoundedWidth) {
+      return info.target;
+    }
+    final left = box.localToGlobal(Offset.zero).dx + BusyBooksSpacing.sm;
+    // The tooltip delegate runs during overlay layout; reading an unrelated
+    // RenderBox.size there violates Flutter's layout ownership contract.
+    final right = left + box.constraints.maxWidth - BusyBooksSpacing.sm * 2;
+    return Offset(
+      (info.target.dx - info.tooltipSize.width / 2).clamp(
+        left,
+        math.max(left, right - info.tooltipSize.width),
+      ),
+      (info.target.dy + info.verticalOffset).clamp(
+        0.0,
+        math.max(0.0, info.overlaySize.height - info.tooltipSize.height),
+      ),
+    );
+  }
+
   static final Color background = BusyBooksLinuxPalette.black.withValues(
     alpha: BusyBooksAlpha.tooltipBackground,
   );
