@@ -1,6 +1,7 @@
 // Host menus use the same serialized entries/session contract as BusyMark's GTK
 // host. The book child remains visible; Flutter retains actions and keybindings.
 #include "native_menu_host.h"
+#include "../../native/menu_selection.h"
 #include <flutter/standard_method_codec.h>
 #include <cmath>
 #include <cstdint>
@@ -63,6 +64,32 @@ HBITMAP ViewBitmap(const std::vector<uint8_t>& alpha, int size, bool enabled) {
     output[i*4+3] = alpha[i];
   }
   return bitmap;
+}
+bool Validate(const EncodableList& entries, int depth, size_t& count) {
+  if (depth > 8 || entries.empty() || entries.size() > 4096 - count) return false;
+  count += entries.size();
+  MenuSelectionGroup selection_group;
+  bool has_command = false;
+  for (const auto& value : entries) {
+    const auto* item = std::get_if<EncodableMap>(&value);
+    if (!item) return false;
+    for (const auto* key : {"separator", "enabled", "checkable", "selected", "mutuallyExclusive"}) {
+      if (const auto* field = Field(*item, key); field && !std::get_if<bool>(field)) return false;
+    }
+    const bool separator = Flag(*item, "separator");
+    const bool checkable = Flag(*item, "checkable");
+    if (!selection_group.Add(separator, checkable, Flag(*item, "mutuallyExclusive"), Flag(*item, "selected"))) return false;
+    if (!separator) {
+      const auto* label = Field(*item, "label");
+      if (!label || !std::get_if<std::string>(label)) return false;
+      has_command = true;
+    }
+    if (const auto* children = Field(*item, "children")) {
+      const auto* list = std::get_if<EncodableList>(children);
+      if (separator || checkable || !list || !Validate(*list, depth + 1, count)) return false;
+    }
+  }
+  return has_command;
 }
 HMENU Build(const EncodableList& entries,UINT& position,int depth,MenuBitmaps& bitmaps) {
   if(depth>16)return nullptr;
@@ -138,6 +165,8 @@ NativeMenuHost::NativeMenuHost(HWND anchor,flutter::BinaryMessenger* messenger):
     auto rect=anchor_value?std::get_if<EncodableMap>(anchor_value):nullptr;
     if(!messages_||!IsWindow(anchor_)){result->Error("unavailable","The menu window is unavailable");return;}
     if(!list||!rect){result->Error("bad-arguments","Menu entries and an anchor are required");return;}
+    size_t entry_count = 0;
+    if (!Validate(*list, 0, entry_count)) { result->Error("bad-arguments", "Invalid menu definition"); return; }
     const double x=Number(*rect,"x"),y=Number(*rect,"y"),width=Number(*rect,"width"),height=Number(*rect,"height");
     const auto preferred=Text(*map,"preferredPosition");
     if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(width)||!std::isfinite(height)||width<0||height<0||std::abs(x)>100000||std::abs(y)>100000||width>100000||height>100000||(preferred!="top"&&preferred!="bottom")){
@@ -145,7 +174,7 @@ NativeMenuHost::NativeMenuHost(HWND anchor,flutter::BinaryMessenger* messenger):
     }
     auto request=std::make_shared<Request>();
     UINT count=0;HMENU menu=Build(*list,count,0,request->bitmaps);
-    if(!menu){result->Error("bad-arguments","Invalid menu definition");return;}
+    if(!menu){result->Error("presentation-failed","Windows could not create the menu");return;}
     const double scale=GetDpiForWindow(anchor_)/96.0;const bool rtl=Text(*map,"textDirection")=="rtl",above=preferred=="top";
     request->session=session;request->menu=menu;
     request->point={static_cast<LONG>((x+(rtl?width:0))*scale),static_cast<LONG>((y+(above?0:height))*scale)};

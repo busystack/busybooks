@@ -1,10 +1,57 @@
 // Adapted from BusyMark shared foundation behavior.
 import 'package:busybooks/src/platform/native_menu_service.dart';
+import 'package:busybooks/src/app/busybooks_design.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('recoverable native failure presents a working Flutter menu', (
+    tester,
+  ) async {
+    const channel = MethodChannel('busybooks/test/fallback');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          channel,
+          (_) async => throw PlatformException(code: 'presentation-failed'),
+        );
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    String? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BusyBooksHeaderPopupMenuButton<String>(
+            tooltip: 'Menu',
+            icon: Icons.menu,
+            nativeMenuService: const NativeMenuService(
+              channel: channel,
+              supportedPlatform: true,
+            ),
+            itemBuilder: (_) => [
+              BusyBooksPopupMenuItem(
+                value: 'disabled',
+                label: 'Loading',
+                enabled: false,
+              ),
+              BusyBooksPopupMenuItem(value: 'open', label: 'Open Book'),
+            ],
+            onSelected: (value) => selected = value,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    expect(find.text('Loading'), findsOneWidget);
+    await tester.tap(find.text('Open Book'));
+    await tester.pumpAndSettle();
+    expect(selected, 'open');
+  });
 
   test(
     'show serializes native menu presentation and returns its selection',
@@ -150,6 +197,77 @@ void main() {
 
       expect(result.available, isFalse);
       expect(result.selectedIndex, isNull);
+    },
+  );
+  test(
+    'disabled selected radio entries are valid; duplicate selections are not',
+    () async {
+      const service = NativeMenuService(supportedPlatform: false);
+      const disabled = NativeMenuEntry.command(
+        label: 'Reading',
+        enabled: false,
+        checkable: true,
+        selected: true,
+        mutuallyExclusive: true,
+      );
+      const enabled = NativeMenuEntry.command(
+        label: 'Notebook',
+        checkable: true,
+        mutuallyExclusive: true,
+      );
+      expect(
+        (await service.show(
+          session: NativeMenuSession(),
+          anchor: Rect.zero,
+          entries: const [disabled, enabled],
+        )).available,
+        false,
+      );
+      await expectLater(
+        service.show(
+          session: NativeMenuSession(),
+          anchor: Rect.zero,
+          entries: const [
+            disabled,
+            NativeMenuEntry.command(
+              label: 'Other',
+              checkable: true,
+              selected: true,
+              mutuallyExclusive: true,
+            ),
+          ],
+        ),
+        throwsArgumentError,
+      );
+    },
+  );
+
+  test(
+    'host presentation failure allows fallback; invalid contracts remain errors',
+    () async {
+      const channel = MethodChannel('busybooks/test/native-menu-failure');
+      var code = 'presentation-failed';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (_) async => throw PlatformException(code: code),
+          );
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      const service = NativeMenuService(
+        channel: channel,
+        supportedPlatform: true,
+      );
+      Future<NativeMenuResult> show() => service.show(
+        session: NativeMenuSession(),
+        anchor: Rect.zero,
+        entries: const [NativeMenuEntry.command(label: 'Open')],
+      );
+      expect((await show()).available, false);
+      code = 'invalid-arguments';
+      await expectLater(show(), throwsA(isA<PlatformException>()));
     },
   );
 }

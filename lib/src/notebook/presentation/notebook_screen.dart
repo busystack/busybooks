@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../annotations/domain/annotation_order.dart';
 import '../../annotations/presentation/annotation_presentation.dart';
+import '../../annotations/presentation/annotation_actions.dart' as actions;
 import '../../app/busybooks_design.dart';
 import '../../app/command_registry.dart';
 import '../../app/busybooks_glyphs.dart';
@@ -462,16 +463,7 @@ class _NotebookItemState extends ConsumerState<_NotebookItem> {
                         return;
                       }
                       if (action == 'remove') {
-                        if (await confirm(
-                          context,
-                          l.delete,
-                          l.removeAnnotationHelp,
-                          destructive: true,
-                        )) {
-                          await ref
-                              .read(workspaceControllerProvider.notifier)
-                              .deleteAnnotation(a.id);
-                        }
+                        await actions.deleteAnnotation(context, ref, a);
                       } else {
                         await ref
                             .read(workspaceControllerProvider.notifier)

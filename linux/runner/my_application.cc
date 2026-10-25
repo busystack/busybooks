@@ -15,6 +15,7 @@
 #include "linux_chrome_host.h"
 #include "reader_host.h"
 #include "native_shortcut_metadata.h"
+#include "../../native/menu_selection.h"
 
 
 
@@ -552,9 +553,7 @@ static gboolean validate_native_menu_entries(FlValue* entries,
   }
   *entry_count += fl_value_get_length(entries);
   size_t command_count = 0;
-  size_t checkable_run_selected_count = 0;
-  gboolean checkable_run_has_disabled_entry = FALSE;
-  gboolean in_checkable_run = FALSE;
+  MenuSelectionGroup selection_group;
   for (size_t index = 0; index < fl_value_get_length(entries); index++) {
     FlValue* entry = fl_value_get_list_value(entries, index);
     if (entry == nullptr || fl_value_get_type(entry) != FL_VALUE_TYPE_MAP) {
@@ -609,36 +608,12 @@ static gboolean validate_native_menu_entries(FlValue* entries,
     if (!separator) {
       command_count++;
     }
-    if (!separator && checkable && mutually_exclusive) {
-      if (!in_checkable_run) {
-        checkable_run_selected_count = 0;
-        checkable_run_has_disabled_entry = FALSE;
-        in_checkable_run = TRUE;
-      }
-      checkable_run_selected_count += selected ? 1 : 0;
-      checkable_run_has_disabled_entry =
-          checkable_run_has_disabled_entry || !enabled;
-      continue;
-    }
-    if (in_checkable_run &&
-        (checkable_run_selected_count > 1 ||
-         checkable_run_has_disabled_entry)) {
+    if (!selection_group.Add(separator, checkable, mutually_exclusive, selected)) {
       respond_native_menu_argument_error(
           method_call,
-          "single-choice groups allow at most one selected entry and require "
-          "enabled entries.");
+          "single-choice groups allow at most one selected entry.");
       return FALSE;
     }
-    in_checkable_run = FALSE;
-  }
-  if (in_checkable_run &&
-      (checkable_run_selected_count > 1 ||
-       checkable_run_has_disabled_entry)) {
-    respond_native_menu_argument_error(
-        method_call,
-        "single-choice groups allow at most one selected entry and require "
-        "enabled entries.");
-    return FALSE;
   }
   if (command_count == 0) {
     respond_native_menu_argument_error(method_call,
@@ -701,11 +676,14 @@ static void build_native_menu_model(FlValue* entries,
     gboolean enabled = TRUE;
     gboolean checkable = FALSE;
     gboolean selected = FALSE;
+    gboolean exclusive = FALSE;
     fl_lookup_optional_bool_with_default(entry, "enabled", TRUE, &enabled);
     fl_lookup_optional_bool_with_default(entry, "checkable", FALSE,
                                          &checkable);
     fl_lookup_optional_bool_with_default(entry, "selected", FALSE,
                                          &selected);
+    fl_lookup_optional_bool_with_default(entry, "mutuallyExclusive", FALSE,
+                                         &exclusive);
 
     FlValue* children = fl_value_lookup_string(entry, "children");
     if (children != nullptr) {
@@ -719,7 +697,11 @@ static void build_native_menu_model(FlValue* entries,
       continue;
     }
     g_autofree gchar* action_name = g_strdup_printf("select-%zu", entry_index);
-    GSimpleAction* action = checkable
+    GSimpleAction* action = checkable && exclusive
+                                ? g_simple_action_new_stateful(
+                                      action_name, G_VARIANT_TYPE_STRING,
+                                      g_variant_new_string(selected ? action_name : ""))
+                                : checkable
                                 ? g_simple_action_new_stateful(
                                       action_name, nullptr,
                                       g_variant_new_boolean(selected))
@@ -729,7 +711,7 @@ static void build_native_menu_model(FlValue* entries,
                       GINT_TO_POINTER(static_cast<gint>(entry_index) + 1));
     g_signal_connect(
         action, "activate",
-        G_CALLBACK(checkable ? native_menu_check_activated_cb
+        G_CALLBACK(checkable && !exclusive ? native_menu_check_activated_cb
                              : native_menu_action_activated_cb),
         session);
     g_action_map_add_action(G_ACTION_MAP(session->action_group),
@@ -739,6 +721,9 @@ static void build_native_menu_model(FlValue* entries,
         g_strdup_printf("%s.%s", kNativeMenuActionNamespace, action_name);
     g_autoptr(GMenuItem) item =
         g_menu_item_new(literal_label, detailed_action);
+    if (checkable && exclusive) {
+      g_menu_item_set_attribute(item, G_MENU_ATTRIBUTE_TARGET, "s", action_name);
+    }
     if (icon_name != nullptr && icon_name[0] != '\0') {
       g_autoptr(GIcon) icon = create_native_menu_icon(icon_name, entry);
       g_menu_item_set_icon(item, icon);

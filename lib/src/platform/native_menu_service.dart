@@ -139,6 +139,7 @@ class NativeMenuService {
     bool preferAbove = false,
     TextDirection? textDirection,
   }) async {
+    _validateEntries(entries);
     if (!_supported) return const NativeMenuResult.unavailable();
     try {
       final selectedIndex = await _channel.invokeMethod<int>('show', {
@@ -158,10 +159,16 @@ class NativeMenuService {
     } on MissingPluginException {
       return const NativeMenuResult.unavailable();
     } on PlatformException catch (error) {
-      if (error.code == 'unavailable') {
-        return const NativeMenuResult.unavailable();
+      // Invalid contracts are programming errors. Host presentation failures
+      // use the same themed fallback as an absent host, without a modal dialog.
+      if (error.code == 'invalid-arguments' || error.code == 'bad-arguments') {
+        rethrow;
       }
-      rethrow;
+      debugPrint(
+        'Native menu ${session.id} failed (${entries.length} rows): '
+        '${error.code}: ${error.message}',
+      );
+      return const NativeMenuResult.unavailable();
     }
   }
 
@@ -181,4 +188,32 @@ class NativeMenuService {
       rethrow;
     }
   }
+}
+
+void _validateEntries(List<NativeMenuEntry> entries) {
+  var count = 0;
+  void visit(List<NativeMenuEntry> rows, int depth) {
+    if (depth > 8 || rows.isEmpty || rows.length > 4096 - count) {
+      throw ArgumentError('Invalid or excessive menu entries');
+    }
+    count += rows.length;
+    var selected = 0;
+    for (final row in rows) {
+      if (row.selected && !row.checkable ||
+          row.children != null && (row.separator || row.checkable)) {
+        throw ArgumentError('Invalid menu selection or submenu');
+      }
+      if (!row.separator && row.checkable && row.mutuallyExclusive) {
+        if (row.selected) selected++;
+        if (selected > 1) {
+          throw ArgumentError('Multiple selections in a single-choice menu');
+        }
+      } else {
+        selected = 0;
+      }
+      if (row.children != null) visit(row.children!, depth + 1);
+    }
+  }
+
+  visit(entries, 0);
 }

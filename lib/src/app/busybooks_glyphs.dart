@@ -10,7 +10,7 @@ abstract final class BusyBooksGlyphs {
   static const IconData bookmark = YaruIcons.bookmark;
   static const IconData pause = YaruIcons.media_pause;
   static const IconData stop = YaruIcons.media_stop;
-  static const IconData annotations = YaruIcons.document_history;
+  static const IconData annotations = YaruIcons.pen;
   static const IconData notebookView = YaruIcons.pen;
   static const IconData back = YaruIcons.go_previous;
   static const IconData forward = YaruIcons.go_next;
@@ -122,7 +122,7 @@ abstract final class BusyBooksGlyphs {
     if (icon == null) {
       return null;
     }
-    if (icon == annotations) return 'accessories-notes-symbolic';
+    if (icon == annotations) return 'document-edit-symbolic';
     if (icon == bookmark) return 'bookmark-new-symbolic';
     if (icon == fitWidth) return 'zoom-fit-best-symbolic';
     if (icon == about || icon == info) {

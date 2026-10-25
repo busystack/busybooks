@@ -11,6 +11,7 @@ import '../../app/localization.dart';
 import '../../app/product_actions.dart';
 import '../../annotations/domain/annotation_order.dart';
 import '../../annotations/presentation/annotation_presentation.dart';
+import '../../annotations/presentation/annotation_actions.dart' as actions;
 import '../../library/data/record_validation.dart' show annotationColors;
 import '../../library/presentation/collection_screen.dart' show BookRow;
 import '../../notebook/application/notebook_controller.dart';
@@ -979,20 +980,14 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                                 annotationId: a.id,
                               );
                             } else if (action == 'edit') {
-                              if (state.ready) {
-                                await reader.editAnnotation(a);
-                              } else {
-                                await openNotebook(
-                                  context,
-                                  ref,
-                                  bookId,
-                                  annotationId: a.id,
-                                );
-                              }
+                              await openNotebook(
+                                context,
+                                ref,
+                                bookId,
+                                annotationId: a.id,
+                              );
                             } else if (action == 'delete') {
-                              await ref
-                                  .read(workspaceControllerProvider.notifier)
-                                  .deleteAnnotation(a.id);
+                              await actions.deleteAnnotation(context, ref, a);
                               await reader.syncAnnotations();
                             } else {
                               await ref
