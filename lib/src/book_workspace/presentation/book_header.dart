@@ -174,7 +174,7 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
               : BusyBooksLinuxHeaderTitle(
                   reading
                       ? book?.title ?? l.reader
-                      : '${book?.title ?? l.book} · ${l.notebook}',
+                      : '${l.notebook} · ${book?.title ?? l.book}',
                 ),
           trailing: BusyBooksLinuxHeaderControlGroup(
             children: [

@@ -2366,6 +2366,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Date unavailable'**
   String get dateUnavailable;
+
+  /// No description provided for @regionPreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Region preview unavailable. The private note is still accessible.'**
+  String get regionPreviewUnavailable;
+
+  /// No description provided for @regionPreviewLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading region preview'**
+  String get regionPreviewLoading;
 }
 
 class _AppLocalizationsDelegate

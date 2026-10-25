@@ -1240,4 +1240,11 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get dateUnavailable => 'Datum nicht verfügbar';
+
+  @override
+  String get regionPreviewUnavailable =>
+      'Bereichsvorschau nicht verfügbar. Die private Notiz bleibt zugänglich.';
+
+  @override
+  String get regionPreviewLoading => 'Bereichsvorschau wird geladen';
 }

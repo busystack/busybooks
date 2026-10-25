@@ -1226,4 +1226,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dateUnavailable => 'Date unavailable';
+
+  @override
+  String get regionPreviewUnavailable =>
+      'Region preview unavailable. The private note is still accessible.';
+
+  @override
+  String get regionPreviewLoading => 'Loading region preview';
 }

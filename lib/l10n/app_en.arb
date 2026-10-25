@@ -391,5 +391,7 @@
   "closeCollection": "Close Collection",
   "refresh": "Refresh",
   "anyNotes": "Any notes",
-  "dateUnavailable": "Date unavailable"
+  "dateUnavailable": "Date unavailable",
+  "regionPreviewUnavailable": "Region preview unavailable. The private note is still accessible.",
+  "regionPreviewLoading": "Loading region preview"
 }

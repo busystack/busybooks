@@ -35,6 +35,7 @@ import 'package:busybooks/src/notebook/application/notebook_controller.dart';
 import 'package:busybooks/src/notebook/application/notebook_view.dart';
 import 'package:busybooks/src/notebook/presentation/book_view_selector.dart';
 import 'package:busybooks/src/notebook/presentation/notebook_item.dart';
+import 'package:busybooks/src/notebook/presentation/region_preview.dart';
 import 'package:busybooks/src/notebook/presentation/notebook_screen.dart';
 import 'package:busybooks/src/platform/gtk_header_icon_service.dart';
 import 'package:busybooks/src/platform/native_menu_service.dart';
@@ -8101,6 +8102,57 @@ void main() {
 }
 
 void _professionalWorkspaceTests() {
+  testWidgets(
+    'Notebook shows the cached image region beside the complete private note',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'formats/comic-deflated.cbz',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        final descriptor =
+            f.calls.lastWhere((call) => call.method == 'open').arguments as Map;
+        final index =
+            jsonDecode(
+                  await File(
+                    '${descriptor['cacheDirectory']}.json',
+                  ).readAsString(),
+                )
+                as Map;
+        final region = {
+          'kind': 'comic',
+          'version': 1,
+          'format': 'cbz',
+          'page': 0,
+          'pageId': index['pages'][0]['file'],
+          'region': [.1, .1, .3, .3],
+        };
+        await f.event('regionSelected', {'anchor': region, 'text': ''});
+        await f.action('annotationNote', {
+          'note': 'Private region note.\nA complete second line.',
+        });
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/notebook/${f.state.bookId}');
+        final preview = find.byType(NotebookRegionPreview);
+        await _pumpUntil(
+          tester,
+          () => find
+              .descendant(of: preview, matching: find.byType(Image))
+              .evaluate()
+              .isNotEmpty,
+        );
+        expect(f.reader.suspended, true);
+        expect(find.textContaining('A complete second line.'), findsOneWidget);
+        expect(find.textContaining('preview unavailable'), findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
   testWidgets(
     'returning to an edited Notebook preserves active header search focus',
     (tester) async {

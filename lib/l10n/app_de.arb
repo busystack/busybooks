@@ -391,5 +391,7 @@
   "closeCollection": "Sammlung schließen",
   "refresh": "Aktualisieren",
   "anyNotes": "Notiz optional",
-  "dateUnavailable": "Datum nicht verfügbar"
+  "dateUnavailable": "Datum nicht verfügbar",
+  "regionPreviewUnavailable": "Bereichsvorschau nicht verfügbar. Die private Notiz bleibt zugänglich.",
+  "regionPreviewLoading": "Bereichsvorschau wird geladen"
 }

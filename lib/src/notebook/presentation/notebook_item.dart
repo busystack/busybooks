@@ -16,6 +16,7 @@ import '../../library/domain/book.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/notebook_controller.dart';
 import 'book_view_selector.dart';
+import 'region_preview.dart';
 
 class NotebookItem extends ConsumerStatefulWidget {
   const NotebookItem({
@@ -199,6 +200,8 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
                 ),
               ],
             ),
+            if (a.kind == 'region')
+              NotebookRegionPreview(annotation: a, active: widget.active),
             if (a.text.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(
