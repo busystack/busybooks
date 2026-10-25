@@ -94,7 +94,11 @@ class WorkspaceController extends Notifier<WorkspaceState> {
     return const WorkspaceState();
   }
 
-  Future<T> _perform<T>(Future<T> Function() body, {bool loading = false}) {
+  Future<T> _perform<T>(
+    Future<T> Function() body, {
+    bool loading = false,
+    bool publishError = true,
+  }) {
     final operation = _tail.then((_) async {
       if (loading) {
         state = state.copy(loading: true, progress: {}, clearError: true);
@@ -106,7 +110,9 @@ class WorkspaceController extends Notifier<WorkspaceState> {
       }
     });
     _tail = operation.then<void>((_) {}).catchError((Object error) {
-      if (ref.mounted) state = state.copy(error: error.toString());
+      if (publishError && ref.mounted) {
+        state = state.copy(error: error.toString());
+      }
     });
     return operation;
   }
@@ -408,6 +414,8 @@ class WorkspaceController extends Notifier<WorkspaceState> {
     );
   }
 
+  // Drafts and annotation actions own these failures. Returning the error keeps
+  // their retry/transaction contracts without publishing private SQL on Home.
   Future<void> saveAnnotation(ReadingAnnotation annotation) =>
       _perform(() async {
         await store.call('putAnnotation', annotation.data);
@@ -418,7 +426,7 @@ class WorkspaceController extends Notifier<WorkspaceState> {
             annotation,
           ],
         );
-      });
+      }, publishError: false);
   Future<void> updateAnnotation(
     String id,
     Map<String, dynamic> changes, {
@@ -439,7 +447,7 @@ class WorkspaceController extends Notifier<WorkspaceState> {
           if (a.id == id) value else a,
       ],
     );
-  });
+  }, publishError: false);
   Future<void> deleteAnnotation(
     String id, {
     Future<bool> Function()? confirm,
@@ -453,7 +461,7 @@ class WorkspaceController extends Notifier<WorkspaceState> {
           state = state.copy(
             annotations: state.annotations.where((a) => a.id != id).toList(),
           );
-        }),
+        }, publishError: false),
         confirm: confirm,
         discardedCreationRevision: discardedCreationRevision,
       );

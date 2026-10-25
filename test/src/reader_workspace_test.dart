@@ -8494,6 +8494,9 @@ void _professionalWorkspaceTests() {
           tester,
           () => f.drafts.drafts[annotation.id]?.error != null,
         );
+        // The draft owns this failure. It must not become a stale Home error
+        // containing a database statement and the complete private note.
+        expect(f.container.read(workspaceControllerProvider).error, isNull);
         expect(tester.widget<TextField>(editor).controller!.text, note);
         gate.fail = false;
         await tester.tap(find.text('Retry'));
@@ -8502,6 +8505,7 @@ void _professionalWorkspaceTests() {
           () => f.drafts.drafts.isEmpty && f.drafts.saving.isEmpty,
         );
         expect(find.text('Saved'), findsOneWidget);
+        expect(f.container.read(workspaceControllerProvider).error, isNull);
         await _readerAction(tester, () async {
           expect(
             (await f.store.call('annotations', id) as List).single['note'],

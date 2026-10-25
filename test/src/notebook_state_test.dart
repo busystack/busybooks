@@ -30,6 +30,7 @@ void main() {
         );
         final save = expectLater(saving, throwsA(isA<FileSystemException>()));
         await Future.wait([deletion, save]);
+        expect(f.container.read(workspaceControllerProvider).error, isNull);
         expect(
           f.container.read(notebookControllerProvider).drafts[f.item.id]!.text,
           'Retained draft',
@@ -41,6 +42,7 @@ void main() {
         f.gate.failDelete = false;
         await f.notebook.flush();
         await f.verify('Retained draft');
+        expect(f.container.read(workspaceControllerProvider).error, isNull);
       } finally {
         await f.close();
       }
