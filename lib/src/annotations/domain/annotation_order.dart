@@ -5,6 +5,22 @@ int compareAnnotationLocations(Map first, Map second) {
     (b['page'] ?? b['index'] ?? 0) as num,
   );
   if (page != 0) return page;
+  if (a['kind'] == 'comic' || b['kind'] == 'comic') {
+    if (a['kind'] != b['kind']) return a['kind'] == 'comic' ? 1 : -1;
+    final ra = a['region'] as List?, rb = b['region'] as List?;
+    if (ra == null && rb != null) return -1;
+    if (ra != null && rb == null) return 1;
+    if (ra != null && rb != null) {
+      final vertical = (ra[1] as num).compareTo(rb[1] as num);
+      if (vertical != 0) return vertical;
+      final horizontal = (ra[0] as num).compareTo(rb[0] as num);
+      if (horizontal != 0) return horizontal;
+    }
+    // Image locations never have PDF coordinates, even in older malformed data.
+    return (first['created'] as num? ?? 0).compareTo(
+      second['created'] as num? ?? 0,
+    );
+  }
   if (a['page'] != null && b['page'] != null) {
     final left = (a['segments'] as List?)?.firstOrNull as Map?;
     final right = (b['segments'] as List?)?.firstOrNull as Map?;
@@ -24,18 +40,43 @@ int compareAnnotationLocations(Map first, Map second) {
       if (position != 0) return position;
     }
   }
-  List<int> steps(Map anchor) => RegExp(r'\d+')
-      .allMatches(
-        (anchor['cfi']?.toString() ?? '').replaceAll(RegExp(r'\[[^\]]*\]'), ''),
-      )
-      .map((match) => int.parse(match[0]!))
-      .toList();
-  final left = steps(a), right = steps(b);
-  for (var index = 0; index < left.length && index < right.length; index++) {
-    final order = left[index].compareTo(right[index]);
-    if (order != 0) return order;
+  for (final end in [false, true]) {
+    final left = _cfiSteps(a['cfi'] as String? ?? '', end),
+        right = _cfiSteps(b['cfi'] as String? ?? '', end);
+    for (var index = 0; index < left.length && index < right.length; index++) {
+      final order = left[index].compareTo(right[index]);
+      if (order != 0) return order;
+    }
+    final length = left.length.compareTo(right.length);
+    if (length != 0) return length;
   }
   return (first['created'] as num? ?? 0).compareTo(
     second['created'] as num? ?? 0,
   );
+}
+
+List<num> _cfiSteps(String cfi, bool end) {
+  final path = StringBuffer();
+  var assertion = false, escaped = false;
+  for (final rune in cfi.runes) {
+    final char = String.fromCharCode(rune);
+    if (escaped) {
+      escaped = false;
+    } else if (char == '^') {
+      escaped = true;
+    } else if (char == '[') {
+      assertion = true;
+    } else if (char == ']') {
+      assertion = false;
+    } else if (!assertion) {
+      path.write(char);
+    }
+  }
+  final range = path.toString().split(',');
+  // Relative endpoints extend the common parent, including an empty endpoint.
+  // Comparing their concatenated digits would instead mix start/end positions.
+  final point = range.first + (range.length == 3 ? range[end ? 2 : 1] : '');
+  return RegExp(
+    r'\d+(?:\.\d+)?',
+  ).allMatches(point).map((m) => num.parse(m[0]!)).toList();
 }

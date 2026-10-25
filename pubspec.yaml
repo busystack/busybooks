@@ -1,5 +1,5 @@
 name: busybooks
-description: A local-first EPUB 3 and PDF reader with collections and a private Notebook for Linux and Windows.
+description: A local-first EPUB, PDF, FB2 and comic reader with collections and a private Notebook for Linux and Windows.
 publish_to: none
 version: 0.1.0+1
 environment:

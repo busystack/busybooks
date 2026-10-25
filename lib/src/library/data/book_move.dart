@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../core/linux_atomic_file_api.dart';
 import '../../core/windows_atomic_file_api.dart';
 import 'file_identity.dart';
+import 'book_paths.dart';
 
 Future<String> contentHash(String path, {bool Function()? cancelled}) async {
   final stream = File(path).openRead().map((chunk) {
@@ -59,7 +60,11 @@ class BookMoveService {
     String target, {
     Map<String, dynamic>? recovery,
   }) async {
-    if (p.equals(source, target)) {
+    final sourceIdentity = BookPathIdentity.resolve(source);
+    final targetIdentity = BookPathIdentity.resolve(target);
+    source = sourceIdentity.path;
+    target = targetIdentity.path;
+    if (sourceIdentity.sameLocation(targetIdentity)) {
       if (await contentHash(source, cancelled: cancelled) != id) {
         throw FileSystemException(
           'Source content changed; move cancelled',

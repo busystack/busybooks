@@ -46,7 +46,7 @@ for(const capabilities of [{fontFamily:true,textMetrics:false},{fontFamily:false
   const work=new typography.TypographyWork(),a=work.begin({cfi:'passage'}),b=work.begin({cfi:'transient'})
   assert(!work.current(a));assert.equal(b.anchor.cfi,'passage');work.navigate();assert(!work.canRestore(b));work.finish(a);assert(work.current(b));work.finish(b);assert.equal(work.active,null)
 }
-const source=(await fs.readFile(new URL('../assets/reader/reader.js',import.meta.url),'utf8')).replace(/^import .*\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
+const source=(await fs.readFile(new URL('../assets/reader/reader.js',import.meta.url),'utf8')).replace(/^import .*\r?\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
 function adapter(){
  const events=[],content={addEventListener(){},style:{setProperty(){}},clientWidth:900}
  const context=vm.createContext({...typography,URL,Uint8Array,console,setTimeout,clearTimeout,requestAnimationFrame:f=>f(),

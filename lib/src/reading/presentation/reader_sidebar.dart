@@ -61,7 +61,7 @@ class ReadingSidebarHeader extends ConsumerWidget {
       'outline',
       if (reader.panelAvailable('thumbnails')) 'thumbnails',
       'annotations',
-      'search',
+      if (reader.panelAvailable('search')) 'search',
       if (collection) 'books',
     ];
     final selected = views.contains(state.panel) ? state.panel : 'outline';
@@ -582,7 +582,7 @@ class _OutlinePanelState extends ConsumerState<_OutlinePanel> {
                   itemBuilder: (c, i) {
                     final node = entries[i], page = node.destination?['page'];
                     final reference =
-                        reader.book?.format == 'pdf' && page is int
+                        reader.book?.pageBased == true && page is int
                         ? PublicationPageReference.pdf(
                             page,
                             state.pages,
@@ -814,6 +814,7 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
             label: switch (ui.filter) {
               'highlight' => l.highlights,
               'bookmark' => l.bookmarks,
+              'region' => l.regionNotes,
               _ => l.allItems,
             },
             tooltip: l.annotations,
@@ -822,6 +823,7 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                 ('all', l.allItems),
                 ('highlight', l.highlights),
                 ('bookmark', l.bookmarks),
+                ('region', l.regionNotes),
               ])
                 BusyBooksPopupSelectorOption(value: value, label: label),
               BusyBooksPopupSelectorOption(value: 'notes', label: l.withNotes),
@@ -885,7 +887,7 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                             ? BusyBooksGlyphs.bookmark
                             : BusyBooksGlyphs.edit,
                         size: BusyBooksSizes.iconSm,
-                        color: a.kind == 'highlight'
+                        color: a.kind != 'bookmark'
                             ? annotationHighlightColor(a.color)
                             : null,
                       ),
@@ -909,7 +911,11 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                                 style: Theme.of(c).textTheme.bodySmall,
                               ),
                             Text(
-                              '${a.kind == 'bookmark' ? l.bookmark : l.highlight} · $refText${notes.drafts.containsKey(a.id) ? ' · ${l.unsavedNote}' : ''}',
+                              '${a.kind == 'region'
+                                  ? l.regionNote
+                                  : a.kind == 'bookmark'
+                                  ? l.bookmark
+                                  : l.highlight} · $refText${notes.drafts.containsKey(a.id) ? ' · ${l.unsavedNote}' : ''}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(c).textTheme.bodySmall?.copyWith(
@@ -934,7 +940,7 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                             value: 'edit',
                             label: l.editNote,
                           ),
-                          if (a.kind == 'highlight')
+                          if (a.kind != 'bookmark')
                             for (final color in annotationColors)
                               BusyBooksPopupMenuItem(
                                 value: color,

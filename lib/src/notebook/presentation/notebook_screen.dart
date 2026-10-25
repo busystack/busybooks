@@ -137,202 +137,208 @@ class _NotebookScreenState extends ConsumerState<NotebookScreen> {
     }).toList()..sort((a, b) => compareAnnotationLocations(a.data, b.data));
     final target = items.indexWhere((a) => a.id == view.revealAnnotation);
     if (target >= 0) _revealItem(target, items.length, view);
-    return Scaffold(
-      body: LinuxPageFrame(
-        sidebarAvailable: false,
-        sidebarExpanded: false,
-        header: BusyBooksLinuxHeaderLayout(
-          leading: BusyBooksHeaderIconButton(
-            key: const ValueKey('notebook-home'),
-            tooltip: l.welcome,
-            icon: BusyBooksGlyphs.home,
-            onPressed: () async {
-              final registry = BusyBooksCommandRegistryScope.maybeOf(context);
-              await (registry?[BusyBooksCommandIds.welcome]?.execute != null
-                  ? registry!.execute(BusyBooksCommandIds.welcome)
-                  : closeWorkspace(context, ref));
-            },
-          ),
-          centerAllocation: view.searchVisible
-              ? BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls
-              : BusyBooksLinuxHeaderCenterAllocation.centeredBetweenControls,
-          title: view.searchVisible
-              ? BusyBooksSearchField(
-                  controller: _query,
-                  hintText: l.searchNotebook,
-                  focusRequest: view.focusRequest,
-                  autofocus: true,
-                  onChanged: (v) => controller.view(widget.id, query: v),
-                  onEscape: () =>
-                      controller.view(widget.id, searchVisible: false),
-                )
-              : BusyBooksLinuxHeaderTitle(
-                  '${book?.title ?? l.book} · ${l.notebook}',
-                ),
-          trailing: BusyBooksLinuxHeaderControlGroup(
-            children: [
-              if (showViewSelector)
-                BookViewSelector(id: widget.id, view: BookView.notebook),
-              BusyBooksHeaderIconButton(
-                tooltip: l.searchNotebook,
-                icon: BusyBooksGlyphs.search,
-                selected: view.searchVisible,
-                shortcut: BusyBooksCommandRegistryScope.maybeOf(
-                  context,
-                )?[BusyBooksCommandIds.search]?.shortcut?.label,
-                onPressed: () {
-                  final registry = BusyBooksCommandRegistryScope.maybeOf(
-                    context,
-                  );
-                  if (registry?[BusyBooksCommandIds.search]?.execute != null) {
-                    registry!.execute(BusyBooksCommandIds.search);
-                  } else {
-                    controller.view(
-                      widget.id,
-                      searchVisible: !view.searchVisible,
-                      focus: true,
-                    );
-                  }
-                },
-              ),
-              BusyBooksMainMenuButton(
-                bookViewSelectorVisible: showViewSelector,
-              ),
-            ],
-          ),
-        ),
-        body: Semantics(
-          label: l.notebook,
-          container: true,
-          child: ColoredBox(
-            color: BusyBooksSurfaceColors.of(context).view,
-            child: Column(
+    return Focus(
+      autofocus: !view.searchVisible,
+      skipTraversal: true,
+      child: Scaffold(
+        body: LinuxPageFrame(
+          sidebarAvailable: false,
+          sidebarExpanded: false,
+          header: BusyBooksLinuxHeaderLayout(
+            leading: BusyBooksHeaderIconButton(
+              key: const ValueKey('notebook-home'),
+              tooltip: l.welcome,
+              icon: BusyBooksGlyphs.home,
+              onPressed: () async {
+                final registry = BusyBooksCommandRegistryScope.maybeOf(context);
+                await (registry?[BusyBooksCommandIds.welcome]?.execute != null
+                    ? registry!.execute(BusyBooksCommandIds.welcome)
+                    : closeWorkspace(context, ref));
+              },
+            ),
+            centerAllocation: view.searchVisible
+                ? BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls
+                : BusyBooksLinuxHeaderCenterAllocation.centeredBetweenControls,
+            title: view.searchVisible
+                ? BusyBooksSearchField(
+                    controller: _query,
+                    hintText: l.searchNotebook,
+                    focusRequest: view.focusRequest,
+                    autofocus: true,
+                    onChanged: (v) => controller.view(widget.id, query: v),
+                    onEscape: () =>
+                        controller.view(widget.id, searchVisible: false),
+                  )
+                : BusyBooksLinuxHeaderTitle(
+                    '${book?.title ?? l.book} · ${l.notebook}',
+                  ),
+            trailing: BusyBooksLinuxHeaderControlGroup(
               children: [
-                if (data.loading) ...[
-                  LinearProgressIndicator(
-                    value: (data.progress['total'] as int? ?? 0) > 0
-                        ? (data.progress['done'] as int) /
-                              (data.progress['total'] as int)
-                        : null,
-                  ),
-                  BusyBooksActionRow(
-                    title: l.busy,
-                    subtitle: data.progress['name']?.toString(),
-                    trailing: BusyBooksDialogButton(
-                      label: l.cancel,
-                      onPressed: () => ref
-                          .read(workspaceControllerProvider.notifier)
-                          .cancel(),
+                if (showViewSelector)
+                  BookViewSelector(id: widget.id, view: BookView.notebook),
+                BusyBooksHeaderIconButton(
+                  tooltip: l.searchNotebook,
+                  icon: BusyBooksGlyphs.search,
+                  selected: view.searchVisible,
+                  shortcut: BusyBooksCommandRegistryScope.maybeOf(
+                    context,
+                  )?[BusyBooksCommandIds.search]?.shortcut?.label,
+                  onPressed: () {
+                    final registry = BusyBooksCommandRegistryScope.maybeOf(
+                      context,
+                    );
+                    if (registry?[BusyBooksCommandIds.search]?.execute !=
+                        null) {
+                      registry!.execute(BusyBooksCommandIds.search);
+                    } else {
+                      controller.view(
+                        widget.id,
+                        searchVisible: !view.searchVisible,
+                        focus: true,
+                      );
+                    }
+                  },
+                ),
+                BusyBooksMainMenuButton(
+                  bookViewSelectorVisible: showViewSelector,
+                ),
+              ],
+            ),
+          ),
+          body: Semantics(
+            label: l.notebook,
+            container: true,
+            child: ColoredBox(
+              color: BusyBooksSurfaceColors.of(context).view,
+              child: Column(
+                children: [
+                  if (data.loading) ...[
+                    LinearProgressIndicator(
+                      value: (data.progress['total'] as int? ?? 0) > 0
+                          ? (data.progress['done'] as int) /
+                                (data.progress['total'] as int)
+                          : null,
                     ),
-                  ),
-                ],
-                if (book != null && !book.available)
-                  BusyBooksBanner(
-                    title: l.missingBookNotebook,
-                    actionLabel: l.locateBook,
-                    onAction: () => locateBook(context, ref, book.id),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.all(BusyBooksSpacing.md),
-                  child: Row(
-                    children: [
-                      for (final filter in [
-                        ('all', l.allItems),
-                        ('highlight', l.highlights),
-                        ('bookmark', l.bookmarks),
-                      ])
-                        Padding(
-                          padding: const EdgeInsetsDirectional.only(end: 8),
-                          child: BusyBooksPushButton.standard(
-                            onPressed: () =>
-                                controller.view(widget.id, filter: filter.$1),
-                            child: Semantics(
-                              selected: view.filter == filter.$1,
-                              child: Text(
-                                '${view.filter == filter.$1 ? '✓ ' : ''}${filter.$2}',
+                    BusyBooksActionRow(
+                      title: l.busy,
+                      subtitle: data.progress['name']?.toString(),
+                      trailing: BusyBooksDialogButton(
+                        label: l.cancel,
+                        onPressed: () => ref
+                            .read(workspaceControllerProvider.notifier)
+                            .cancel(),
+                      ),
+                    ),
+                  ],
+                  if (book != null && !book.available)
+                    BusyBooksBanner(
+                      title: l.missingBookNotebook,
+                      actionLabel: l.locateBook,
+                      onAction: () => locateBook(context, ref, book.id),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(BusyBooksSpacing.md),
+                    child: Row(
+                      children: [
+                        for (final filter in [
+                          ('all', l.allItems),
+                          ('highlight', l.highlights),
+                          ('bookmark', l.bookmarks),
+                          ('region', l.regionNotes),
+                        ])
+                          Padding(
+                            padding: const EdgeInsetsDirectional.only(end: 8),
+                            child: BusyBooksPushButton.standard(
+                              onPressed: () =>
+                                  controller.view(widget.id, filter: filter.$1),
+                              child: Semantics(
+                                selected: view.filter == filter.$1,
+                                child: Text(
+                                  '${view.filter == filter.$1 ? '✓ ' : ''}${filter.$2}',
+                                ),
                               ),
                             ),
                           ),
+                        const SizedBox(width: 12),
+                        Checkbox(
+                          value: view.withNotes,
+                          onChanged: (v) =>
+                              controller.view(widget.id, withNotes: v),
                         ),
-                      const SizedBox(width: 12),
-                      Checkbox(
-                        value: view.withNotes,
-                        onChanged: (v) =>
-                            controller.view(widget.id, withNotes: v),
-                      ),
-                      Flexible(child: Text(l.withNotes)),
-                    ],
+                        Flexible(child: Text(l.withNotes)),
+                      ],
+                    ),
                   ),
-                ),
-                if (view.searchVisible)
-                  Padding(
-                    padding: BusyBooksInsets.sectionLabel,
-                    child: Text(l.notebookSearchScope),
-                  ),
-                Expanded(
-                  child: items.isEmpty
-                      ? Center(child: Text(l.notebookEmpty))
-                      : ListView.builder(
-                          controller: _scroll,
-                          itemCount: items.length,
-                          itemBuilder: (c, i) {
-                            _builtForReveal.add(i);
-                            final a = items[i];
-                            final card = BusyBooksClamp(
-                              maxWidth: 1000,
-                              scrollable: false,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 10,
-                                ),
-                                child: _NotebookItem(
-                                  key: ValueKey(a.id),
-                                  annotation: a,
-                                  selected: view.selected == a.id,
-                                  onSelect: () => controller.view(
-                                    widget.id,
-                                    selected: a.id,
+                  if (view.searchVisible)
+                    Padding(
+                      padding: BusyBooksInsets.sectionLabel,
+                      child: Text(l.notebookSearchScope),
+                    ),
+                  Expanded(
+                    child: items.isEmpty
+                        ? Center(child: Text(l.notebookEmpty))
+                        : ListView.builder(
+                            controller: _scroll,
+                            itemCount: items.length,
+                            itemBuilder: (c, i) {
+                              _builtForReveal.add(i);
+                              final a = items[i];
+                              final card = BusyBooksClamp(
+                                maxWidth: 1000,
+                                scrollable: false,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 10,
                                   ),
-                                ),
-                              ),
-                            );
-                            final section = _sectionKey(a);
-                            final heading =
-                                section != null &&
-                                (i == 0 ||
-                                    _sectionKey(items[i - 1]) != section);
-                            return Column(
-                              key: a.id == view.revealAnnotation
-                                  ? _revealKey
-                                  : null,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (heading)
-                                  BusyBooksClamp(
-                                    scrollable: false,
-                                    maxWidth: 1000,
-                                    child: Semantics(
-                                      header: true,
-                                      child: Text(
-                                        annotationReference(
-                                          c,
-                                          a,
-                                          book: book,
-                                        ).split(' · ').first,
-                                        style: Theme.of(
-                                          c,
-                                        ).textTheme.titleMedium,
-                                      ),
+                                  child: _NotebookItem(
+                                    key: ValueKey(a.id),
+                                    annotation: a,
+                                    selected: view.selected == a.id,
+                                    onSelect: () => controller.view(
+                                      widget.id,
+                                      selected: a.id,
                                     ),
                                   ),
-                                card,
-                              ],
-                            );
-                          },
-                        ),
-                ),
-              ],
+                                ),
+                              );
+                              final section = _sectionKey(a);
+                              final heading =
+                                  section != null &&
+                                  (i == 0 ||
+                                      _sectionKey(items[i - 1]) != section);
+                              return Column(
+                                key: a.id == view.revealAnnotation
+                                    ? _revealKey
+                                    : null,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (heading)
+                                    BusyBooksClamp(
+                                      scrollable: false,
+                                      maxWidth: 1000,
+                                      child: Semantics(
+                                        header: true,
+                                        child: Text(
+                                          annotationReference(
+                                            c,
+                                            a,
+                                            book: book,
+                                          ).split(' · ').first,
+                                          style: Theme.of(
+                                            c,
+                                          ).textTheme.titleMedium,
+                                        ),
+                                      ),
+                                    ),
+                                  card,
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -400,14 +406,18 @@ class _NotebookItemState extends ConsumerState<_NotebookItem> {
             Row(
               children: [
                 Icon(
-                  a.kind == 'highlight'
+                  a.kind != 'bookmark'
                       ? BusyBooksGlyphs.edit
                       : BusyBooksGlyphs.bookmark,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${a.kind == 'highlight' ? l.highlight : l.bookmark} · ${annotationReference(context, a, book: ref.read(workspaceControllerProvider).bookById(a.bookId))}',
+                    '${a.kind == 'region'
+                        ? l.regionNote
+                        : a.kind == 'highlight'
+                        ? l.highlight
+                        : l.bookmark} · ${annotationReference(context, a, book: ref.read(workspaceControllerProvider).bookById(a.bookId))}',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
@@ -420,7 +430,7 @@ class _NotebookItemState extends ConsumerState<_NotebookItem> {
                       label: l.showInReading,
                     ),
                     BusyBooksPopupMenuItem(value: 'edit', label: l.editNote),
-                    if (a.kind == 'highlight')
+                    if (a.kind != 'bookmark')
                       for (final color in annotationColors)
                         BusyBooksPopupMenuItem(
                           value: color,

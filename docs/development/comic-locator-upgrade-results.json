@@ -1,0 +1,209 @@
+{
+  "scope": "Repair previously accepted stored comic point fields before ordinary edits and backup; strict incoming validation retained",
+  "recordedUtc": "2026-10-24T04:21:53.117044+00:00",
+  "baselineCommit": "b36f6fb0e0de4aca4e5e2012eb6df8d3503a4f40",
+  "implementationCommit": "78b234da93aa1b657ec297e20d2fb292b249b9b5",
+  "repair": {
+    "database": "current reading-data.sqlite only",
+    "sqlSchemaUnchanged": 2,
+    "backupSchemaUnchanged": 3,
+    "locatorVersion": 1,
+    "fieldsRemoved": [
+      "point"
+    ],
+    "formats": [
+      "cbz",
+      "cbr"
+    ],
+    "locations": [
+      "annotations",
+      "current positions",
+      "outline destinations"
+    ],
+    "batchSize": 32,
+    "profileLockAndSingleTransaction": true,
+    "wholeRecordValidationBeforeWrite": true,
+    "identityTextAndImageGeometryPreserved": true,
+    "incomingBackupsSanitized": false,
+    "unknownVersionsOrInvalidGeometryRepaired": false
+  },
+  "previousImplementation": {
+    "revision": "852bd74ec290ffe5f14acef729f51b6b43d0f55c",
+    "generator": "tools/make_comic_locator_upgrade_fixture.py",
+    "fixtures": {
+      "comic-locator-previous-backup.json": "5540ca43bf43c810a5df9a34f9b25ee3db2dde99952527b774295949955650f3",
+      "comic-locator-previous-profile.sql": "9aa0ab9fd66f8ae4c15c2f581389eae096c55b5394e64b5c1c09c469456e8e2e"
+    },
+    "executedControls": [
+      {
+        "stage": "previous implementation",
+        "restore": true,
+        "edits": 2,
+        "backup": true,
+        "records": 13
+      },
+      {
+        "stage": "strict validator before repair",
+        "failures": {
+          "updateAnnotation": "Bad state: FormatException: Invalid reading data: comic locator fields",
+          "backup": "Bad state: FormatException: Invalid reading data: comic locator fields"
+        }
+      }
+    ]
+  },
+  "checks": {
+    "flutterSuite": {
+      "passed": 353,
+      "skipped": 1,
+      "skipReason": "Existing opt-in live Wiktionary contract"
+    },
+    "newUpgradeRegressionTests": 4,
+    "analysis": "no issues",
+    "formatting": "134 files, 0 changes",
+    "storage": [
+      {
+        "status": "passed",
+        "checks": 88,
+        "scope": "real SQLite, original files, database collections, typed restoration and safe same-volume moves; no native rendering"
+      }
+    ],
+    "backupContract": [
+      {
+        "status": "passed",
+        "checks": 63,
+        "scope": "real SQLite and data-only archive round trips below/at/above combined 100000 records and encoded 128 MiB; rejected publication preserves source and previous backup"
+      }
+    ],
+    "ordering": [
+      {
+        "status": "passed",
+        "checks": 5,
+        "scope": "Annotation ordering, independent of creation time"
+      }
+    ],
+    "dependencyPinsUnchanged": {
+      "pubspec.yaml": "3411548de33988ec311482f88d81a361d8823ca087cd6777b5969dcdcaa24487",
+      "pubspec.lock": "13823170dcfa19af5ea9d5df4cdf8815abb39db973ec119fc2e2e5352c49a8a2"
+    },
+    "vendorFilesVerified": 218,
+    "linuxReleaseBuild": "passed",
+    "sdk": {
+      "frameworkVersion": "3.47.5",
+      "channel": "stable",
+      "repositoryUrl": "https://github.com/flutter/flutter.git",
+      "frameworkRevision": "6a19cca56475dbfba1478ee68d7bd0c2ef891da1",
+      "frameworkCommitDate": "2026-09-17 14:13:22 -0400",
+      "engineRevision": "af7e796e161ae0bb1ff0758c71a7105418bd9ded",
+      "engineCommitDate": "2026-09-16 18:35:09.000Z",
+      "engineContentHash": "ab598368592da0064197e2bc15c7f5b0a2c6bb1f",
+      "engineBuildDate": "2026-09-16 12:35:21.428",
+      "dartSdkVersion": "3.13.4",
+      "devToolsVersion": "2.60.0",
+      "flutterVersion": "3.47.5"
+    }
+  },
+  "package": {
+    "path": "build/distributions/busybooks-0.1.0-linux-x64-comic-locator-upgrade.tar.gz",
+    "sha256": "567379c8aa90e7ca61a96981a6400383535f472432a5b283b86aaa09be5bf11d",
+    "bytes": 15770938,
+    "sourceDateEpoch": 1792815509,
+    "contents": {
+      "status": "passed",
+      "readerAssetsMatched": 224,
+      "rarHelperExecutable": true,
+      "unrarLicensePresent": true,
+      "rarHelperSha256": "347ff0206b80377489cebc4d470345a0132f1ef06bd5252fc1e73743a236d1de",
+      "rarHelperUnchangedFromQualifiedPackage": true
+    },
+    "nativeApplicationStartupUpgrade": {
+      "status": "passed",
+      "scope": "Actual extracted Linux application startup against previous schema-2 profile",
+      "records": 10,
+      "repairedRecords": 6,
+      "schema": 2,
+      "unaffectedRowsByteIdentical": true,
+      "allOtherFieldsPreserved": true,
+      "startupRepairObservedMs": 727
+    },
+    "oldArtifactsPreserved": true
+  },
+  "platformGates": [
+    {
+      "name": "Windows WebView2",
+      "status": "unverified; actual Windows host/runtime unavailable"
+    },
+    {
+      "name": "Installed strict Snap",
+      "status": "unverified; no installed BusyBooks strict Snap or snapcraft/LXD/multipass environment"
+    }
+  ],
+  "rendererRegressionEvidence": "docs/development/format-review-results.json (unchanged renderer assets; historical execution)",
+  "rawEvidence": [
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-analyze.log",
+      "sha256": "6beff97daae1328261b6eeed1912f4237c7b76eed45107af25a3e1dd8e1c556a",
+      "bytes": 96
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-backup-contract.log",
+      "sha256": "4d760e97f236fb8f5194683db52565d418abfd8a3df29f02a8992ceaa36ed453",
+      "bytes": 250
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-build.log",
+      "sha256": "c58e2c5eed3121ed241836b9413935db79258c7ff872dd4a441930123f5c14a3",
+      "bytes": 520
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-flutter.log",
+      "sha256": "1d5f5cc50f9e1fa58e1fee1f4f015b75ef8611343cacff5c6965329aff00077b",
+      "bytes": 69417
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-formatting.log",
+      "sha256": "12feaa0b4cf1759ed833fa3bcfb7d2e1978083d8d63d6f96f5fc7cce36803fa4",
+      "bytes": 49
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-order.log",
+      "sha256": "b57cd2c61e2cfcc64646cbd68079347813c7566faef7e31925da6b1fd66ed249",
+      "bytes": 135
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-package-contents.log",
+      "sha256": "912b613256953e82e8cfe8f9ee2345ac41196c2a8ba10ed3b3102f785eae4cc7",
+      "bytes": 242
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-package-startup.log",
+      "sha256": "7bc045131c1e079bec8f1a09d1941fe96573c8c6fc8ae264b0c1e5b0a3778058",
+      "bytes": 262
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-regression.log",
+      "sha256": "17db7dd278d4e3357292a54ec4aaad96cdc467703692713a1471532aadb6301a",
+      "bytes": 1541
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-storage.log",
+      "sha256": "a9d374ff479474b86b6572ef2c3cbdd08a84c30c5f8c399c625b244ce45e2f7d",
+      "bytes": 203
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/busybooks-comic-point-transition-generation.log",
+      "sha256": "f884f1c79a9f2fe4a6dcea052f842bbccb035d06871008128ca3722ee18716b6",
+      "bytes": 856
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/package_startup_probe.py",
+      "sha256": "7a4e34bc52cd5300f10316c9d6c1a47bfb0edd616e9b437c2f7e8eebabdac23c",
+      "bytes": 3140
+    },
+    {
+      "file": "evidence/comic-locator-upgrade-20261023/sdk.json",
+      "sha256": "be5a65f1ddc3a081ef3d72d7aec0bd1811ac58ec49ea1dd05cba45b01c5b4689",
+      "bytes": 560
+    }
+  ],
+  "remoteActions": "No push, merge or publication"
+}

@@ -43,7 +43,9 @@ await import('./fixed_layout_probe.mjs')
 await import('./reader_startup_probe.mjs')
 
 await import('./reader_defects_probe.mjs')
+await import('./reader_review_regressions.mjs')
 
 await import('./reader_sidebar_probe.mjs')
 
 await import('./typography_probe.mjs')
+await import('./comic_interaction_probe.mjs')

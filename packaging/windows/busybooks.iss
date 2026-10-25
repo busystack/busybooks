@@ -20,11 +20,17 @@ Name: "{group}\BusyBooks"; Filename: "{app}\busybooks.exe"
 [Tasks]
 Name: "epub"; Description: "Open EPUB books with BusyBooks"; Flags: unchecked
 Name: "pdf"; Description: "Open PDF books with BusyBooks"; Flags: unchecked
+Name: "fb2"; Description: "Open FictionBook books with BusyBooks"; Flags: unchecked
+Name: "comics"; Description: "Open CBZ and CBR comics with BusyBooks"; Flags: unchecked
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\BusyBooks.Book"; ValueType: string; ValueData: "BusyBooks book"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\BusyBooks.Book\shell\open\command"; ValueType: string; ValueData: """{app}\busybooks.exe"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\.epub\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: epub; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: pdf; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\.fb2\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: fb2; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\.fbz\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: fb2; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\.cbz\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: comics; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\.cbr\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: comics; Flags: uninsdeletevalue
 [Run]
 Filename: "{app}\VC_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Microsoft Visual C++ Runtime"; Flags: waituntilterminated
 Filename: "{app}\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"; Parameters: "/silent /install"; StatusMsg: "Installing WebView2 Runtime"; Flags: waituntilterminated

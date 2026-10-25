@@ -792,13 +792,13 @@ abstract class AppLocalizations {
   /// No description provided for @backupHelp.
   ///
   /// In en, this message translates to:
-  /// **'Backup & Restore Reading Data includes collections, reading positions, annotations, private notes and preferences. Original EPUB/PDF files are excluded.'**
+  /// **'Backup & Restore Reading Data includes collections, reading positions, annotations, private notes and preferences. Original book files are excluded.'**
   String get backupHelp;
 
   /// No description provided for @restoreWarning.
   ///
   /// In en, this message translates to:
-  /// **'Restore reading data into this profile? Matching book, annotation, collection and Recent records will be replaced. Unrelated data is kept. Original EPUB/PDF files are excluded and will not be changed.'**
+  /// **'Restore reading data into this profile? Matching book, annotation, collection and Recent records will be replaced. Unrelated data is kept. Original book files are excluded and will not be changed.'**
   String get restoreWarning;
 
   /// No description provided for @backupComplete.
@@ -864,7 +864,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutText.
   ///
   /// In en, this message translates to:
-  /// **'An offline personal EPUB 3 and PDF library and reader. Built with the BusyStack desktop foundation.'**
+  /// **'An offline personal EPUB, PDF, FB2 and comic library and reader. Built with the BusyStack desktop foundation.'**
   String get aboutText;
 
   /// No description provided for @accessibility.
@@ -978,7 +978,7 @@ abstract class AppLocalizations {
   /// No description provided for @unsupported.
   ///
   /// In en, this message translates to:
-  /// **'Only DRM-free EPUB 3 and PDF are supported.'**
+  /// **'Only DRM-free EPUB 2/3, PDF, FB2 (.fb2, .fb2.zip, .fbz), CBZ and CBR are supported.'**
   String get unsupported;
 
   /// No description provided for @goToHelp.
@@ -1068,7 +1068,7 @@ abstract class AppLocalizations {
   /// No description provided for @openBookHelp.
   ///
   /// In en, this message translates to:
-  /// **'Read an EPUB 3 or PDF from its current location.'**
+  /// **'Read an EPUB, PDF, FB2, CBZ or CBR from its current location.'**
   String get openBookHelp;
 
   /// No description provided for @createCollection.
@@ -1152,7 +1152,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyCollection.
   ///
   /// In en, this message translates to:
-  /// **'This collection has no books. Add EPUB/PDF files from any location.'**
+  /// **'This collection has no books. Add supported book files from any location.'**
   String get emptyCollection;
 
   /// No description provided for @removeReference.
@@ -1292,6 +1292,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Highlight Color'**
   String get highlightColor;
+
+  /// No description provided for @regionColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Region Color'**
+  String get regionColor;
 
   /// No description provided for @moreTypography.
   ///
@@ -1686,7 +1692,7 @@ abstract class AppLocalizations {
   /// No description provided for @unsupportedTarget.
   ///
   /// In en, this message translates to:
-  /// **'Folders and collection files are unsupported. Open an EPUB/PDF file or choose a collection saved in BusyBooks.'**
+  /// **'Folders and collection files are unsupported. Open a supported book file or choose a collection saved in BusyBooks.'**
   String get unsupportedTarget;
 
   /// No description provided for @saveWarning.
@@ -2072,6 +2078,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saved font'**
   String get rememberedFont;
+
+  /// No description provided for @regionNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Region note'**
+  String get regionNote;
+
+  /// No description provided for @regionNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Region notes'**
+  String get regionNotes;
+
+  /// No description provided for @comicDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Comic Reading Defaults'**
+  String get comicDefaults;
+
+  /// No description provided for @readingDirection.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading direction'**
+  String get readingDirection;
+
+  /// No description provided for @directionAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'From book'**
+  String get directionAuto;
+
+  /// No description provided for @directionLtr.
+  ///
+  /// In en, this message translates to:
+  /// **'Left to right'**
+  String get directionLtr;
+
+  /// No description provided for @directionRtl.
+  ///
+  /// In en, this message translates to:
+  /// **'Right to left'**
+  String get directionRtl;
+
+  /// No description provided for @regionInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a rectangle on one page. Arrow keys move it; Shift+Arrow resizes; Enter confirms; Escape cancels.'**
+  String get regionInstructions;
+
+  /// No description provided for @protectedBookHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Protected books and encrypted archives cannot be opened. Reading data is preserved.'**
+  String get protectedBookHelp;
+
+  /// No description provided for @bookResourceLimitHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'This book exceeds a reading resource limit. Details below identify the affected file or resource.'**
+  String get bookResourceLimitHelp;
+
+  /// No description provided for @damagedBookHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'The book is damaged or has invalid content. Locate a complete, readable copy of the same original to keep its reading data.'**
+  String get damagedBookHelp;
+
+  /// No description provided for @firstPage.
+  ///
+  /// In en, this message translates to:
+  /// **'First page'**
+  String get firstPage;
+
+  /// No description provided for @lastPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Last page'**
+  String get lastPage;
 }
 
 class _AppLocalizationsDelegate

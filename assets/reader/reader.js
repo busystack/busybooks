@@ -3,30 +3,102 @@ import './vendor/foliate/view.js'
 import { fitScale, validPage, cssColor, tabTarget } from './reading_geometry.mjs'
 import { noTypography, reflowableTypography, createLocalFont, prepareLocalFont, installLocalFont, typographyCSS, protectSpecializedFonts, applyFontFamily, validateTypographyUpdate, TypographyWork } from './typography.mjs'
 import * as CFI from './vendor/foliate/epubcfi.js'
+import { adaptDTBook } from './dtbook.mjs'
+import { makePreparedFB2 } from './prepared_book.mjs'
+import { makeComicBook, comicAnchor, normalizedRegion, decodeComicImage } from './comic_book.mjs'
 import { EPUB } from './vendor/foliate/epub.js'
 import { Overlayer } from './vendor/foliate/overlayer.js'
 import * as pdfjs from './vendor/pdfjs/pdf.mjs'
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.mjs', import.meta.url).href
 const content = document.querySelector('#content')
 const session = new URL(window.location.href).searchParams.get('session') ?? 'probe'
-const emit = (type, data = {}) => {
-    const json = JSON.stringify({ type, session, ...data })
-    if (window.webkit?.messageHandlers?.busybooks) window.webkit.messageHandlers.busybooks.postMessage(json)
+const bridgePayloadCharacters=16*1024*1024,bridgeChunkCharacters=32*1024
+let bridgeRevision=0,commandTransfer=null,commandRevision=-1
+function postBridge(json){
+    if(window.webkit?.messageHandlers?.busybooks)window.webkit.messageHandlers.busybooks.postMessage(json)
     else window.chrome?.webview?.postMessage(json)
-    if (window.busybooksProbe) window.busybooksProbe({type,session,...data})
+}
+function emit(type,data={}){
+    const message={type,session,...data},json=JSON.stringify(message)
+    if(json.length>bridgePayloadCharacters){postBridge(JSON.stringify({type:'bridgeError',session,direction:'event',message:'Reader bridge payload limit exceeded'}));return false}
+    if(utf8Length(json)<=131072)postBridge(json)
+    else {
+        const revision=++bridgeRevision
+        for(let offset=0;offset<json.length;offset+=bridgeChunkCharacters){
+            const end=Math.min(json.length,offset+bridgeChunkCharacters)
+            postBridge(JSON.stringify({type:'bridgeChunk',session,bridgeRevision:revision,offset,total:json.length,chunk:json.slice(offset,end),complete:end===json.length}))
+        }
+    }
+    if(window.busybooksProbe)window.busybooksProbe(message)
+    return true
+}
+function receiveCommand(frame){
+    if(frame.action!=='bridgeChunk'){
+        if(commandTransfer){commandTransfer=null;throw Error('Incomplete reader bridge transfer')}
+        return frame
+    }
+    const {bridgeRevision:revision,offset,total,chunk,complete}=frame
+    const invalid=()=>{commandTransfer=null;throw Error('Invalid reader bridge transfer')}
+    if(!Number.isSafeInteger(revision)||revision<0||!Number.isSafeInteger(offset)||!Number.isSafeInteger(total)||
+        total<1||total>bridgePayloadCharacters||typeof chunk!=='string'||!chunk.length||chunk.length>bridgeChunkCharacters||typeof complete!=='boolean')invalid()
+    if(revision<commandRevision||revision===commandRevision&&!commandTransfer)return null
+    if(offset===0){if(revision<=commandRevision||commandTransfer)invalid();commandRevision=revision;commandTransfer={revision,total,size:0,chunks:[]}}
+    const transfer=commandTransfer
+    if(!transfer||revision!==transfer.revision||offset!==transfer.size||total!==transfer.total||transfer.size+chunk.length>total)invalid()
+    transfer.chunks.push(chunk);transfer.size+=chunk.length
+    if(complete!==(transfer.size===total))invalid()
+    if(!complete)return null
+    commandTransfer=null
+    const command=JSON.parse(transfer.chunks.join(''))
+    if(command.session!==session||command.action==='bridgeChunk')invalid()
+    return command
 }
 let strings={}, chrome={}, spokenAnchor=null, currentRange=null, view, pdf, prefs = {}, location = {}, selection = null, annotations = [], pages = [], labels = []
 const fixedContents=new WeakMap()
-let noteView=null,noteGeneration=0
+let noteView=null,noteGeneration=0,cacheFailureReported=false
 let typography=noTypography,localFont={family:'serif',faces:[]},fontSignature='',lastEpubRelocation=null,pinnedTypographyLocation=null
 const typographyWork=new TypographyWork()
 let appearanceOperation=Promise.resolve(),programmaticSelections=new WeakMap()
+let annotationOperation=Promise.resolve(),annotationRevision=-1,annotationTransfer=null
+function receiveAnnotations(command){
+    const revision=command.revision??annotationRevision+1
+    if(revision<annotationRevision)return
+    let value=command.value
+    if(typeof command.chunk==='string'){
+        if(command.offset===0){annotationRevision=revision;annotationTransfer={revision,size:0,chunks:[]}}
+        const transfer=annotationTransfer
+        if(!transfer||transfer.revision!==revision)return
+        if(command.offset!==transfer.size)throw Error('Incomplete annotation transfer')
+        transfer.chunks.push(command.chunk);transfer.size+=command.chunk.length
+        if(!command.complete)return
+        value=JSON.parse(transfer.chunks.join(''))
+    }
+    if(!Array.isArray(value))throw Error('Invalid annotation snapshot')
+    annotationRevision=revision;annotationTransfer=null
+    const operation=annotationOperation.catch(()=>{}).then(async()=>{
+        if(revision!==annotationRevision)return
+        if(view)for(const a of annotations)if(a.anchor?.cfi)await view.deleteAnnotation({value:a.anchor.cfi})
+        annotations=value
+        if(view){await paintEpub();if(noteView)await paintNote()}else if(pdf)paintPdf()
+    })
+    annotationOperation=operation;return operation
+}
 function userNavigation(){typographyWork.navigate();pinnedTypographyLocation=null;programmaticSelections=new WeakMap()}
 function reportEpubLocation(data){
     lastEpubRelocation=data
     if(typographyWork.active&&typographyWork.canRestore(typographyWork.active))return
     const pin=pinnedTypographyLocation
     reportLocation(pin&&pin.view===view?{...data,anchor:pin.anchor,progress:pin.progress}:data)
+}
+let activeFormat='epub',navigationTail=Promise.resolve(),regionSelection=null
+const isComic=()=>activeFormat==='cbz'||activeFormat==='cbr'
+function textAnchor(cfi,index){
+    const resolved=index??view.resolveCFI(cfi)?.index
+    if(activeFormat==='fb2'){
+        const section=view.book.sections[resolved];if(!section)throw Error('Invalid FB2 section')
+        return {kind:'fb2',version:1,section:section.identity,index:resolved,cfi}
+    }
+    return {cfi,...(index!=null?{index}:{} )}
 }
 let generation = 0, history = [], historyIndex = -1
 const colors = { yellow: '#f5d547', green: '#70c77d', blue: '#6ab7ed', pink: '#e997ba' }
@@ -87,7 +159,8 @@ async function enrichEpubOutline(book,owner){
     if(owner!==session||view?.book!==book)return
     const revision=++outlineRevision,entries=flatten(book.toc)
     publishOutline(entries,revision)
-    if(!book.pageList?.length){emit('metadata',{tocUpdates:[],outlineRevision:revision,tocResolved:true});return}
+    if(isComic()){for(const entry of entries){entry.anchor=comicAnchor(book,Number(entry.href))}publishOutline(entries,revision);emit('metadata',{tocUpdates:[],outlineRevision:revision,tocResolved:true});return}
+    if(activeFormat!=='fb2'&&!book.pageList?.length){emit('metadata',{tocUpdates:[],outlineRevision:revision,tocResolved:true});return}
     const documents=new Map()
     await resolveOutline(entries,async entry=>{
         if(!entry.href)return null
@@ -99,33 +172,40 @@ async function enrichEpubOutline(book,owner){
         }
         const doc=await documents.get(resolved.index),fragment=resolved.anchor(doc)
         const range=fragment instanceof Range?fragment:doc.createRange()
-        if(!(fragment instanceof Range))range.selectNodeContents(fragment)
+        if(!(fragment instanceof Range))range.selectNodeContents(fragment||doc.body)
         range.collapse(true)
         const page=publication.getProgressOf(resolved.index,range).pageItem
-        return page?.label?{pageLabel:page.label}:null
+        return {...(page?.label?{pageLabel:page.label}:{}),...(activeFormat==='fb2'?{anchor:textAnchor(publication.getCFI(resolved.index,range),resolved.index)}:{})}
     },revision,owner)
 }
 function reportLocation(data) {
-    location = data
-    emit('location', data)
+    const {text,...position}=data
+    location = position
+    emit('location', position)
     reportNavigation()
 }
 function reportNavigation(){
     const index=location.anchor?.page??location.anchor?.index??0
     const shown=view?.isFixedLayout&&prefs.spread?Math.max(index,...view.renderer.getContents().map(x=>x.index??index)):index
-    emit('navigation',{speechNext:view?(view.isFixedLayout?index<view.book.sections.length-1:!view.renderer.atEnd):index<(pdf?.numPages??0)-1,back:view?view.history.canGoBack:historyIndex>0,forward:view?view.history.canGoForward:historyIndex<history.length-1,previous:view?(view.isFixedLayout?index>0:!view.renderer.atStart):index>0,next:view?(view.isFixedLayout?shown<view.book.sections.length-1:!view.renderer.atEnd):index+(prefs.spread?1:0)<(pdf?.numPages??0)-1})
+    emit('navigation',{speechNext:isComic()?false:view?(view.isFixedLayout?index<view.book.sections.length-1:!view.renderer.atEnd):index<(pdf?.numPages??0)-1,back:isComic()?historyIndex>0:view?view.history.canGoBack:historyIndex>0,forward:isComic()?historyIndex<history.length-1:view?view.history.canGoForward:historyIndex<history.length-1,previous:view?(view.isFixedLayout?index>0:!view.renderer.atStart):index>0,next:view?(view.isFixedLayout?shown<view.book.sections.length-1:!view.renderer.atEnd):index+(prefs.spread?1:0)<(pdf?.numPages??0)-1})
 }
 function remember() {
+    if(isComic())captureComicLocation()
     if (historyIndex < 0 || JSON.stringify(history[historyIndex]) !== JSON.stringify(location.anchor)) {
         history.splice(historyIndex+1);history.push(structuredClone(location.anchor));historyIndex = history.length-1
     }
     reportNavigation()
 }
+function cacheResourceFailure(error){
+    if(error?.name==='AbortError')throw error
+    if(!cacheFailureReported){cacheFailureReported=true;emit('error',{message:String(error),cacheFailure:true})}
+    throw Object.assign(error instanceof Error?error:Error(String(error)),{cacheFailureReported:true})
+}
 function safeDocument(data) {
     // Book documents are never script-capable application contexts. CSP also blocks
     // network requests; sanitize before EPUB resources become Blob URLs.
     const doc = new DOMParser().parseFromString(data,'application/xhtml+xml')
-    if (doc.querySelector('parsererror')) throw Error('Invalid EPUB XHTML')
+    if (doc.querySelector('parsererror')) cacheResourceFailure(Error('Invalid publication XHTML'))
     for (const el of doc.querySelectorAll('script,iframe,object,embed,form,base,meta[http-equiv],link[rel="preload"],link[rel="modulepreload"]')) el.remove()
     for (const el of doc.querySelectorAll('*')) for (const attr of [...el.attributes]) {
         if (/^on/i.test(attr.name) || /^(?:javascript|vbscript):/i.test(attr.value.trim())) el.removeAttribute(attr.name)
@@ -135,7 +215,7 @@ function safeDocument(data) {
 function reportEpubSelection(doc,index,settle=true){
     const s=doc.getSelection();if(!s?.rangeCount||s.isCollapsed){selection=null;emit('selection',{text:'',anchor:null});return}
     const range=s.getRangeAt(0),progress=view.getProgressOf(index,range)
-    selected({text:s.toString(),anchor:{cfi:view.getCFI(index,range),index},reference:progress.pageItem?.label?`${strings.printPage} ${progress.pageItem.label}`:progress.tocItem?.label??location.reference??'',order:index},range,doc,settle)
+    selected({text:s.toString(),anchor:textAnchor(view.getCFI(index,range),index),reference:progress.pageItem?.label?`${strings.printPage} ${progress.pageItem.label}`:progress.tocItem?.label??location.reference??'',order:index},range,doc,settle)
 }
 function captureEpubSelections(){
     return (view?.renderer.getContents()??[]).flatMap(({doc,index})=>{
@@ -153,16 +233,171 @@ function restoreEpubSelections(work){
         reportEpubSelection(saved.doc,saved.index,false)
     }
 }
-async function openEpub(config) {
-    const index=await (await fetch('book-index')).json(),sizes=index.resources
+async function boundedResourceBuffer(response,maximum,expected=null){
+    if(!response.ok)throw Error('Publication resource is unavailable')
+    if(!Number.isSafeInteger(maximum)||maximum<0||expected!=null&&(!Number.isSafeInteger(expected)||expected<0||expected>maximum))throw Error('Publication resource exceeds its media limit')
+    const reader=response.body?.getReader()
+    if(!reader)throw Error('Bounded publication resource streaming is unavailable')
+    const chunks=[];let size=0
+    try{
+        for(;;){
+            const {done,value}=await reader.read();if(done)break
+            size+=value.byteLength
+            if(size>maximum||expected!=null&&size>expected){await reader.cancel();throw Error('Publication resource exceeds its media limit or declared size')}
+            chunks.push(value)
+        }
+    }finally{reader.releaseLock()}
+    if(expected!=null&&size!==expected)throw Error('Publication resource size does not match its index')
+    const buffer=new Uint8Array(size);let offset=0
+    for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength}
+    return buffer.buffer
+}
+async function openFoliate(config) {
+    const index=JSON.parse(new TextDecoder().decode(await boundedResourceBuffer(await fetch('book-index'),16*1024*1024))),sizes=index.resources
+    if(config.format==='epub'&&index.version!==4)throw Error('Unsupported EPUB cache version')
     const resource=name=>'book/'+sizes[name].file
-    const load=async name=>!Object.hasOwn(sizes,name)?null:await (await fetch(resource(name))).arrayBuffer()
-    const loadText=async name=>{
-        const buffer=await load(name);if(buffer==null)return null
-        const data=new Uint8Array(buffer)
-        return new TextDecoder(data[0]===255&&data[1]===254?'utf-16le':data[0]===254&&data[1]===255?'utf-16be':'utf-8').decode(data)
+    const load=async(name,options,text=false)=>{
+        if(!Object.hasOwn(sizes,name))return null
+        try{
+            const resourceMaximum=config.format==='epub'?sizes[name].maximumBytes:config.format==='fb2'?(name.startsWith('sections/')?4*1024*1024:16*1024*1024):64*1024*1024
+            if(!Number.isSafeInteger(resourceMaximum)||resourceMaximum<0||resourceMaximum>64*1024*1024)throw Error('Invalid publication resource budget')
+            const maximum=text?Math.min(4*1024*1024,resourceMaximum):resourceMaximum
+            if(!Number.isSafeInteger(sizes[name].size)||sizes[name].size<0||sizes[name].size>maximum)throw Error('Publication resource exceeds its media limit')
+            const buffer=await boundedResourceBuffer(await fetch(resource(name),options),maximum,sizes[name].size)
+            const expected=sizes[name].sha256
+            if(typeof expected!=='string'||!/^([a-f0-9]{64})$/.test(expected))throw Error('Publication resource digest is missing')
+            const digest=await crypto.subtle.digest('SHA-256',buffer)
+            const actual=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('')
+            if(actual!==expected)throw Error('Publication resource digest does not match its index')
+            return buffer
+        }catch(error){cacheResourceFailure(error)}
     }
-    const book=await new EPUB({loadText,loadBlob:async(name,type)=>{const buffer=await load(name);return buffer==null?null:new Blob([buffer],{type})},getSize:name=>sizes[name]?.size??0}).init()
+    const loadText=async(name,options)=>{
+        const buffer=await load(name,options,true);if(buffer==null)return null
+        const data=new Uint8Array(buffer)
+        try{return adaptDTBook(new TextDecoder(data[0]===255&&data[1]===254||data[0]===60&&data[1]===0?'utf-16le':data[0]===254&&data[1]===255||data[0]===0&&data[1]===60?'utf-16be':'utf-8',{fatal:true}).decode(data))}
+        catch(error){cacheResourceFailure(error)}
+    }
+    const loader={loadText,loadBlob:async(name,type,options)=>{const buffer=await load(name,options);return buffer==null?null:new Blob([buffer],{type:type??''})},getSize:name=>sizes[name]?.size??0}
+    let book
+    switch(config.format){
+        case 'epub':book=await new EPUB(loader).init();break
+        case 'fb2':book=await makePreparedFB2(index,loader,safeDocument);break
+        case 'cbz':case 'cbr':book=makeComicBook(index,loader);break
+        default:throw Error('Unsupported publication format')
+    }
+    try{await mountFoliate(book,config)}catch(error){if(view?.book===book)view.close();book.destroy?.();throw error}
+}
+async function verifyComicPage(){
+    const current=view,parts=current.renderer.getContents().filter(x=>x.index===location.anchor?.page)
+    if(!parts.length)throw Error('Comic page did not lay out')
+    for(const {doc} of parts){const img=doc.querySelector('img');await img?.decode();if(current!==view||!img?.naturalWidth||!img.getBoundingClientRect().width)throw Error('Comic page failed to decode or lay out')}
+    await nextFrame()
+}
+function captureComicLocation(){
+    if(!view||location.anchor?.page==null)return
+    const viewport=view.renderer.getBoundingClientRect()
+    const parts=view.renderer.getContents().flatMap(part=>{
+        const frame=part.doc.defaultView?.frameElement,bounds=frame?.getBoundingClientRect()
+        if(!bounds?.width||!bounds.height||!part.doc.querySelector('img'))return []
+        const x=Math.max(0,Math.min(bounds.width,viewport.left-bounds.left)),y=Math.max(0,Math.min(bounds.height,viewport.top-bounds.top))
+        const distance=(bounds.left+x-viewport.left)**2+(bounds.top+y-viewport.top)**2
+        return [{index:part.index,position:[x/bounds.width,y/bounds.height],distance,left:bounds.left,right:bounds.left+bounds.width}]
+    })
+    // When the spread fits horizontally, retain its explicitly selected page.
+    // The viewport's left edge belongs to the companion even without panning.
+    // An overflowing spread can instead save the page actually reached by pan.
+    const overflow=parts.length&&Math.max(...parts.map(part=>part.right))-Math.min(...parts.map(part=>part.left))>viewport.width+1
+    parts.sort((a,b)=>a.distance-b.distance||Number(b.index===location.anchor.page)-Number(a.index===location.anchor.page)||a.index-b.index)
+    const part=(!overflow&&parts.find(part=>part.index===location.anchor.page))||parts[0];if(!part)return
+    location={...location,anchor:comicAnchor(view.book,part.index,{position:part.position}),progress:(part.index+1)/view.book.sections.length,reference:`${strings.page} ${part.index+1}`}
+}
+function restoreComicPosition(anchor){
+    const part=view?.renderer.getContents().find(x=>x.index===(anchor?.page??location.anchor?.page)),frame=part?.doc.defaultView.frameElement
+    if(!frame)return
+    const bounds=frame.getBoundingClientRect(),viewport=view.renderer.getBoundingClientRect(),region=anchor?.region,position=anchor?.position
+    if(region){normalizedRegion(region);view.renderer.scrollBy({left:bounds.left+(region[0]+region[2]/2)*bounds.width-(viewport.left+viewport.width/2),top:bounds.top+(region[1]+region[3]/2)*bounds.height-(viewport.top+viewport.height/2)})}
+    else if(position)view.renderer.scrollBy({left:bounds.left+position[0]*bounds.width-viewport.left,top:bounds.top+position[1]*bounds.height-viewport.top})
+}
+function setupComicPage(doc,index){
+    const img=doc.querySelector('img');if(!img)return
+    doc.body.style.position='relative';doc.body.setAttribute('tabindex','0')
+    doc.addEventListener('keydown',keys)
+    doc.addEventListener('pointerdown',event=>{
+        if(event.button!==0)return
+        if(regionSelection){
+            if(regionSelection.index!==index)return
+            event.preventDefault();const bounds=img.getBoundingClientRect(),x=Math.max(0,Math.min(1,(event.clientX-bounds.left)/bounds.width)),y=Math.max(0,Math.min(1,(event.clientY-bounds.top)/bounds.height))
+            regionSelection.start=[x,y];regionSelection.rect=[Math.min(x,.999),Math.min(y,.999),.001,.001];regionSelection.pointer=event.pointerId;img.setPointerCapture(event.pointerId);paintRegions();return
+        }
+        // Drag panning belongs to the normal reader, outside selection mode.
+        const region=event.target.closest('[data-region-id]'),target=region??img
+        let x=event.screenX,y=event.screenY,moved=false
+        delete target.dataset.regionDragged
+        try{target.setPointerCapture(event.pointerId)}catch{} // A cancelled/replaced pointer may already be gone.
+        const move=e=>{if(!moved&&Math.hypot(x-e.screenX,y-e.screenY)<3)return;moved=true;view.renderer.scrollBy({left:x-e.screenX,top:y-e.screenY});x=e.screenX;y=e.screenY}
+        const up=()=>{target.removeEventListener('pointermove',move);target.removeEventListener('pointerup',up);target.removeEventListener('pointercancel',up);if(moved&&region){target.dataset.regionDragged='true';setTimeout(()=>delete target.dataset.regionDragged,0)}}
+        target.addEventListener('pointermove',move);target.addEventListener('pointerup',up);target.addEventListener('pointercancel',up);if(!region)event.preventDefault()
+    })
+    img.addEventListener('pointermove',event=>{
+        const state=regionSelection;if(!state||state.index!==index||state.pointer!==event.pointerId)return
+        const bounds=img.getBoundingClientRect(),x=Math.max(0,Math.min(1,(event.clientX-bounds.left)/bounds.width)),y=Math.max(0,Math.min(1,(event.clientY-bounds.top)/bounds.height)),[sx,sy]=state.start
+        state.rect=[Math.min(sx,x),Math.min(sy,y),Math.abs(sx-x),Math.abs(sy-y)];paintRegions()
+    })
+    img.addEventListener('pointerup',event=>{if(regionSelection?.pointer===event.pointerId){regionSelection.pointer=null;try{normalizedRegion(regionSelection.rect);confirmRegion()}catch{}}})
+    doc.addEventListener('dragstart',e=>e.preventDefault())
+    paintRegions()
+}
+function beginRegion(){
+    if(!isComic())return
+    cancelRegion()
+    const index=location.anchor?.page??0
+    regionSelection={index,rect:[.25,.25,.5,.5]}
+    const hint=document.createElement('div');hint.id='region-hint';hint.setAttribute('role','status');hint.textContent=strings.regionInstructions??'Select a region. Arrows move; Shift+Arrows resize; Enter confirms; Escape cancels.'
+    document.body.append(hint);paintRegions();view.renderer.focusView()
+}
+function cancelRegion(){if(!regionSelection)return;regionSelection=null;document.querySelector('#region-hint')?.remove();paintRegions()}
+function regionPopoverRect(mark,doc){
+    const range=doc.createRange();range.selectNode(mark)
+    const rect=selectionRect(range,doc)
+    // A full image region can leave no side large enough for a native popover.
+    // Anchor its editor to the visible center; persistent geometry stays intact.
+    return {x:rect.x+rect.width/2,y:rect.y+rect.height/2,width:1,height:1}
+}
+function confirmRegion(){
+    const state=regionSelection;if(!state)return
+    const region=normalizedRegion(state.rect).slice(),part=view.renderer.getContents().find(x=>x.index===state.index),mark=part?.doc.querySelector('[data-region-selection]')
+    const rect=regionPopoverRect(mark??part.doc.querySelector('img'),part.doc),anchor=comicAnchor(view.book,state.index,{region})
+    cancelRegion();selection=null;emit('regionSelected',{anchor,text:'',reference:`${strings.page} ${state.index+1}`,rect})
+}
+function regionKey(event){
+    if(!['Escape','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return false
+    event.preventDefault();event.stopPropagation()
+    if(event.key==='Escape'){cancelRegion();return true}
+    if(event.key==='Enter'){confirmRegion();return true}
+    const rect=regionSelection.rect,step=event.ctrlKey ? .001 : .01,axis=['ArrowLeft','ArrowRight'].includes(event.key)?0:1,delta=['ArrowLeft','ArrowUp'].includes(event.key)?-step:step
+    if(event.shiftKey)rect[axis+2]=Math.max(.001,Math.min(1-rect[axis],rect[axis+2]+delta))
+    else rect[axis]=Math.max(0,Math.min(1-rect[axis+2],rect[axis]+delta))
+    paintRegions();return true
+}
+function paintRegions(){
+    if(!isComic()||!view)return
+    for(const {doc,index} of view.renderer.getContents()){
+        if(!doc?.body)continue
+        doc.querySelectorAll('[data-region-id],[data-region-selection]').forEach(x=>x.remove())
+        const img=doc.querySelector('img');if(!img)continue
+        img.style.cursor=regionSelection?'crosshair':'grab'
+        const items=annotations.filter(a=>a.annotationKind==='region'&&a.anchor?.page===index&&a.anchor.pageId===view.book.sections[index]?.pageId)
+        if(regionSelection?.index===index)items.push({id:null,anchor:{region:regionSelection.rect},color:'blue'})
+        for(const annotation of items){
+            const [x,y,w,h]=annotation.anchor.region,mark=doc.createElement(annotation.id?'button':'div')
+            if(annotation.id){mark.dataset.regionId=annotation.id;mark.setAttribute('aria-label',strings.regionNote??'Region note')}else mark.dataset.regionSelection='true'
+            Object.assign(mark.style,{position:'absolute',boxSizing:'border-box',left:`${img.offsetLeft+x*img.clientWidth}px`,top:`${img.offsetTop+y*img.clientHeight}px`,width:`${w*img.clientWidth}px`,height:`${h*img.clientHeight}px`,border:`3px solid ${colors[annotation.color]??colors.yellow}`,background:'transparent',padding:'0',pointerEvents:annotation.id&&!regionSelection?'auto':'none'})
+            mark.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(mark.dataset.regionDragged&&event.detail!==0)return;emit('annotation',{id:annotation.id,rect:regionPopoverRect(mark,doc)})});doc.body.append(mark)
+        }
+    }
+}
+async function mountFoliate(book,config){
     // Search, CFI resolution and the rendered publication use the same safe
     // DOM structure. Removing active book elements must not shift search anchors.
     for(const section of book.sections){
@@ -192,6 +427,7 @@ async function openEpub(config) {
                 }
             }).catch(error=>emit('navigationError',{message:String(error)}))
         }
+        if(isComic()){fixedContents.set(doc,{index});setupComicPage(doc,index);return}
         if(view.isFixedLayout){
             const overlayer=new Overlayer();fixedContents.set(doc,{index,overlayer})
             doc.documentElement.append(overlayer.element)
@@ -221,14 +457,19 @@ async function openEpub(config) {
     view.addEventListener('relocate',({detail:d})=>{
         const index=view.resolveCFI(d.cfi)?.index??0
         currentRange=d.range
-        reportEpubLocation({printPage:d.pageItem?.label,tocHref:d.tocItem?.href,tocId:d.tocItem?.id==null?null:`outline:${d.tocItem.id}`,anchor:{cfi:d.cfi,index},progress:d.fraction??0,chapter:d.tocItem?.label??'',reference:d.pageItem?.label?`${strings.printPage} ${d.pageItem.label}`:[d.tocItem?.label,`${Math.round((d.fraction??0)*1000)/10}%`].filter(Boolean).join(' · '),text:d.range?.toString()??view.renderer.getContents().find(x=>x.index===index)?.doc?.body?.innerText??'',screenPage:d.location?.current,totalScreens:d.location?.total})
+        if(isComic()){
+            reportLocation({anchor:comicAnchor(book,index),progress:(index+1)/book.sections.length,reference:`${strings.page} ${index+1}`,text:'',noText:true})
+            book.releaseExcept(new Set(view.renderer.getContents().map(x=>x.index)))
+            paintRegions();return
+        }
+        reportEpubLocation({printPage:d.pageItem?.label,tocHref:d.tocItem?.href,tocId:d.tocItem?.id==null?null:`outline:${d.tocItem.id}`,anchor:textAnchor(d.cfi,index),progress:d.fraction??0,chapter:d.tocItem?.label??'',reference:d.pageItem?.label?`${strings.printPage} ${d.pageItem.label}`:[d.tocItem?.label,`${Math.round((d.fraction??0)*1000)/10}%`].filter(Boolean).join(' · '),text:d.range?.toString()??view.renderer.getContents().find(x=>x.index===index)?.doc?.body?.innerText??'',screenPage:d.location?.current,totalScreens:d.location?.total})
     })
     view.addEventListener('external-link',e=>{e.preventDefault();emit('external',{url:e.detail.href_})})
     view.addEventListener('link',e=>{
         userNavigation();emit('navigationJump');remember()
         const a=e.detail.a,type=a.getAttributeNS('http://www.idpf.org/2007/ops','type')??a.getAttribute('epub:type')??''
-        if(type.split(/\s+/).includes('noteref')){
-            e.preventDefault();showFootnote(e.detail.href,location.anchor?.index??0).catch(error=>emit('navigationError',{message:String(error)}))
+        if(type.split(/\s+/).includes('noteref')||a.getAttribute('role')==='doc-noteref'){
+            e.preventDefault();showFootnote(e.detail.href,location.anchor?.index??0,null,a).catch(error=>emit('navigationError',{message:String(error)}))
         }
     })
     view.addEventListener('create-overlay',()=>paintEpub())
@@ -239,16 +480,20 @@ async function openEpub(config) {
         view.renderer.getContents=()=>getContents().map(x=>({...x,...fixedContents.get(x.doc)}))
     }
     typography=view.isFixedLayout?noTypography:reflowableTypography
-    emit('metadata',{title:book.metadata?.title,author:book.metadata?.author,fixed:view.isFixedLayout,typography})
+    emit('metadata',{title:book.metadata?.title,author:book.metadata?.author,fixed:view.isFixedLayout,typography,...(isComic()?{pages:book.sections.length,labels:book.sections.map((_,i)=>String(i+1))}:{})})
     await applyAppearance(config.appearance??{})
-    const saved=config.anchor?.cfi?epubNavigation(config.anchor):null
+    if(isComic()&&config.anchor?.pageId&&book.sections[config.anchor.page]?.pageId!==config.anchor.pageId)throw Error('Saved comic page identity does not match')
+    const saved=isComic()?{index:config.anchor?.page??0}:config.anchor?.cfi?epubNavigation(config.anchor):null
     if(saved&&!saved.anchor){await view.renderer.goTo(saved);view.history.pushState(saved.index)}
     else await view.init({lastLocation:config.anchor?.cfi,showTextStart:!config.anchor?.cfi})
+    if(!view.renderer.getContents().some(({doc})=>doc?.documentElement&&!doc.querySelector('parsererror')))
+        throw Error('Publication did not produce a readable first document')
     await applyAppearance(config.appearance??{})
-    annotations=config.annotations??[];await paintEpub()
+    annotations=config.annotations??annotations;await paintEpub()
+    if(isComic()){await verifyComicPage();restoreComicPosition(config.anchor);paintRegions();remember();view.renderer.addEventListener('scroll',()=>{clearTimeout(window.comicScrollTimer);window.comicScrollTimer=setTimeout(()=>{captureComicLocation();reportLocation(location)},200)},{passive:true})}
     const owner=session;requestAnimationFrame(()=>setTimeout(()=>enrichEpubOutline(book,owner).catch(error=>{if(owner===session&&view?.book===book)emit('metadata',{outlineFailed:true});emit('diagnostic',{stage:'outline',message:'Publication outline unavailable'})}),0))
 }
-async function showFootnote(href,sourceIndex,selectedCFI){
+async function showFootnote(href,sourceIndex,selectedCFI,sourceLink=null){
     const epoch=++noteGeneration
     for(const old of document.querySelectorAll('dialog.footnote[open]'))old.close()
     const resolved=await view.resolveNavigation(href),section=view.book.sections[resolved.index]
@@ -261,7 +506,9 @@ async function showFootnote(href,sourceIndex,selectedCFI){
     const root=node.nodeType===Node.TEXT_NODE?node.parentElement:node,article=document.createElement('article'),clone=document.importNode(root,true)
     const originals=new WeakMap(),copies=new WeakMap()
     function map(from,to){originals.set(to,from);copies.set(from,to);for(let i=0;i<from.childNodes.length;i++)map(from.childNodes[i],to.childNodes[i])}
-    map(root,clone);clone.removeAttribute('hidden');clone.style.removeProperty('display')
+    map(root,clone);clone.removeAttribute('hidden')
+    const rootStyle=document.createElement('span').style
+    rootStyle.cssText=clone.getAttribute('style')??'';rootStyle.removeProperty('display');clone.setAttribute('style',rootStyle.cssText)
     article.append(clone);article.dir=doc.documentElement.dir||view.book.dir||'ltr';article.lang=doc.documentElement.lang||view.language?.canonical||'';dialog.append(article)
     await styleFootnote(dialog)
     function toCopy(range){const result=document.createRange(),start=copies.get(range.startContainer),end=copies.get(range.endContainer);if(!start||!end)return null;result.setStart(start,range.startOffset);result.setEnd(end,range.endOffset);return result}
@@ -273,7 +520,7 @@ async function showFootnote(href,sourceIndex,selectedCFI){
         const mapped=doc.createRange(),start=originals.get(range.startContainer),end=originals.get(range.endContainer)
         mapped.setStart(start??root,start?range.startOffset:0);mapped.setEnd(end??root,end?range.endOffset:root.childNodes.length)
         const progress=view.getProgressOf(resolved.index,mapped)
-        selected({note:true,text:s.toString(),anchor:{cfi:view.getCFI(resolved.index,mapped),index:resolved.index},reference:progress.pageItem?.label?`${strings.printPage} ${progress.pageItem.label}`:progress.tocItem?.label??location.reference??''},range)
+        selected({note:true,text:s.toString(),anchor:textAnchor(view.getCFI(resolved.index,mapped),resolved.index),reference:progress.pageItem?.label?`${strings.printPage} ${progress.pageItem.label}`:progress.tocItem?.label??location.reference??''},range)
     }
     document.addEventListener('selectionchange',changed)
     dialog.addEventListener('scroll',()=>overlayer.redraw(),{passive:true})
@@ -282,7 +529,7 @@ async function showFootnote(href,sourceIndex,selectedCFI){
     for(const img of article.querySelectorAll('img[src]')){
         const path=section.resolveHref(img.getAttribute('src'));img.removeAttribute('srcset')
         if(view.book.isExternal(path)){img.removeAttribute('src');continue}
-        const blob=await view.book.loadBlob(path,view.book.resources.getItemByHref(path)?.mediaType)
+        const blob=await view.book.loadBlob(path,view.book.resources?.getItemByHref?.(path)?.mediaType)
         if(blob){const url=URL.createObjectURL(blob);urls.push(url);img.src=url}
     }
     const close=()=>{observer.disconnect();document.removeEventListener('selectionchange',changed);if(noteView===state)noteView=null;if(selection?.note){selection=null;emit('selection',{anchor:null,text:''})}for(const url of urls)URL.revokeObjectURL(url);dialog.remove()}
@@ -294,9 +541,14 @@ async function showFootnote(href,sourceIndex,selectedCFI){
         const href=section.resolveHref(a.getAttribute('href')),type=a.getAttributeNS('http://www.idpf.org/2007/ops','type')??a.getAttribute('epub:type')??''
         if(type.split(/\s+/).includes('backlink')||a.getAttribute('role')==='doc-backlink')return
         if(view.book.isExternal(href)){emit('external',{url:href});return}
-        // Backlinks to the referring section close the note at the exact
-        // original passage; cross-references elsewhere remain navigable.
-        try{const target=await view.resolveNavigation(href);if(target.index!==sourceIndex){emit('navigationJump');remember();await view.goTo(href)}}
+        try{
+            const target=await view.resolveNavigation(href)
+            if(sourceLink&&target?.index===sourceIndex){
+                const destination=target.anchor?.(sourceLink.ownerDocument)
+                if(destination===sourceLink||destination===sourceLink.parentElement&&destination?.localName==='sup')return
+            }
+            emit('navigationJump');remember();await view.goTo(href)
+        }
         catch(error){emit('navigationError',{message:String(error)})}
     })
     if(epoch!==noteGeneration){close();return}
@@ -313,12 +565,14 @@ async function paintNote(){
     }
 }
 function epubNavigation(anchor){
+    if(activeFormat==='fb2'&&(anchor.kind!=='fb2'||anchor.version!==1||view.book.sections[anchor.index]?.identity!==anchor.section))throw Error('FB2 locator section does not match this book')
     const parsed=CFI.parse(anchor.cfi),resolved=view.resolveNavigation(anchor.cfi)
     // The engine emits section-only CFIs for fixed pages without a text range.
     // Such a durable location has no in-document range for CFI.toRange().
     return (parsed.parent??parsed).length>1?resolved:{index:anchor.index??resolved.index}
 }
 async function gotoEpub(anchor){
+    if(isComic()){if(anchor.pageId&&view.book.sections[anchor.page]?.pageId!==anchor.pageId)throw Error('Comic page identity does not match');const result=await view.goTo(anchor.page??anchor.index??Number(anchor.href));if(!result)throw Error(strings.navigationInterrupted);await verifyComicPage();restoreComicPosition(anchor);paintRegions();return}
     const target=anchor.cfi??anchor.href??(anchor.fraction!=null?{fraction:anchor.fraction}:anchor.index)
     if(!anchor.cfi){const resolved=await view.goTo(target);if(!resolved)throw Error(strings.navigationInterrupted);return}
     const resolved=epubNavigation(anchor)
@@ -332,9 +586,15 @@ async function gotoEpub(anchor){
         }
     }
     suppressSelectionUntil=performance.now()+600;await view.select(target)
+    // Returning from a note can leave the same range selected in its original
+    // iframe, so the browser emits no new selectionchange. Synchronize native
+    // actions and text assistance without opening a selection popover.
+    const selectedDocument=view.renderer.getContents().find(part=>part.index===resolved.index)?.doc
+    if(selectedDocument)reportEpubSelection(selectedDocument,resolved.index,false)
 }
 async function paintEpub(){
     if(!view)return
+    if(isComic()){paintRegions();return}
     for(const a of annotations)if(a.anchor?.cfi&&a.annotationKind!=='bookmark')await view.addAnnotation({value:a.anchor.cfi,color:a.color})
     await paintSpeaking()
 }
@@ -375,6 +635,7 @@ function css(p) {
 }
 function bookSpread(book){return book?.rendition?.spread}
 async function applyAppearance(p,restoring=null){
+    if(isComic())captureComicLocation()
     const owner=view,previousWork=typographyWork.active,work=typographyWork.begin(location.anchor),original=location
     work.selections=restoring?.selections??(previousWork?.navigation===work.navigation?previousWork.selections:captureEpubSelections())
     work.previous=restoring??previousWork?.previous??{prefs,localFont,fontSignature}
@@ -393,9 +654,10 @@ async function applyAppearance(p,restoring=null){
         prefs=next;localFont=font;fontSignature=signature
         if(view){
             const r=view.renderer
-            view.style.setProperty('--page-tint',p.color==='dark'?'invert(1) hue-rotate(180deg)':p.color==='sepia'?'sepia(.3)':'none')
+            view.style.setProperty('--page-tint',isComic()?'none':p.color==='dark'?'invert(1) hue-rotate(180deg)':p.color==='sepia'?'sepia(.3)':'none')
             r.setAttribute('gap',`${Math.min(30,((p.margin??32)*2/Math.max(1,content.clientWidth))*100)}%`);r.setAttribute('flow',p.flow??'paginated');r.setAttribute('margin',`${p.margin??32}px`)
             r.setAttribute('max-inline-size',`${p.width??720}px`);r.setAttribute('max-column-count',p.spread?'2':'1')
+            if(isComic()&&view.book.dir!==(p.direction==='auto'||!p.direction?view.book.metadata?.direction??'ltr':p.direction)){view.book.dir=p.direction==='auto'||!p.direction?view.book.metadata?.direction??'ltr':p.direction;r.open(view.book)}
             if(view.isFixedLayout)r.spread=p.spread?(bookSpread(view.book)??'auto'):'none'
             r.setAttribute('zoom',p.zoom??'fit-page')
             if(typography.fontFamily||typography.textMetrics){
@@ -421,6 +683,7 @@ async function applyAppearance(p,restoring=null){
                 // renderer.goTo awaits anchor layout/scroll without history.pushState.
                 r.render?.()
             }else css(prefs)
+            if(isComic()&&work.anchor?.page!=null){await r.goTo({index:work.anchor.page});restoreComicPosition(work.anchor)}
             if(typographyWork.canRestore(work)&&work.anchor?.cfi)await r.goTo(epubNavigation(work.anchor))
             if(!current())return false
             for(const dialog of document.querySelectorAll('dialog.footnote[open]'))await styleFootnote(dialog)
@@ -457,7 +720,7 @@ async function openPdf(config){
     // malformed optional entries must not hold first-page readiness hostage.
     const details={pages:pdf.numPages,labels,fixed:true}
     emit('metadata',details)
-    annotations=config.annotations??[];prefs=config.appearance??{};css(prefs)
+    annotations=config.annotations??annotations;prefs=config.appearance??{};css(prefs)
     let layout=relayoutPdf(config.anchor??{page:0,y:0}),usable=await layout
     while(!usable&&pdfLayout&&pdfLayout!==layout){layout=pdfLayout;usable=await layout}
     if(!usable)return false
@@ -505,7 +768,7 @@ async function enrichPdfOutline(){
                 pdfOutlinePositions.set(entry.id,position)
                 return {anchor,href:String(anchor.page)}
             },revision,owner)
-            if(owner===session&&pdf===publication&&location.anchor?.page!=null)reportLocation({...location,tocId:pdfTocId(location.anchor),tocHref:pdfTocHref(location.anchor.page)})
+            if(owner===session&&(pdf??view?.book)===publication&&location.anchor?.page!=null)reportLocation({...location,tocId:pdfTocId(location.anchor),tocHref:pdfTocHref(location.anchor.page)})
 
 }
 let pdfToc=[]
@@ -550,10 +813,10 @@ async function destinationAnchor(dest,position){
     return anchor
 }
 function pdfAnchor(index,y=0){
-    const p=pages[index],point=p.viewport?.convertToPdfPoint(0,Math.max(0,y)*p.element.offsetHeight)
+    const p=pages[index],point=p.viewport?.convertToPdfPoint(Math.max(0,content.scrollLeft-p.element.offsetLeft),Math.max(0,y)*p.element.offsetHeight)
     return {page:index,ref:p.ref,y, ...(point?{point}:{})}
 }
-let observer, layoutGeneration=0, renderRunning=0
+let observer, layoutGeneration=0, pdfNavigationGeneration=0, renderRunning=0
 const renderQueue=[],renderTasks=new Set(),geometry=new Map()
 function stopRendering(){
     for(const task of renderTasks)task.cancel()
@@ -586,29 +849,31 @@ function trimPages(){
         p.element.replaceChildren();p.rendering=null;p.text=null;geometry.get(i)?.cleanup()
     }
 }
-let pdfLayout
+let pdfLayout,pdfViewport
 function relayoutPdf(anchor){return pdfLayout=layoutPdf(anchor)}
 async function layoutPdf(anchor){
     const epoch=++layoutGeneration;layingOut=true;navigatingPage=anchor?.page??0
-    stopRendering();observer?.disconnect();content.replaceChildren();pages=[]
-    const initial=await pdf.getPage((anchor?.page??0)+1)
-    if(epoch!==layoutGeneration)return false
-    geometry.set(initial.pageNumber-1,initial)
-    const fallback=initial.getViewport({scale:1,rotation:(initial.rotate+(prefs.rotation??0))%360})
-    content.style.display=prefs.spread?'flex':'block';content.style.flexWrap='wrap';content.style.alignContent='start';content.style.justifyContent='center'
-    for(let i=0;i<pdf.numPages;i++){
-        const known=geometry.get(i)
-        const base=known?.getViewport({scale:1,rotation:(known.rotate+(prefs.rotation??0))%360})??fallback
-        const scale=fitScale(base.width,base.height,content.clientWidth,content.clientHeight,prefs.zoom,prefs.spread)
-        const el=document.createElement('section');el.className='pdf-page';el.tabIndex=0;el.setAttribute('aria-label',pdfReference(i));el.style.width=`${base.width*scale}px`;el.style.height=`${base.height*scale}px`;el.dataset.index=i
-        if(prefs.flow!=='scrolled'&&i!==(anchor?.page??0)&&!(prefs.spread&&i===(anchor?.page??0)+1))el.hidden=true
-        content.append(el);pages.push({element:el,scale,epoch})
-    }
-    observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
-    for(const p of pages)observer.observe(p.element)
-    const rendered=await queuePage(anchor?.page??0,epoch)
-    if(!rendered||epoch!==layoutGeneration)return false
-    const positioned=await gotoPdf(anchor??{page:0},epoch);layingOut=false;return positioned!==false&&epoch===layoutGeneration
+    try{
+        stopRendering();observer?.disconnect();content.replaceChildren();pages=[]
+        const initial=await pdf.getPage((anchor?.page??0)+1)
+        if(epoch!==layoutGeneration)return false
+        geometry.set(initial.pageNumber-1,initial)
+        const fallback=initial.getViewport({scale:1,rotation:(initial.rotate+(prefs.rotation??0))%360})
+        content.style.display=prefs.spread?'flex':'block';content.style.flexWrap='wrap';content.style.alignContent='start';content.style.justifyContent='center'
+        for(let i=0;i<pdf.numPages;i++){
+            const known=geometry.get(i)
+            const base=known?.getViewport({scale:1,rotation:(known.rotate+(prefs.rotation??0))%360})??fallback
+            const scale=fitScale(base.width,base.height,content.clientWidth,content.clientHeight,prefs.zoom,prefs.spread)
+            const el=document.createElement('section');el.className='pdf-page';el.tabIndex=0;el.setAttribute('aria-label',pdfReference(i));el.style.width=`${base.width*scale}px`;el.style.height=`${base.height*scale}px`;el.dataset.index=i
+            if(prefs.flow!=='scrolled'&&i!==(anchor?.page??0)&&!(prefs.spread&&i===(anchor?.page??0)+1))el.hidden=true
+            content.append(el);pages.push({element:el,scale,epoch})
+        }
+        observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
+        for(const p of pages)observer.observe(p.element)
+        const rendered=await queuePage(anchor?.page??0,epoch)
+        if(!rendered||epoch!==layoutGeneration)return false
+        const positioned=await gotoPdf(anchor??{page:0},epoch);return positioned!==false&&epoch===layoutGeneration
+    }finally{if(epoch===layoutGeneration){layingOut=false;pdfViewport=[content.clientWidth,content.clientHeight]}}
 }
 async function renderPage(index,epoch){
     const data=pages[index];if(!data||data.epoch!==epoch)return
@@ -642,7 +907,7 @@ async function renderPage(index,epoch){
             e.preventDefault()
             try{
                 if(a.url)emit('external',{url:a.url})
-                else {emit('navigationJump');remember();await gotoPdf(await destinationAnchor(a.dest));remember()}
+                else {emit('navigationJump');await queueNavigation(async()=>{userNavigation();remember();await gotoPdf(await destinationAnchor(a.dest));remember()})}
             }catch(error){emit('navigationError',{message:String(error)})}
         })
         el.append(link)
@@ -653,18 +918,22 @@ async function renderPage(index,epoch){
 async function gotoPdf(anchor,epoch=layoutGeneration){
     const index=typeof anchor==='number'?anchor:anchor.page
     if(!validPage(index,pdf.numPages)){emit('navigationError',{message:strings.invalidPage});return false}
+    const navigation=++pdfNavigationGeneration,current=()=>navigation===pdfNavigationGeneration&&epoch===layoutGeneration
     navigatingPage=index
-    let rendered;try{rendered=await queuePage(index,epoch)}catch(error){navigatingPage=null;throw error}
-    if(!rendered||epoch!==layoutGeneration){navigatingPage=null;return false}const p=pages[index];if(!p){navigatingPage=null;return false}
+    let rendered;try{rendered=await queuePage(index,epoch)}catch(error){if(current())navigatingPage=null;throw error}
+    if(!current())return false
+    if(!rendered){navigatingPage=null;return false}const p=pages[index];if(!p){navigatingPage=null;return false}
     if(prefs.flow!=='scrolled')for(let i=0;i<pages.length;i++)pages[i].element.hidden=i!==index&&!(prefs.spread&&i===index+1)
     const pdfPoint=anchor.point??(anchor.rect?[anchor.rect[0],anchor.rect[3]]:null)
     const point=pdfPoint&&p.viewport?p.viewport.convertToViewportPoint(...pdfPoint):null
     const top=point?point[1]:(anchor.y??0)*p.element.offsetHeight
-    if(point)content.scrollLeft=Math.max(0,p.element.offsetLeft+point[0]-content.clientWidth*.25)
+    // Persisted anchors include y and describe the viewport origin. Explicit
+    // document destinations retain their reading inset.
+    content.scrollLeft=point?Math.max(0,p.element.offsetLeft+point[0]-(anchor.y==null?content.clientWidth*.25:0)):0
     content.scrollTop=p.element.offsetTop+Math.max(0,top)
     suppressSelectionUntil=performance.now()+600
     if(anchor.textOffset!=null)selectPdfText(index,anchor.textOffset,anchor.textLength??1)
-    else if(anchor.segments?.length)selectPdfText(index,anchor.segments[0].start,anchor.segments[0].text.length)
+    else if(anchor.segments?.length)selectPdfText(index,anchor.segments[0].start,anchor.segments[0].length??anchor.segments[0].text?.length??1)
     reportLocation({anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight),progress:(index+1)/pdf.numPages,reference:pdfReference(index),text:p.text??'',chapter:'',tocHref:pdfTocHref(index),tocId:pdfTocId(anchor),noText:p.text!=null&&!p.text.trim()});navigatingPage=null;return true
 }
 function pdfText(items){
@@ -711,7 +980,7 @@ function pdfSelection(){
         if(piece.compareBoundaryPoints(Range.END_TO_END,all)>0)piece.setEnd(all.endContainer,all.endOffset)
         const rect=p.element.getBoundingClientRect(),boxes=[...piece.getClientRects()].filter(x=>x.width&&x.height).map(x=>[...p.viewport.convertToPdfPoint(x.left-rect.left,x.top-rect.top),...p.viewport.convertToPdfPoint(x.right-rect.left,x.bottom-rect.top)])
         const before=all.cloneRange();before.setEnd(piece.startContainer,piece.startOffset)
-        segments.push({page:i,ref:p.ref,boxes,start:before.toString().length,text:piece.toString()})
+        segments.push({page:i,ref:p.ref,boxes,start:before.toString().length,length:piece.toString().length})
     }
     if(!segments.length)return
     selected({text:s.toString(),anchor:{page:segments[0].page,segments},reference:pdfReference(segments[0].page),order:segments[0].page},r)
@@ -736,10 +1005,11 @@ async function search(query,queryId,token){
     const flush=()=>{if(batch.length){result('matches',{items:batch});batch=[]}}
     const match=value=>{batch.push(value);if(batch.length>=100)flush()}
     try{
+        if(isComic())throw Error('This image publication has no searchable text')
         if(!query){result('searchDone');return}
         if(view){for await(const item of view.search({query,drawOptions:{color:cssColor(chrome.accent??0xff3584e4)}})){
             if(token!==generation)return
-            if(item.subitems)for(const x of item.subitems)match({anchor:{cfi:x.cfi},excerpt:typeof x.excerpt==='string'?x.excerpt:[x.excerpt?.pre,x.excerpt?.match,x.excerpt?.post].filter(Boolean).join(''),reference:item.label})
+            if(item.subitems)for(const x of item.subitems)match({anchor:textAnchor(x.cfi),excerpt:typeof x.excerpt==='string'?x.excerpt:[x.excerpt?.pre,x.excerpt?.match,x.excerpt?.post].filter(Boolean).join(''),reference:item.label})
             flush();if(item.progress)result('searchProgress',{progress:item.progress});await nextFrame()
         }}else for(let i=0;i<pdf.numPages;i++){
             if(token!==generation)return
@@ -752,6 +1022,8 @@ async function search(query,queryId,token){
     }catch(error){result('searchError',{message:String(error)})}finally{if(token!==generation)view?.clearSearch()}
 }
 function keys(e){
+    if(regionSelection&&regionKey(e))return
+    if(isComic()&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&['Home','End'].includes(e.key)){e.preventDefault();dispatch({action:'goto',anchor:{page:e.key==='Home'?0:view.book.sections.length-1}});return}
     if(['PageDown','PageUp','ArrowRight','ArrowLeft','ArrowUp','ArrowDown','Home','End'].includes(e.key))userNavigation()
     if(e.target?.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName))return
     if(e.key==='Escape'&&document.querySelector('dialog[open]')){e.preventDefault();[...document.querySelectorAll('dialog[open]')].at(-1).close();return}
@@ -792,22 +1064,40 @@ document.addEventListener('keydown',keys)
 content.addEventListener('pointerdown',userNavigation,{passive:true})
 content.addEventListener('wheel',userNavigation,{passive:true})
 content.addEventListener('touchstart',userNavigation,{passive:true})
-new ResizeObserver(()=>{if(pdf){clearTimeout(window.pdfResizeTimer);window.pdfResizeTimer=setTimeout(()=>relayoutPdf(location.anchor).catch(error=>emit('navigationError',{message:String(error)})),150)}}).observe(content)
+new ResizeObserver(()=>{if(pdf){clearTimeout(window.pdfResizeTimer);window.pdfResizeTimer=setTimeout(()=>queueNavigation(async()=>{
+    // Layout itself changes scrollbars. Only rebuild for a new settled viewport,
+    // and let earlier navigation finish before capturing its current anchor.
+    if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight)return
+    await relayoutPdf(location.anchor)
+}).catch(error=>emit('navigationError',{message:String(error)})),150)}}).observe(content)
 function emitPassage(request,ignoreSelection=false){
+    if(isComic()){emit('passage',{request,text:'',anchor:location.anchor,reference:location.reference,selected:false});return}
         let passage=ignoreSelection?null:selection
-        if(!passage&&view){const index=view.resolveCFI(location.anchor.cfi)?.index??0;let range=currentRange;if(!range){const doc=view.renderer.getContents().find(x=>x.index===index)?.doc;if(doc){range=doc.createRange();range.selectNodeContents(doc.body??doc.documentElement)}}if(range)passage={text:range.toString(),anchor:{cfi:view.getCFI(index,range),index},reference:location.reference}}
+        if(!passage&&view){const index=view.resolveCFI(location.anchor.cfi)?.index??0;let range=currentRange;if(!range){const doc=view.renderer.getContents().find(x=>x.index===index)?.doc;if(doc){range=doc.createRange();range.selectNodeContents(doc.body??doc.documentElement)}}if(range)passage={text:range.toString(),anchor:textAnchor(view.getCFI(index,range),index),reference:location.reference}}
         if(!passage&&pdf){const index=location.anchor?.page??0,p=pages[index],layer=p?.element.querySelector('.textLayer');if(layer){
             const rect=p.element.getBoundingClientRect(),top=Math.max(rect.top,content.getBoundingClientRect().top),spans=[...layer.querySelectorAll('span')].filter(s=>s.getBoundingClientRect().bottom>=top),text=spans.map(s=>s.textContent).join(' '),boxes=spans.map(s=>s.getBoundingClientRect()).map(r=>[...p.viewport.convertToPdfPoint(r.left-rect.left,r.top-rect.top),...p.viewport.convertToPdfPoint(r.right-rect.left,r.bottom-rect.top)])
-            passage={text,anchor:{page:index,segments:[{page:index,boxes,start:0,text}]},reference:location.reference}
+            passage={text,anchor:{page:index,segments:[{page:index,boxes,start:0,length:text.length}]},reference:location.reference}
         }}
     emit('passage',{...(passage??{text:location.text??'',anchor:location.anchor,reference:location.reference}),request,selected:!ignoreSelection&&selection!=null})
 }
+function queueNavigation(operation){
+    const work=navigationTail.catch(()=>{}).then(operation);navigationTail=work;return work
+}
 async function dispatch(c){
     if(c.session!=null&&c.session!==session)return
+    try{c=receiveCommand(c);if(!c)return}catch(error){emit('bridgeError',{direction:'command',message:String(error)});return}
+    if((isComic()||activeFormat==='pdf')&&['goto','back','forward','next','previous','advanceSpeech','appearance','cancelAppearance','flush'].includes(c.action)){
+        return queueNavigation(()=>dispatchCommand(c))
+    }
+    return dispatchCommand(c)
+}
+async function dispatchCommand(c){
+    if(c.session!=null&&c.session!==session)return
     try{
-    if(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){userNavigation();noteGeneration++;for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close()}
+    if(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){cancelRegion();userNavigation();noteGeneration++;for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close()}
     switch(c.action){
-    case 'open':typography=noTypography;theme(c.chrome??{});strings=c.labels??{};content.className='loading';content.textContent=strings.loadingBook??'';content.setAttribute('aria-busy','true');content.setAttribute('aria-label',c.title??'');prefs=c.appearance??{};if(c.format==='pdf'){if(await openPdf(c)===false)return}else await openEpub(c);content.removeAttribute('aria-busy');emit('opened',{typography});break
+    case 'open':await annotationOperation;cacheFailureReported=false;activeFormat=c.format;annotations=c.annotations??annotations;typography=noTypography;theme(c.chrome??{});strings=c.labels??{};content.className='loading';content.textContent=strings.loadingBook??'';content.setAttribute('aria-busy','true');content.setAttribute('aria-label',c.title??'');prefs=c.appearance??{};if(c.format==='pdf'){if(await openPdf(c)===false)return}else if(['epub','fb2','cbz','cbr'].includes(c.format))await openFoliate(c);else throw Error('Unsupported publication format');content.removeAttribute('aria-busy');emit('opened',{typography});break
+    case 'beginRegion':beginRegion();break
     case 'chrome':theme(c.value);break
     case 'cancelAppearance':{
         const operation=cancelAppearance();appearanceOperation=operation.then(()=>true,()=>false)
@@ -825,43 +1115,50 @@ async function dispatch(c){
         break
     }
     case 'speaking':spokenAnchor=c.anchor;await paintSpeaking();break
-    case 'next':if(view)await view.next();else await gotoPdf({page:(location.anchor?.page??0)+(prefs.spread?2:1)});break
-    case 'previous':if(view)await view.prev();else await gotoPdf({page:(location.anchor?.page??0)-(prefs.spread?2:1)});break
-    case 'goto':{const owner=session;remember();if(view)await gotoEpub(c.anchor);else {const usable=await gotoPdf(c.anchor);if(usable===false)throw Error(strings.navigationInterrupted);remember()}if(c.request!=null&&owner===session)emit('navigationResult',{request:c.request});break}
-    case 'back':if(view)view.history.back();else if(historyIndex>0){historyIndex--;await gotoPdf(history[historyIndex])}break
-    case 'forward':if(view)view.history.forward();else if(historyIndex<history.length-1){historyIndex++;await gotoPdf(history[historyIndex])}break
+    case 'next':if(view)await view.next();else await gotoPdf({page:Math.min(pdf.numPages-1,(location.anchor?.page??0)+(prefs.spread?2:1))});break
+    case 'previous':if(view)await view.prev();else await gotoPdf({page:Math.max(0,(location.anchor?.page??0)-(prefs.spread?2:1))});break
+    case 'goto':{const owner=session;remember();if(view){await gotoEpub(c.anchor);if(isComic())remember();}else {const usable=await gotoPdf(c.anchor);if(usable===false)throw Error(strings.navigationInterrupted);remember()}if(c.request!=null&&owner===session)emit('navigationResult',{request:c.request});break}
+    case 'back':if(isComic()){if(historyIndex>0){historyIndex--;await gotoEpub(history[historyIndex])}}else if(view)view.history.back();else if(historyIndex>0){historyIndex--;await gotoPdf(history[historyIndex])}break
+    case 'forward':if(isComic()){if(historyIndex<history.length-1){historyIndex++;await gotoEpub(history[historyIndex])}}else if(view)view.history.forward();else if(historyIndex<history.length-1){historyIndex++;await gotoPdf(history[historyIndex])}break
     case 'search':await requestSearch(c.query,c.queryId);break
     case 'cancelSearch':generation++;view?.clearSearch();break
-    case 'annotations':if(view)for(const a of annotations)if(a.anchor?.cfi)view.deleteAnnotation({value:a.anchor.cfi});annotations=c.value;view?await paintEpub():paintPdf();break
+    case 'annotations':await receiveAnnotations(c);break
     case 'passage':emitPassage(c.request);break
     case 'advanceSpeech':if(view){if(view.isFixedLayout)await view.goTo((location.anchor?.index??0)+1);else await view.next();}else await gotoPdf({page:(location.anchor?.page??0)+1});emitPassage(c.request,true);break
     case 'focus':if(view)view.renderer.focusView();else content.focus();break
     case 'outline':if(view)await enrichEpubOutline(view.book,session);else if(pdf)await enrichPdfOutline().catch(()=>emit('metadata',{outlineFailed:true}));break
     case 'thumbnailWindow':setThumbnailWindow(c.pages,c.request);break
-    case 'thumbnail':if(pdf&&validPage(c.page,pdf.numPages))queueThumbnail(c.page,c.request);break
-    case 'flush':await appearanceOperation;emit('location',location);emit('flushed',{request:c.request});break
-    }}catch(e){if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e)})}
+    case 'thumbnail':if((pdf||isComic())&&validPage(c.page,pdf?.numPages??view.book.sections.length))queueThumbnail(c.page,c.request);break
+    case 'flush':await appearanceOperation;await annotationOperation;if(isComic())captureComicLocation();else if(pdf&&location.anchor?.page!=null){const index=location.anchor.page,p=pages[index];if(p)location={...location,anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight)}}emit('location',location);emit('flushed',{request:c.request});break
+    }}catch(e){if(isComic()&&view?.book?.releaseExcept)view.book.releaseExcept(new Set(view.renderer.getContents().map(x=>x.index)));if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});if(e.cacheFailureReported||c.action==='open'&&cacheFailureReported)return;emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e),cacheFailure:c.action==='open'&&c.format!=='pdf'})}
 }
 const thumbnails=[],thumbnailPending=new Map(),thumbnailTasks=new Map();let thumbnailRunning=0,thumbnailEpoch=0,thumbnailRequest=0
 function setThumbnailWindow(indices,request){
     thumbnailEpoch++;thumbnailRequest=request
     for(const task of thumbnailTasks.values())task.cancel();thumbnailTasks.clear();thumbnails.length=0;thumbnailPending.clear()
-    for(const index of (Array.isArray(indices)?indices:[]).slice(0,12))if(pdf&&validPage(index,pdf.numPages))queueThumbnail(index,request)
+    for(const index of (Array.isArray(indices)?indices:[]).slice(0,12))if((pdf||isComic())&&validPage(index,pdf?.numPages??view.book.sections.length))queueThumbnail(index,request)
 }
 function queueThumbnail(index,request){
     if(request!==thumbnailRequest||thumbnailPending.has(index)||thumbnails.length>=12)return
-    const job={index,request,epoch:thumbnailEpoch,publication:pdf,owner:session};thumbnailPending.set(index,job);thumbnails.push(job);pumpThumbnails()
+    const job={index,request,epoch:thumbnailEpoch,publication:pdf??view?.book,owner:session};thumbnailPending.set(index,job);thumbnails.push(job);pumpThumbnails()
 }
 async function pumpThumbnails(){
     if(thumbnailRunning>=2||!thumbnails.length)return
     const job=thumbnails.shift(),{index,request,epoch,publication,owner}=job;thumbnailRunning++
-    const owned=()=>owner===session&&epoch===thumbnailEpoch&&pdf===publication
+    const owned=()=>owner===session&&epoch===thumbnailEpoch&&(pdf??view?.book)===publication
     const current=()=>owned()&&!job.cancelled
     let canvas,timer,cancel
     const aborted=new Promise(resolve=>{cancel=resolve})
-    const work={task:null,cancel:()=>{job.cancelled=true;cancel();work.task?.cancel()}}
+    const controller=new AbortController()
+    const work={task:null,cancel:()=>{job.cancelled=true;cancel();controller.abort();work.task?.cancel()}}
     thumbnailTasks.set(job,work)
     const render=async()=>{if(!current())return
+        if(publication.comic){
+            const data=await (await fetch('book/'+publication.sections[index].pageId,{signal:controller.signal})).blob();if(!current())return
+            const decoded=await decodeComicImage(data,controller.signal)
+            try{if(!current())return;canvas=document.createElement('canvas');const scale=Math.min(240/decoded.width,320/decoded.height);canvas.width=Math.max(1,Math.floor(decoded.width*scale));canvas.height=Math.max(1,Math.floor(decoded.height*scale));canvas.getContext('2d').drawImage(decoded.image,0,0,canvas.width,canvas.height);if(current())emit('thumbnail',{page:index,request,data:canvas.toDataURL(),width:canvas.width,height:canvas.height})}finally{decoded.release()}
+            return
+        }
         const page=await publication.getPage(index+1);if(!current())return
         const base=page.getViewport({scale:1}),viewport=page.getViewport({scale:Math.min(240/base.width,320/base.height)})
         canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.floor(viewport.width));canvas.height=Math.max(1,Math.floor(viewport.height))
@@ -869,7 +1166,7 @@ async function pumpThumbnails(){
         if(current())emit('thumbnail',{page:index,request,data:canvas.toDataURL(),width:canvas.width,height:canvas.height})
     }
     try{await Promise.race([render(),aborted,new Promise((_,reject)=>{
-        timer=setTimeout(()=>{reject(Error('Page preview timed out'));job.cancelled=true;work.task?.cancel()},20000)
+        timer=setTimeout(()=>{reject(Error('Page preview timed out'));job.cancelled=true;controller.abort();work.task?.cancel()},20000)
     })])}
     catch(error){if(owned()&&error?.name!=='RenderingCancelledException')emit('thumbnailError',{page:index,request,message:String(error)})}
     finally{clearTimeout(timer);if(canvas){canvas.width=0;canvas.height=0}thumbnailTasks.delete(job);if(thumbnailPending.get(index)===job)thumbnailPending.delete(index);thumbnailRunning--;pumpThumbnails()}
@@ -878,3 +1175,5 @@ async function pumpThumbnails(){
 window.busybooks={dispatch};emit('ready')
 
 // Application appearance is resolved in Flutter, including system changes.
+
+window.addEventListener?.('pagehide',()=>{generation++;thumbnailEpoch++;for(const task of thumbnailTasks.values())task.cancel();cancelRegion();view?.close();view?.book?.destroy?.();pdf?.destroy()},{once:true})

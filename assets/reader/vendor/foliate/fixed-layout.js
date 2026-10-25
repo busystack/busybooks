@@ -52,8 +52,9 @@ export class FixedLayout extends HTMLElement {
             width: 100%;
             height: 100%;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            direction: ltr;
+            justify-content: flex-start;
+            align-items: flex-start;
             overflow: auto;
         }`)
 
@@ -152,6 +153,8 @@ export class FixedLayout extends HTMLElement {
                 display: 'block',
                 flexShrink: '0',
                 marginBlock: 'auto',
+                marginLeft: '0',
+                marginRight: '0',
             })
             if (portrait && frame !== target) {
                 element.style.display = 'none'
@@ -162,6 +165,14 @@ export class FixedLayout extends HTMLElement {
         } else {
             transform(left)
             transform(right)
+        }
+        // Auto margins center the visible spread only when there is free space.
+        // With overflow they become zero, keeping both edges in the scroll area.
+        const visible = (this.#center ? [this.#center] : [left, right])
+            .filter(frame => frame.element && frame.element.style.display !== 'none')
+        if (visible.length) {
+            visible[0].element.style.marginLeft = 'auto'
+            visible.at(-1).element.style.marginRight = 'auto'
         }
     }
     async #showSpread({ left, right, center, side }) {
@@ -200,6 +211,8 @@ export class FixedLayout extends HTMLElement {
         }
     }
     open(book) {
+        // BusyBooks: rebuilding comic spread order must reload the active side.
+        this.#index = -1
         this.book = book
         const { rendition } = book
         this.spread = rendition?.spread
@@ -220,7 +233,7 @@ export class FixedLayout extends HTMLElement {
                 return spread
             }
             if (pageSpread === 'center') {
-                const spread = last.left || last.right ? newSpread() : last
+                const spread = last.center || last.left || last.right ? newSpread() : last
                 spread.center = section
             }
             else if (pageSpread === 'left') {
@@ -273,7 +286,6 @@ export class FixedLayout extends HTMLElement {
             this.#reportLocation(reason)
             return
         }
-        this.#index = index
         const spread = this.#spreads[index]
         if (spread.center) {
             const index = this.book.sections.indexOf(spread.center)
@@ -288,6 +300,8 @@ export class FixedLayout extends HTMLElement {
             const right = { index: indexR, src: srcR }
             await this.#showSpread({ left, right, side })
         }
+        // BusyBooks: a failed page load must not advance the active spread.
+        this.#index = index
         this.#reportLocation(reason)
     }
     async select(target) {

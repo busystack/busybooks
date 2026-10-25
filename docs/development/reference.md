@@ -84,4 +84,4 @@ BusyMax's read-only schedule-toolbar reference for adjacent Previous/Next is
 header/icon services use `go-previous-symbolic` and `go-next-symbolic`; BusyBooks
 keeps independent copies/adaptations of the common components. Sidebar reuse
 uses BusyMark's same revision above. Actual visual/native parity requires the
-separate desktop checks in verification.md.
+separate desktop checks in [format-verification.md](format-verification.md).

@@ -1215,7 +1215,18 @@ static void my_application_class_init(MyApplicationClass* klass) {
   G_APPLICATION_CLASS(klass)->shutdown = my_application_shutdown;
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
 }
-static void my_application_init(MyApplication* self) {self->pending_paths=g_ptr_array_new_with_free_func(g_free);}
+static void my_application_init(MyApplication* self) {
+  self->pending_paths=g_ptr_array_new_with_free_func(g_free);
+  // The pinned gtk plugin registers a command-line signal handler when the
+  // Flutter view starts. That runs before the class closure and otherwise
+  // consumes remote launches without reaching BusyBooks' owned input queue.
+  // Register first and stop further emission so each request has one owner.
+  g_signal_connect(self,"command-line",G_CALLBACK(+[](GApplication* application,
+      GApplicationCommandLine* command_line,gpointer)->gint {
+    g_signal_stop_emission_by_name(application,"command-line");
+    return my_application_command_line(application,command_line);
+  }),nullptr);
+}
 
 MyApplication* my_application_new() {
   g_set_prgname(APPLICATION_ID);

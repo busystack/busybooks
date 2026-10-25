@@ -135,7 +135,13 @@ void main() {
         await reader.open(id);
         final descriptor =
             calls.lastWhere((c) => c.method == 'open').arguments as Map;
-        expect(descriptor['path'], await original.resolveSymbolicLinks());
+        expect(
+          await FileSystemEntity.identical(
+            descriptor['path'] as String,
+            original.path,
+          ),
+          isTrue,
+        );
         expect(descriptor['cacheDirectory'], startsWith(profile));
         expect(await Directory(p.join(profile, 'books')).exists(), isFalse);
         await event('ready', {'session': session});
@@ -155,8 +161,11 @@ void main() {
         );
         expect(container.read(readerControllerProvider).ready, isTrue);
         expect(
-          container.read(workspaceControllerProvider).workspace!.path,
-          original.path,
+          await FileSystemEntity.identical(
+            container.read(workspaceControllerProvider).workspace!.path,
+            original.path,
+          ),
+          isTrue,
         );
         final oldSession = session;
         await reader.close();

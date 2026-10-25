@@ -1,0 +1,1400 @@
+{
+  "schema": 1,
+  "date": "2026-10-23",
+  "sourceBaseline": "79af51228cd32e3b5669135a52e6120aa6498207",
+  "implementationCommit": "3089ecc4d0f848e3d3d3626546f831f0210fe71c",
+  "environment": {
+    "os": "Ubuntu 24.04.5 x64",
+    "gtk": "3.24.41",
+    "webkitgtk": "2.52.6",
+    "display": "Actual X11 desktop",
+    "flutter": "3.47.5",
+    "dart": "3.13.4",
+    "normalSdkAndPersistentPubCacheRestored": true,
+    "lockfileUnchanged": true,
+    "lockfileSha256": "13823170dcfa19af5ea9d5df4cdf8815abb39db973ec119fc2e2e5352c49a8a2"
+  },
+  "supportedLogicalFormats": [
+    "epub",
+    "pdf",
+    "fb2",
+    "cbz",
+    "cbr"
+  ],
+  "acceptedSuffixes": [
+    "epub",
+    "pdf",
+    "fb2",
+    "fb2.zip",
+    "fbz",
+    "cbz",
+    "cbr"
+  ],
+  "bookIdentity": "SHA-256 of complete original bytes, including ZIP/RAR wrappers",
+  "sqlSchema": 2,
+  "logicalBackupSchema": 3,
+  "backupIncludesPublicationResources": false,
+  "rar": {
+    "backend": "Official UnRAR 7.21; separate statically linked RAR-only helper",
+    "sourceSha256": "d1afa67ef4121ebc5986815699e05db0ce8648499e5dca854f282a4c3f72c003",
+    "runtimeDownloaded": false,
+    "externalUnrarRequired": false,
+    "qualification": {
+      "status": "passed",
+      "checks": 16,
+      "decoderSha256": "347ff0206b80377489cebc4d470345a0132f1ef06bd5252fc1e73743a236d1de",
+      "scope": "RAR4/RAR5 stored, compressed and solid exact decoded bytes; encrypted headers/data, multipart and CRC rejection"
+    },
+    "unsupported": [
+      "encrypted headers/data",
+      "multipart",
+      "SFX",
+      "other RAR generations",
+      "dictionaries above 256 MiB",
+      "ambiguous non-ASCII OEM-only RAR4 filenames",
+      "decoder-unsupported features"
+    ],
+    "license": "UnRAR license; complete terms and acknowledgements shipped; BusyBooks code remains Apache-2.0"
+  },
+  "imageProfile": {
+    "qualifiedOn": "Linux WebKitGTK",
+    "encodings": [
+      "baseline/progressive JPEG",
+      "RGB/RGBA/grayscale PNG",
+      "lossy/lossless WebP"
+    ],
+    "animatedOrOtherPageEncodings": "Explicit rejection; no silent omission or renumbering",
+    "windowsVerified": false
+  },
+  "limits": {
+    "comicOriginalBytes": 1073741824,
+    "otherOriginalBytes": 268435456,
+    "archiveEntries": 20000,
+    "comicEntryActualBytes": 67108864,
+    "comicAggregateActualBytes": 4294967296,
+    "comicPages": 10000,
+    "comicImageSidePixels": 16000,
+    "comicImageDecodedPixels": 33554432,
+    "comicInfoBytes": 1048576,
+    "zipCentralMetadataBytes": 16777216,
+    "zipLocalMetadataBytes": 16777216,
+    "zipAggregateFilenameBytes": 4194304,
+    "zipFilenameBytes": 32768,
+    "rarMemoryBytes": 805306368,
+    "rarDictionaryBytes": 268435456,
+    "rarDeadlineSeconds": 180,
+    "rarProtocolUtf16Units": 8388608,
+    "preparedNameUtf16Units": 4194304,
+    "fb2XmlBytes": 67108864,
+    "xmlDepth": 128,
+    "xmlEventsAndAttributes": 500000,
+    "xmlAttributesPerElement": 256,
+    "xmlTagUtf16Units": 262144,
+    "fb2Sections": 10000,
+    "fb2Binaries": 2048,
+    "fb2BinaryBase64Characters": 25165824,
+    "fb2AggregateBase64Characters": 67108864,
+    "preparedIndexBytes": 16777216,
+    "retainedComicPagesAfterNavigation": 2,
+    "pageTransitions": "Old/new spreads coexist until navigation commits",
+    "thumbnailJobs": 2,
+    "thumbnailWindow": 12,
+    "thumbnailCacheEntries": 32,
+    "thumbnailCacheBytes": 8388608
+  },
+  "checks": {
+    "pinnedDependencyResolution": "Passed offline with --enforce-lockfile; lockfile unchanged",
+    "localization": "English/German generated with pinned SDK",
+    "format": "132 files, zero changes",
+    "analysis": "No issues",
+    "flutterSuite": {
+      "passed": 344,
+      "skipped": 1,
+      "skipReason": "Existing opt-in live Wiktionary network test disabled"
+    },
+    "finalXmlAndFormatContracts": {
+      "passed": 8
+    },
+    "storage": {
+      "status": "passed",
+      "checks": 88,
+      "scope": "real SQLite, original files, database collections, typed restoration and safe same-volume moves; no native rendering"
+    },
+    "cache": {
+      "status": "passed",
+      "resources": 4,
+      "scope": "Case-sensitive logical names and encoded path isolation"
+    },
+    "crossVolumeMoveRecovery": {
+      "status": "passed",
+      "checks": 64,
+      "scope": "real cross-filesystem streamed move and durable journal interruption/recovery; replacement source preserved; cancellation, injected copy/hash failure, actual Linux delete denial",
+      "sourceParent": "/tmp",
+      "destinationParent": "/dev/shm"
+    },
+    "annotationOrder": {
+      "status": "passed",
+      "checks": 5,
+      "scope": "Annotation ordering, independent of creation time"
+    },
+    "formatPersistenceAndOriginalExport": {
+      "status": "passed",
+      "checks": 153,
+      "scope": "Original-byte identity, inspection, bounded preparation, locators, annotations, original export, cache deletion, restart, missing originals and data-only backup/restore; no rendering claims"
+    },
+    "epub2IndependentSchemas": {
+      "fixtures": 7,
+      "schemaChecks": 39,
+      "results": [
+        {
+          "status": "passed",
+          "fixture": "epub2.epub",
+          "schemaChecks": 5,
+          "epubCheckErrors": [],
+          "warnings": [],
+          "normativeProfileException": false
+        },
+        {
+          "status": "passed",
+          "fixture": "epub2-cover-page.epub",
+          "schemaChecks": 5,
+          "epubCheckErrors": [],
+          "warnings": [],
+          "normativeProfileException": false
+        },
+        {
+          "status": "passed",
+          "fixture": "epub2-dtbook.epub",
+          "schemaChecks": 8,
+          "epubCheckErrors": [],
+          "warnings": [
+            "RSC-027"
+          ],
+          "normativeProfileException": false
+        },
+        {
+          "status": "passed",
+          "fixture": "epub2-mime-aliases.epub",
+          "schemaChecks": 6,
+          "epubCheckErrors": [],
+          "warnings": [
+            "OPF-037",
+            "OPF-037"
+          ],
+          "normativeProfileException": false
+        },
+        {
+          "status": "passed",
+          "fixture": "epub2-xml-island.epub",
+          "schemaChecks": 5,
+          "epubCheckErrors": [
+            "OPF-032",
+            "OPF-043"
+          ],
+          "warnings": [],
+          "normativeProfileException": true
+        },
+        {
+          "status": "passed",
+          "fixture": "representative.kepub.epub",
+          "schemaChecks": 5,
+          "epubCheckErrors": [],
+          "warnings": [],
+          "normativeProfileException": false
+        },
+        {
+          "status": "passed",
+          "fixture": "epub2-utf16.epub",
+          "schemaChecks": 5,
+          "epubCheckErrors": [
+            "HTM_058"
+          ],
+          "warnings": [
+            "RSC-027"
+          ],
+          "normativeProfileException": true
+        }
+      ],
+      "exceptions": "UTF-16 XHTML and stylesheet-only XML fallback are normative EPUB 2 cases; only fixture-specific EPUBCheck profile errors are allowed. All XML trees pass their independent schemas/DTDs."
+    },
+    "readerLogic": "Passed actual adapter controlled probes: startup, fixed-layout, sidebar, ranges, typography, region panning and selection after notes",
+    "nativeEngineSmoke": {
+      "passed": 20,
+      "imageOnlyTests": "Require decoded page previews, not text search"
+    },
+    "nativeFormatMatrix": {
+      "publications": 22,
+      "restartCases": 12,
+      "passedProofs": 34,
+      "expectedFallbackRejections": 2,
+      "validatedNativeLocators": 2155,
+      "perFormatValidatedLocators": {
+        "epub": 991,
+        "fb2": 733,
+        "cbz": 239,
+        "cbr": 192
+      },
+      "proofs": [
+        {
+          "fixture": "epub2.epub",
+          "restart": false,
+          "coldPreparationMs": 467,
+          "engineFirstUsableMs": 760,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2.epub",
+          "restart": true,
+          "engineFirstUsableMs": 770,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2-utf16.epub",
+          "restart": false,
+          "coldPreparationMs": 411,
+          "engineFirstUsableMs": 769,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2-utf16.epub",
+          "restart": true,
+          "engineFirstUsableMs": 763,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2-dtbook.epub",
+          "restart": false,
+          "coldPreparationMs": 467,
+          "engineFirstUsableMs": 760,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2-dtbook.epub",
+          "restart": true,
+          "engineFirstUsableMs": 323,
+          "checks": [
+            "publisher-page-reference",
+            "note-survives-cache-restart",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2-mime-aliases.epub",
+          "restart": false,
+          "coldPreparationMs": 473,
+          "engineFirstUsableMs": 785,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2-mime-aliases.epub",
+          "restart": true,
+          "engineFirstUsableMs": 773,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "epub2-xml-island.epub",
+          "restart": false,
+          "coldPreparationMs": 444,
+          "engineFirstUsableMs": 749,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 3,
+          "searchMatches": 3
+        },
+        {
+          "fixture": "epub2-xml-island.epub",
+          "restart": true,
+          "engineFirstUsableMs": 768,
+          "checks": [
+            "publisher-page-reference",
+            "note-survives-cache-restart",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 3,
+          "searchMatches": 3
+        },
+        {
+          "fixture": "representative.kepub.epub",
+          "restart": false,
+          "coldPreparationMs": 586,
+          "engineFirstUsableMs": 1176,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "representative.kepub.epub",
+          "restart": true,
+          "engineFirstUsableMs": 810,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 2
+        },
+        {
+          "fixture": "reflowable.kepub.epub",
+          "restart": false,
+          "coldPreparationMs": 602,
+          "engineFirstUsableMs": 866,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 63
+        },
+        {
+          "fixture": "reflowable.kepub.epub",
+          "restart": true,
+          "engineFirstUsableMs": 845,
+          "checks": [
+            "publisher-page-reference",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation"
+          ],
+          "sections": 3,
+          "searchMatches": 63
+        },
+        {
+          "fixture": "fiction-utf8.fb2",
+          "restart": false,
+          "coldPreparationMs": 537,
+          "engineFirstUsableMs": 761,
+          "checks": [
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction-utf8.fb2",
+          "restart": true,
+          "engineFirstUsableMs": 805,
+          "checks": [
+            "note-survives-cache-restart",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction-utf16.fb2",
+          "restart": false,
+          "coldPreparationMs": 453,
+          "engineFirstUsableMs": 760,
+          "checks": [
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction-utf16.fb2",
+          "restart": true,
+          "engineFirstUsableMs": 800,
+          "checks": [
+            "note-survives-cache-restart",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction-cp1251.fb2",
+          "restart": false,
+          "coldPreparationMs": 442,
+          "engineFirstUsableMs": 747,
+          "checks": [
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction-cp1251.fb2",
+          "restart": true,
+          "engineFirstUsableMs": 834,
+          "checks": [
+            "note-survives-cache-restart",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction.fb2.zip",
+          "restart": false,
+          "coldPreparationMs": 847,
+          "engineFirstUsableMs": 955,
+          "checks": [
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction.fb2.zip",
+          "restart": true,
+          "engineFirstUsableMs": 905,
+          "checks": [
+            "note-survives-cache-restart",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction.fbz",
+          "restart": false,
+          "coldPreparationMs": 518,
+          "engineFirstUsableMs": 783,
+          "checks": [
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "fiction.fbz",
+          "restart": true,
+          "engineFirstUsableMs": 1323,
+          "checks": [
+            "note-survives-cache-restart",
+            "selection",
+            "typed-locator",
+            "highlight",
+            "typography",
+            "native-resize",
+            "text-assistance-passage",
+            "exact-search-navigation",
+            "footnotes-images-backlinks",
+            "note-annotation-restoration"
+          ],
+          "sections": 5,
+          "searchMatches": 5
+        },
+        {
+          "fixture": "comic-deflated.cbz",
+          "restart": false,
+          "coldPreparationMs": 571,
+          "engineFirstUsableMs": 692,
+          "webKitRssKiB": [
+            223516
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 18,
+          "navigationMaxMs": 28
+        },
+        {
+          "fixture": "comic-stored.cbz",
+          "restart": false,
+          "coldPreparationMs": 530,
+          "engineFirstUsableMs": 693,
+          "webKitRssKiB": [
+            223284
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 20,
+          "navigationMaxMs": 36
+        },
+        {
+          "fixture": "comic-codecs.cbz",
+          "restart": false,
+          "coldPreparationMs": 457,
+          "engineFirstUsableMs": 676,
+          "webKitRssKiB": [
+            228880
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 5,
+          "navigationMaxMs": 27
+        },
+        {
+          "fixture": "comic-rar4-stored.cbr",
+          "restart": false,
+          "coldPreparationMs": 577,
+          "engineFirstUsableMs": 700,
+          "webKitRssKiB": [
+            223752
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 18,
+          "navigationMaxMs": 30
+        },
+        {
+          "fixture": "comic-rar4-compressed.cbr",
+          "restart": false,
+          "coldPreparationMs": 574,
+          "engineFirstUsableMs": 740,
+          "webKitRssKiB": [
+            223960
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 17,
+          "navigationMaxMs": 32
+        },
+        {
+          "fixture": "comic-rar4-solid.cbr",
+          "restart": false,
+          "coldPreparationMs": 553,
+          "engineFirstUsableMs": 696,
+          "webKitRssKiB": [
+            224436
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 21,
+          "navigationMaxMs": 35
+        },
+        {
+          "fixture": "comic-rar5-stored.cbr",
+          "restart": false,
+          "coldPreparationMs": 583,
+          "engineFirstUsableMs": 706,
+          "webKitRssKiB": [
+            223888
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 21,
+          "navigationMaxMs": 33
+        },
+        {
+          "fixture": "comic-rar5-compressed.cbr",
+          "restart": false,
+          "coldPreparationMs": 578,
+          "engineFirstUsableMs": 692,
+          "webKitRssKiB": [
+            224316
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 18,
+          "navigationMaxMs": 32
+        },
+        {
+          "fixture": "comic-rar5-solid.cbr",
+          "restart": false,
+          "coldPreparationMs": 552,
+          "engineFirstUsableMs": 696,
+          "webKitRssKiB": [
+            223828
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 7,
+          "navigationMedianMs": 19,
+          "navigationMaxMs": 34
+        },
+        {
+          "fixture": "comic-long.cbz",
+          "restart": false,
+          "coldPreparationMs": 652,
+          "engineFirstUsableMs": 710,
+          "webKitRssKiB": [
+            287256,
+            254996,
+            255260
+          ],
+          "checks": [
+            "all-pages-decoded",
+            "bounded-live-pages",
+            "jpeg-png-webp",
+            "rtl-ltr-spreads-zoom",
+            "region-keyboard-create-restore-hit-test-cancel",
+            "pan-through-regions",
+            "thumbnail",
+            "history",
+            "artwork-colors"
+          ],
+          "maximumLivePages": 2,
+          "pages": 120,
+          "navigationMedianMs": 34,
+          "navigationMaxMs": 86
+        }
+      ]
+    },
+    "postIndexBoundComicProofs": {
+      "passed": 3,
+      "scope": "Stored ZIP, codec matrix and 120-page actual WebKitGTK traversal after metadata preflight"
+    },
+    "additionalDurableNoteRestarts": {
+      "passedProofs": 4,
+      "noteBodyRestarts": 2,
+      "formats": [
+        "EPUB 2 DTBook",
+        "FB2"
+      ],
+      "textAssistance": "Selected durable passages verified through the renderer API; this does not assert new audio or network-service delivery acceptance"
+    },
+    "nativeTypography": {
+      "webKitProofs": 7,
+      "chromiumWeightProof": true
+    },
+    "nativePointerRouting": "Passed alone on actual desktop: welcome/chrome/book/resize/modal/teardown",
+    "interactiveApplication": "Actual CBR page/region note creation, native editor edit/delete menus, Escape, Go To, thumbnails, Notebook navigation, focus return, restart/cache deletion, missing original, and wrapped FB2 chooser/location saving; screenshots and fixture-only SQLite evidence saved locally",
+    "failureRecovery": "Protected save ordering/drafts/retry/deletion/stale-session flows, including regions, passed controlled Flutter tests; no live desktop disk failure injected",
+    "resourceCancellation": [
+      {
+        "status": "passed",
+        "operation": "real RAR5 solid decoder cancellation",
+        "elapsedMs": 29,
+        "cancellationMs": 18,
+        "interruptedOutputBytes": 25157662,
+        "published": false
+      },
+      {
+        "status": "passed",
+        "operation": "native store worker control cancellation",
+        "cancellationMs": 9,
+        "stagingRemaining": 0,
+        "existingNoteRetained": true
+      },
+      {
+        "status": "passed",
+        "operation": "file-backed comic above former source cap",
+        "sourceBytes": 290794372,
+        "pages": 42,
+        "inspectionAndPreparationMs": 5025
+      }
+    ],
+    "resourceProbePeakRssKiB": 56492,
+    "compiledResourceProbeNote": "AOT Dart probe; LD_PRELOAD supplied the host SQLite native asset for this standalone executable only. Actual Flutter bundle tests use its packaged SQLite without this override.",
+    "longComic": {
+      "fixture": "comic-long.cbz",
+      "restart": false,
+      "coldPreparationMs": 652,
+      "engineFirstUsableMs": 710,
+      "webKitRssKiB": [
+        287256,
+        254996,
+        255260
+      ],
+      "checks": [
+        "all-pages-decoded",
+        "bounded-live-pages",
+        "jpeg-png-webp",
+        "rtl-ltr-spreads-zoom",
+        "region-keyboard-create-restore-hit-test-cancel",
+        "pan-through-regions",
+        "thumbnail",
+        "history",
+        "artwork-colors"
+      ],
+      "maximumLivePages": 2,
+      "pages": 120,
+      "navigationMedianMs": 34,
+      "navigationMaxMs": 86
+    },
+    "wholeBundleOpenings": {
+      "passed": 17,
+      "forwardedRelativePaths": 16,
+      "results": [
+        {
+          "fixture": "epub2.epub",
+          "format": "epub",
+          "openedAndSavedMs": 2226,
+          "forwarded": false
+        },
+        {
+          "fixture": "epub2-utf16.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1125,
+          "forwarded": true
+        },
+        {
+          "fixture": "epub2-dtbook.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1205,
+          "forwarded": true
+        },
+        {
+          "fixture": "representative.kepub.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1267,
+          "forwarded": true
+        },
+        {
+          "fixture": "epub2-mime-aliases.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1225,
+          "forwarded": true
+        },
+        {
+          "fixture": "epub2-xml-island.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1052,
+          "forwarded": true
+        },
+        {
+          "fixture": "reflowable.kepub.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1170,
+          "forwarded": true
+        },
+        {
+          "fixture": "fiction-utf16.fb2",
+          "format": "fb2",
+          "openedAndSavedMs": 1154,
+          "forwarded": true
+        },
+        {
+          "fixture": "Wrapped.FB2.ZIP",
+          "format": "fb2",
+          "openedAndSavedMs": 1123,
+          "forwarded": true
+        },
+        {
+          "fixture": "fiction.fbz",
+          "format": "fb2",
+          "openedAndSavedMs": 138,
+          "forwarded": true
+        },
+        {
+          "fixture": "comic-deflated.cbz",
+          "format": "cbz",
+          "openedAndSavedMs": 1123,
+          "forwarded": true
+        },
+        {
+          "fixture": "comic-rar4-solid.cbr",
+          "format": "cbr",
+          "openedAndSavedMs": 1098,
+          "forwarded": true
+        },
+        {
+          "fixture": "comic-rar5-solid.cbr",
+          "format": "cbr",
+          "openedAndSavedMs": 1047,
+          "forwarded": true
+        },
+        {
+          "fixture": "reflowable.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1106,
+          "forwarded": true
+        },
+        {
+          "fixture": "fixed-layout.epub",
+          "format": "epub",
+          "openedAndSavedMs": 1005,
+          "forwarded": true
+        },
+        {
+          "fixture": "text.pdf",
+          "format": "pdf",
+          "openedAndSavedMs": 1521,
+          "forwarded": true
+        },
+        {
+          "fixture": "image-only.pdf",
+          "format": "pdf",
+          "openedAndSavedMs": 1253,
+          "forwarded": true
+        }
+      ]
+    },
+    "desktopMime": {
+      "status": "passed",
+      "mimeTypes": {
+        "Book.Fb2": "application/x-fictionbook+xml",
+        "Book.FB2.ZiP": "application/x-zip-compressed-fb2",
+        "Book.FbZ": "application/x-zip-compressed-fb2",
+        "Book.CbZ": "application/vnd.comicbook+zip",
+        "Book.CbR": "application/vnd.comicbook-rar",
+        "ordinary.zip": "application/zip",
+        "ordinary.rar": "application/vnd.rar"
+      }
+    },
+    "desktopValidation": "Passed; existing Literature category hint only",
+    "appstreamValidation": "Passed offline",
+    "packageContents": {
+      "status": "passed",
+      "helperSha256": "347ff0206b80377489cebc4d470345a0132f1ef06bd5252fc1e73743a236d1de",
+      "helperRuntime": [
+        "\tlinux-vdso.so.1 (0x000074e89d7c5000)",
+        "\tlibstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x000074e89d400000)",
+        "\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x000074e89d317000)",
+        "\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000074e89d716000)",
+        "\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x000074e89d000000)",
+        "\t/lib64/ld-linux-x86-64.so.2 (0x000074e89d7c7000)"
+      ],
+      "requiredFiles": [
+        "busybooks",
+        "busybooks_comic_archive",
+        "share/licenses/unrar/license.txt",
+        "share/licenses/unrar/acknow.txt",
+        "share/licenses/busybooks/LICENSE",
+        "share/licenses/busybooks/NOTICE",
+        "share/mime/mime.cache",
+        "share/mime/packages/io.busystack.busybooks.mime.xml"
+      ],
+      "readerAssetsMatchSource": [
+        "reader.js",
+        "comic_book.mjs",
+        "prepared_book.mjs",
+        "dtbook.mjs"
+      ],
+      "fixtureBooksIncluded": false,
+      "unrarLicensesMatchSource": true,
+      "decoderDevelopmentOverrideAbsentForBundleTests": true
+    }
+  },
+  "artifact": {
+    "path": "build/distributions/busybooks-0.1.0-linux-x64.tar.gz",
+    "sha256Sidecar": "build/distributions/busybooks-0.1.0-linux-x64.tar.gz.sha256",
+    "localEvidence": "evidence/formats-20261023/busybooks-format-package-final.json",
+    "published": false
+  },
+  "remainingReleaseGates": [
+    {
+      "platform": "Windows WebView2",
+      "status": "unavailable; not compiled or executed",
+      "required": "Windows CI/MSVC build, installed Windows 10/11 runtime/associations, every format/codec/RAR profile, note/region restoration, focus/menus/DPI, offline packaged runtime and file workflows"
+    },
+    {
+      "platform": "Installed strict Snap",
+      "status": "unavailable; BusyBooks not installed; Snapcraft/LXD/Multipass absent",
+      "required": "Build/install actual strict recipe; verify confined helper/runtime/SQLite/WebKit/speech, offline format/note/cancellation and permitted file workflows; no confinement relaxation"
+    }
+  ],
+  "fixtureProvenance": "test/fixtures/formats/PROVENANCE.md and SHA256SUMS; CC0 text/art, Noto font license retained",
+  "rawEvidenceDirectory": "evidence/formats-20261023/ (ignored, local only)",
+  "rawEvidence": [
+    {
+      "file": "busybooks-formats-sdk-final.json",
+      "sha256": "3d60442e1ed667e1cbaa8b01864256af6339e8b57ab362d6a07218c2896365fd",
+      "bytes": 636
+    },
+    {
+      "file": "busybooks-formats-dependency-final.log",
+      "sha256": "5215bf49baceb2d2193af9ed94524bc8e123bf4706bc1cc3ec10dc5b4e37a7f1",
+      "bytes": 225
+    },
+    {
+      "file": "busybooks-formats-l10n-final.log",
+      "sha256": "97362974d3ec503ef18e205dbcc7d8e1ca57e5426c80a4966c6608571fa88609",
+      "bytes": 161
+    },
+    {
+      "file": "busybooks-formats-format-final.log",
+      "sha256": "47c84fbe4b056566232510906db90645483b1489b977b5b4c7766ae2301c1b30",
+      "bytes": 49
+    },
+    {
+      "file": "busybooks-formats-full-analyze-final.log",
+      "sha256": "6e45b231896be9e00e139f06e5a528bc7fa7bd7e50446a2e0ed8fc385f23ab27",
+      "bytes": 96
+    },
+    {
+      "file": "busybooks-formats-flutter-final.log",
+      "sha256": "840f7f208c17265091ad7ed7452dbc4bd23f0646e81792fb864106dc398d28b8",
+      "bytes": 65424
+    },
+    {
+      "file": "busybooks-format-contract-final.log",
+      "sha256": "5153549037b1addd0027a7a7e2b0ea82eb59ad5108b79bc583e251b2f007ad94",
+      "bytes": 736
+    },
+    {
+      "file": "busybooks-formats-reader-probes-final.log",
+      "sha256": "bb24eaca907a6f41fc9434227508f132291a8752b964138d30138844699c26f7",
+      "bytes": 1582
+    },
+    {
+      "file": "busybooks-format-storage-regression-final.log",
+      "sha256": "a9d374ff479474b86b6572ef2c3cbdd08a84c30c5f8c399c625b244ce45e2f7d",
+      "bytes": 203
+    },
+    {
+      "file": "busybooks-format-cache-regression-final.log",
+      "sha256": "e9b2cc566c23892bbf04017f606f476ff6938a7b025b76714820202036382ee5",
+      "bytes": 144
+    },
+    {
+      "file": "busybooks-format-move-regression-final.log",
+      "sha256": "5f86e5e731b52d71df5025c2da28e74100f3f45258d7b8448d20f594a6609254",
+      "bytes": 317
+    },
+    {
+      "file": "busybooks-format-order-regression-final.log",
+      "sha256": "b57cd2c61e2cfcc64646cbd68079347813c7566faef7e31925da6b1fd66ed249",
+      "bytes": 135
+    },
+    {
+      "file": "busybooks-formats-data-final.log",
+      "sha256": "231f5bb37e92461e2c4775a409fa0141f097c1da8d378457cfe11210397124aa",
+      "bytes": 1609
+    },
+    {
+      "file": "busybooks-rar-qualification-final.log",
+      "sha256": "a80a1bd56cb9f796fb5c16d95a91de9c4ab8b9fba083c526a9f8c26bfd70648d",
+      "bytes": 244
+    },
+    {
+      "file": "busybooks-epub2-conformance-final.log",
+      "sha256": "fbbb34d61f2b8c9e7d99223cb3d179a82635a1505dd13839e6f38424ff5d4e14",
+      "bytes": 1108
+    },
+    {
+      "file": "busybooks-format-native-acceptance-final.log",
+      "sha256": "418821e591ef8fd237caf4dd1fd75fbf4e933148759fe7ef23ba87913d5a2ecf",
+      "bytes": 1259171
+    },
+    {
+      "file": "busybooks-format-footnote-restart-final.log",
+      "sha256": "d15dd98eb40f9a175091c8d669fbd2629c95d60675495cce58b65a2080893540",
+      "bytes": 130764
+    },
+    {
+      "file": "busybooks-format-long-timing-final.log",
+      "sha256": "30ec6c3fd31396c37e301910550ce7ae28b1e096a6fd5135c6499a9d30288334",
+      "bytes": 111111
+    },
+    {
+      "file": "busybooks-format-index-bound-native-final.log",
+      "sha256": "2ba983e54e26d77c94b968e2937d4ae5dbc5af1c314b3eacbdc833cb3347d37e",
+      "bytes": 174912
+    },
+    {
+      "file": "busybooks-native-locator-validation-final.log",
+      "sha256": "d3935fb94b3cbe700342c45b7f85278f9324100d422e4f68f70af46c72476f55",
+      "bytes": 401
+    },
+    {
+      "file": "busybooks-format-engine-smoke-final.log",
+      "sha256": "59b565f86e19ee82c96cdf76ab124ffc4ed84f55adf1112946781af8a13f1166",
+      "bytes": 269901
+    },
+    {
+      "file": "busybooks-format-input-regression-final.log",
+      "sha256": "62973303084ef554b2126a3d9d1be318a61aafab0929dd70acd2af71ed247adc",
+      "bytes": 67
+    },
+    {
+      "file": "busybooks-format-typography-regression-final.log",
+      "sha256": "bc9a9bc21c3d8def71f952a15d7b4dea069650da69c86f797731f3e2006e12ac",
+      "bytes": 98452
+    },
+    {
+      "file": "busybooks-format-resources-final.log",
+      "sha256": "2d1fac73665b1beb7e0a82a49495d2dc1461d73de3ff01ad448867ca5fd95445",
+      "bytes": 446
+    },
+    {
+      "file": "busybooks-format-resources-memory-final.log",
+      "sha256": "31d1585a245ea16e150d6110042e59b2ce67398b036c46b26d67bbb4dbc61394",
+      "bytes": 781
+    },
+    {
+      "file": "busybooks-formats-resources-compile-final.log",
+      "sha256": "c24ed8824c44aac538c1cfbdf7620d282635c7ddbf87e0895079a3b873b789eb",
+      "bytes": 42
+    },
+    {
+      "file": "busybooks-format-bundle-opening-final.log",
+      "sha256": "a501548aacd24e0aa0a462e56a48fca050838a94d46b2d9c40fd0302f0e69523",
+      "bytes": 1811
+    },
+    {
+      "file": "busybooks-formats-linux-build-final.log",
+      "sha256": "c58e2c5eed3121ed241836b9413935db79258c7ff872dd4a441930123f5c14a3",
+      "bytes": 520
+    },
+    {
+      "file": "busybooks-format-mime-final.log",
+      "sha256": "22d21820d84e0b10934f9b1f30c6534aee71219dcc43a6376fdd858c5344c2b1",
+      "bytes": 345
+    },
+    {
+      "file": "busybooks-format-desktop-validation-final.log",
+      "sha256": "eba91c62589a56805eeea6f7f77c1ef2497752d6585d2b37a02b96b1d9b1e606",
+      "bytes": 205
+    },
+    {
+      "file": "busybooks-format-appstream-validation-final.log",
+      "sha256": "6c0565d7c39e8bb933da619c3865c9259c4c92c9d6642b313aadd664515fa24b",
+      "bytes": 31
+    },
+    {
+      "file": "busybooks-format-package-contents-final.json",
+      "sha256": "6002e4b2dc3534bf7a9f389da9fa96742917cf0a4dff10ff6ef8135300383693",
+      "bytes": 1121
+    },
+    {
+      "file": "busybooks-format-interactive-record.json",
+      "sha256": "2f2c423e8d9fa136d1eb82d12fa3b00088e7c57d170cc59c8ac00c9bf75b0480",
+      "bytes": 2672
+    }
+  ],
+  "postIndexBoundNativeProofs": [
+    {
+      "type": "formatProof",
+      "passed": true,
+      "checks": [
+        "all-pages-decoded",
+        "bounded-live-pages",
+        "jpeg-png-webp",
+        "rtl-ltr-spreads-zoom",
+        "region-keyboard-create-restore-hit-test-cancel",
+        "pan-through-regions",
+        "thumbnail",
+        "history",
+        "artwork-colors"
+      ],
+      "maximumLivePages": 2,
+      "pages": 7,
+      "navigationMedianMs": 19,
+      "navigationMaxMs": 36
+    },
+    {
+      "type": "formatProof",
+      "passed": true,
+      "checks": [
+        "all-pages-decoded",
+        "bounded-live-pages",
+        "jpeg-png-webp",
+        "rtl-ltr-spreads-zoom",
+        "region-keyboard-create-restore-hit-test-cancel",
+        "pan-through-regions",
+        "thumbnail",
+        "history",
+        "artwork-colors"
+      ],
+      "maximumLivePages": 2,
+      "pages": 7,
+      "navigationMedianMs": 7,
+      "navigationMaxMs": 28
+    },
+    {
+      "type": "formatProof",
+      "passed": true,
+      "checks": [
+        "all-pages-decoded",
+        "bounded-live-pages",
+        "jpeg-png-webp",
+        "rtl-ltr-spreads-zoom",
+        "region-keyboard-create-restore-hit-test-cancel",
+        "pan-through-regions",
+        "thumbnail",
+        "history",
+        "artwork-colors"
+      ],
+      "maximumLivePages": 2,
+      "pages": 120,
+      "navigationMedianMs": 35,
+      "navigationMaxMs": 73
+    }
+  ],
+  "interactiveScreenshotsNote": "Captured during the implementation and focus/popover fixes; final automated native checks rerun afterward"
+}

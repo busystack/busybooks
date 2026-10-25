@@ -1,5 +1,10 @@
 # Local font selection verification
 
+This document retains the typography work's historical results. The later
+format expansion changes two pinned Foliate files without changing its revision;
+its fresh native typography regressions and current vendor hashes are recorded
+in [format verification](format-verification.md) and `tools/vendor-manifest.json`.
+
 This change started at `96b7a14` on a clean `feat/busybooks` worktree. Repository
 instructions and the existing preferences, storage, reader, popover and backup
 paths were read before editing. No applicable AGENTS.md was present. Verification

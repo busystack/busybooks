@@ -343,19 +343,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       ),
                     ),
                   ],
-                  BusyBooksHeaderIconButton(
-                    tooltip: l.searchBook,
-                    shortcut: binding(BusyBooksCommandIds.search),
-                    icon: BusyBooksGlyphs.search,
-                    selected: state.searchVisible,
-                    onPressed: state.ready
-                        ? () =>
-                              registry[BusyBooksCommandIds.search]?.execute !=
-                                  null
-                              ? registry.execute(BusyBooksCommandIds.search)
-                              : runAppAction(context, _reader.toggleSearch)
-                        : null,
-                  ),
+                  if (_reader.textInteraction)
+                    BusyBooksHeaderIconButton(
+                      tooltip: l.searchBook,
+                      shortcut: binding(BusyBooksCommandIds.search),
+                      icon: BusyBooksGlyphs.search,
+                      selected: state.searchVisible,
+                      onPressed: state.ready && _reader.textInteraction
+                          ? () =>
+                                registry[BusyBooksCommandIds.search]?.execute !=
+                                    null
+                                ? registry.execute(BusyBooksCommandIds.search)
+                                : runAppAction(context, _reader.toggleSearch)
+                          : null,
+                    ),
                   BusyBooksMainMenuButton(
                     bookViewSelectorVisible: showViewSelector,
                   ),
@@ -400,8 +401,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   actionLabel: l.retry,
                   onAction: () async {
                     try {
-                      await _reader.close();
-                      await _reader.open(widget.id);
+                      await _reader.retry(widget.id);
                     } catch (e) {
                       if (context.mounted) await showError(context, e);
                     }
@@ -520,7 +520,7 @@ class _ReadingLocation extends ConsumerWidget {
         reader = ref.read(readerControllerProvider.notifier),
         l = context.l10n;
     final page = (state.location['anchor'] as Map?)?['page'] as int?;
-    final pdf = reader.book?.format == 'pdf';
+    final pdf = reader.book?.pageBased == true;
     final pageReference = pdf && page != null
         ? PublicationPageReference.pdf(page, state.pages, state.labels)
         : null;

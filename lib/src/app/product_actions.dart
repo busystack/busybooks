@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../workspace/workspace_model.dart';
 import '../notebook/application/notebook_controller.dart';
@@ -12,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../workspace/workspace_controller.dart';
 import '../library/domain/book.dart';
+import '../library/domain/book_format.dart';
 import '../reading/application/reader_controller.dart';
 import '../reading/application/narration_controller.dart';
 import 'app_settings.dart';
@@ -117,10 +119,26 @@ Future<String?> textPrompt(
   }
 }
 
-const bookFileTypes = XTypeGroup(
-  label: 'EPUB 3 / PDF',
-  extensions: ['epub', 'pdf'],
+final bookFileTypes = XTypeGroup(
+  label: 'EPUB / PDF / FB2 / CBZ / CBR',
+  // GTK's extension patterns are case sensitive. Use ordinary suffix variants
+  // so compound names remain visible without accepting generic ZIP/RAR files.
+  extensions: Platform.isLinux
+      ? [for (final suffix in bookSuffixes) ..._suffixCases(suffix)]
+      : bookSuffixes,
 );
+
+Iterable<String> _suffixCases(String suffix) sync* {
+  if (suffix.isEmpty) {
+    yield '';
+    return;
+  }
+  final first = suffix[0], rest = suffix.substring(1);
+  for (final tail in _suffixCases(rest)) {
+    yield '$first$tail';
+    if (first.toUpperCase() != first) yield '${first.toUpperCase()}$tail';
+  }
+}
 
 Future<void> _readerLocation(ProviderContainer container, String id) async {
   final router = container.read(appRouterProvider);
@@ -551,6 +569,12 @@ Future<void> unavailableFile(
               ? c.l10n.fileChangedHelp
               : error.code == 'unsupported'
               ? c.l10n.unsupportedTarget
+              : error.code == 'protected'
+              ? c.l10n.protectedBookHelp
+              : error.code == 'limit'
+              ? c.l10n.bookResourceLimitHelp
+              : error.code == 'damaged'
+              ? c.l10n.damagedBookHelp
               : c.l10n.locateBookHelp,
         ),
         SelectableText(error.toString()),
@@ -642,12 +666,12 @@ Future<void> exportBook(
       : null;
   final path = await getSaveLocation(
     suggestedName: original
-        ? '${book.title}.${book.format}'
+        ? '${book.title}.${book.originalSuffix}'
         : '${book.title}.md',
     acceptedTypeGroups: [
       XTypeGroup(
         label: original ? book.format : 'Markdown',
-        extensions: [original ? book.format : 'md'],
+        extensions: [original ? book.originalSuffix : 'md'],
       ),
     ],
   );

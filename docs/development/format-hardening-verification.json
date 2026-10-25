@@ -1,0 +1,275 @@
+{
+  "date": "2026-10-24T11:06:05.887355+00:00",
+  "status": "F18-F22 confirmed and corrected; all recorded checks passed",
+  "checkout": "/mnt/Media/busystack/busybooks",
+  "branch": "feature/book-formats",
+  "implementationCommit": "22bc1b760f31f069a55b08e9dfc575745c98df23",
+  "findings": [
+    {
+      "id": "F18",
+      "priority": "P1",
+      "status": "fixed",
+      "correction": "EPUB inspection reads bounded metadata from a file-backed ZIP directory. Cache extraction streams one resource at a time with backpressure, CRC, SHA-256 and actual-size checks, without retaining compressed book bytes or a decompressed Archive."
+    },
+    {
+      "id": "F19",
+      "priority": "P1",
+      "status": "fixed",
+      "correction": "PDF native resources use a SHA-256-verified content-addressed snapshot. Preparation returns the final verified source instance and stat. Watching starts before native opening and always polls physical identity, size, modification and change times alongside native events."
+    },
+    {
+      "id": "F20",
+      "priority": "P2",
+      "status": "fixed",
+      "correction": "Large events and commands use bounded session-owned transfers. Normal commands retain immediate delivery; multi-frame transfers own the channel until complete. Locations omit passage text, new PDF segments store UTF-16 length, and legacy text-bearing anchors remain valid. Incomplete transfers and explicit native bridge errors fail flushing."
+    },
+    {
+      "id": "F21",
+      "priority": "P2",
+      "status": "fixed",
+      "correction": "Cache resource digests, sealed indices, exact physical file sets and format-specific descriptor closure are checked before reuse. Fetch-time WebCrypto verifies resource digests again. The first renderer cache/resource parsing failure forces one regeneration; manual Retry also forces rebuilding. Encoded EPUB paths are decoded once after resolving path and fragment components."
+    },
+    {
+      "id": "F22",
+      "priority": "P2",
+      "status": "fixed",
+      "correction": "Geometry and EXIF share one bounded JPEG marker iterator, including repeated marker fill and standalone markers. Comic orientation and centered landscape classification agree with native decoding."
+    }
+  ],
+  "verification": {
+    "flutterTests": {
+      "command": "flutter test --no-pub --reporter expanded",
+      "passed": 375,
+      "skipped": 1
+    },
+    "analyzer": {
+      "command": "flutter analyze --no-pub",
+      "result": "No issues found"
+    },
+    "format": {
+      "command": "dart format --output=none --set-exit-if-changed lib test tools",
+      "files": 145,
+      "changed": 0
+    },
+    "linuxBuild": {
+      "command": "flutter build linux --release --no-pub",
+      "result": "passed",
+      "bundledReaderAssetsMatchSource": true,
+      "readerAssetSha256": {
+        "assets/reader/reader.js": "c3e7bb8a1b3fb4e4721f7a320ab1476c5a73042e53b730140cbc270cfa2bf896",
+        "assets/reader/prepared_book.mjs": "887dea568ecadb8be42c3f0c72e33919ef4b23ce28f000f649234c238639cae5",
+        "assets/reader/comic_book.mjs": "46c51fa066f601bc5612ce4441d21d94e6c993684a8632a1187f83b7d4507461"
+      }
+    },
+    "javascript": {
+      "command": "node tools/reader_logic_probe.mjs",
+      "result": "passed",
+      "scope": "Controlled actual-adapter APIs, navigation/flush ordering, large Unicode events and legacy goto commands, cache-error propagation, same-length fetched-resource corruption, search/CFI/fixed-layout/typography behavior"
+    },
+    "formatDataAndBackup": {
+      "command": "BUSYBOOKS_COMIC_DECODER=<bundled decoder> dart run tools/format_probe.dart",
+      "checks": 153,
+      "result": "passed"
+    },
+    "cacheNames": {
+      "command": "dart run tools/cache_probe.dart",
+      "resources": 4,
+      "result": "passed"
+    },
+    "nativeSmoke": {
+      "command": "bash tools/probe_linux_engines.sh",
+      "fixtures": 20,
+      "result": "passed",
+      "scope": "Actual WebKitGTK reader: EPUB 2/3, fixed EPUB, KEPUB, FB2 and ZIP wrappers, text/image PDFs, CBZ, RAR4/RAR5 stored/compressed/solid; PDF requests use verified snapshots"
+    },
+    "previousNativeRegressions": {
+      "command": "bash tools/probe_review_corrections.sh",
+      "proofs": [
+        {
+          "type": "formatProof",
+          "passed": true,
+          "checks": [
+            "encoded-filenames-and-fragments",
+            "svg-href-and-xlink-images",
+            "footnote-same-chapter-cross-reference",
+            "inline-search-excerpt"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "passed": true,
+          "checks": [
+            "epub2-ncx-encoded-paths-and-fragments"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "passed": true,
+          "checks": [
+            "encoded-filenames-and-fragments",
+            "svg-href-and-xlink-images",
+            "footnote-same-chapter-cross-reference",
+            "inline-search-excerpt"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "passed": true,
+          "checks": [
+            "fb2-encoded-image",
+            "footnote-same-chapter-cross-reference",
+            "inline-search-excerpt"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "passed": true,
+          "checks": [
+            "fb2-encoded-image",
+            "footnote-same-chapter-cross-reference",
+            "inline-search-excerpt"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "passed": true,
+          "checks": [
+            "consecutive-centered-comic-pages",
+            "companion-pan-round-trip",
+            "comic-flush-awaits-page-load"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "passed": true,
+          "checks": [
+            "pdf-two-axis-position",
+            "pdf-spread-first-boundary",
+            "pdf-relative-command-order",
+            "pdf-resize-navigation-order"
+          ]
+        }
+      ],
+      "expectedFirstDocumentRejection": true
+    },
+    "webkitHardening": {
+      "command": "bash tools/probe_format_hardening.sh",
+      "proofs": [
+        {
+          "type": "formatProof",
+          "session": "probe",
+          "passed": true,
+          "checks": [
+            "F20-native-large-selection-frames",
+            "F20-on-demand-narration",
+            "F20-compact-flushed-location"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "session": "probe",
+          "passed": true,
+          "checks": [
+            "F20-native-large-selection-frames",
+            "F20-on-demand-narration",
+            "F20-compact-flushed-location"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "session": "probe",
+          "passed": true,
+          "checks": [
+            "F19-verified-pdf-snapshot-renders",
+            "F20-compact-pdf-selection",
+            "F20-native-large-selection-frames",
+            "F20-on-demand-narration",
+            "F20-compact-flushed-location"
+          ]
+        },
+        {
+          "type": "formatProof",
+          "session": "probe",
+          "passed": true,
+          "checks": [
+            "F22-oriented-marker-fill-comic"
+          ]
+        }
+      ],
+      "scope": "Actual DOM selections, native bounded frames, narration, compact locations, source replacement after PDF preparation and before resource fetch, EXIF-oriented JPEG rendering"
+    },
+    "chromiumHardening": {
+      "command": "BUSYBOOKS_REVIEW_PROOF=tools/hardening_native_proof.js node tools/probe_chromium_format_review.mjs <reflowable.epub> fiction-utf8.fb2 <text.pdf> orientation6-fill.cbz",
+      "proofs": [
+        {
+          "engine": "Chromium",
+          "fixture": "/mnt/Media/busystack/busybooks/test/fixtures/reflowable.epub",
+          "passed": true,
+          "checks": [
+            "F20-native-large-selection-frames",
+            "F20-on-demand-narration",
+            "F20-compact-flushed-location"
+          ]
+        },
+        {
+          "engine": "Chromium",
+          "fixture": "fiction-utf8.fb2",
+          "passed": true,
+          "checks": [
+            "F20-native-large-selection-frames",
+            "F20-on-demand-narration",
+            "F20-compact-flushed-location"
+          ]
+        },
+        {
+          "engine": "Chromium",
+          "fixture": "/mnt/Media/busystack/busybooks/test/fixtures/text.pdf",
+          "passed": true,
+          "checks": [
+            "F19-verified-pdf-snapshot-renders",
+            "F20-compact-pdf-selection",
+            "F20-native-large-selection-frames",
+            "F20-on-demand-narration",
+            "F20-compact-flushed-location"
+          ]
+        },
+        {
+          "engine": "Chromium",
+          "fixture": "orientation6-fill.cbz",
+          "passed": true,
+          "checks": [
+            "F22-oriented-marker-fill-comic"
+          ]
+        }
+      ],
+      "scope": "Actual DOM selections, bounded native frames, narration, compact locations, verified snapshot resource serving and EXIF-oriented JPEG rendering; original replacement is exercised separately in the WebKit and real-store/controller tests"
+    },
+    "epubMemory": {
+      "commands": [
+        "python3 tools/make_hardening_fixtures.py --expansion /tmp/busybooks-f18-expansion.epub",
+        "dart compile exe tools/probe_streamed_epub.dart -o /tmp/busybooks-streamed-epub-probe",
+        "/tmp/busybooks-streamed-epub-probe /tmp/busybooks-f18-expansion.epub"
+      ],
+      "result": {
+        "status": "passed",
+        "compressedBytes": 265198,
+        "expandedBytes": 268438249,
+        "baselineRss": 15044608,
+        "peakRss": 27512832,
+        "growthBytes": 12468224,
+        "osMaxRss": 26755072,
+        "scope": "Actual inspection and cache extraction, 256 MiB expansion, sampled process RSS; no whole-book retained bytes"
+      },
+      "measurementNotes": "Standalone compiled worker paths, after a small-publication warm-up. Reports process RSS and OS high-water mark; does not claim a total Flutter/browser application RSS bound."
+    }
+  },
+  "fixture": {
+    "path": "test/fixtures/formats/orientation6-fill.cbz",
+    "sha256": "8ee275956f0d1da703742cad3adb532303e2c82949fec16f98d3b1431939ec6a",
+    "generator": "tools/make_hardening_fixtures.py",
+    "provenance": "Independent CC0 reproduction of the review case: 600x900 JPEG, EXIF orientation 6, marker fill, and an additional standalone TEM marker. The review sandbox attachments were not mounted in this checkout."
+  },
+  "platformLimitations": [
+    "Windows host code was updated and reviewed. Windows compilation and WebView2 runtime execution were unavailable in this Linux environment."
+  ]
+}

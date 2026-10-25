@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libhandy-1-dev libwebkit2gtk-4.1-dev libspeechd2 speech-dispatcher-espeak-ng libxtst6 xvfb dbus-x11
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libhandy-1-dev libwebkit2gtk-4.1-dev libspeechd2 speech-dispatcher-espeak-ng libxtst6 libxml2-utils xvfb dbus-x11
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -15,15 +15,37 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test tools
       - run: flutter analyze
       - run: flutter test
+      - name: Validate normative EPUB 2 fixtures
+        run: |
+          curl --fail --location https://github.com/w3c/epubcheck/releases/download/v5.4.0/epubcheck-5.4.0.zip --output "$RUNNER_TEMP/epubcheck.zip"
+          printf '%s  %s\n' 33350c61038e71dfb3d45a76aed04bf5481e6d5500cb780f6e98db8bbd15a28c "$RUNNER_TEMP/epubcheck.zip" | sha256sum --check -
+          unzip -q "$RUNNER_TEMP/epubcheck.zip" -d "$RUNNER_TEMP/epubcheck"
+          python3 tools/check_epub2_fixtures.py "$RUNNER_TEMP/epubcheck/epubcheck-5.4.0/epubcheck.jar"
       - run: dart run tools/storage_probe.dart
       - run: dart run tools/move_volume_probe.dart /tmp /dev/shm
       - run: dart run tools/cache_probe.dart
       - run: dart run tools/annotation_order_probe.dart
       - run: flutter build linux --release
+      - run: python3 tools/probe_linux_mime.py build/linux/x64/release/bundle/share/mime
+      - run: python3 tools/qualify_rar.py build/linux/x64/release/bundle/busybooks_comic_archive
+      - run: dart run tools/format_probe.dart
+        env:
+          BUSYBOOKS_COMIC_DECODER: ${{ github.workspace }}/build/linux/x64/release/bundle/busybooks_comic_archive
+      - run: dart run tools/format_resources_probe.dart
+        env:
+          BUSYBOOKS_COMIC_DECODER: ${{ github.workspace }}/build/linux/x64/release/bundle/busybooks_comic_archive
       - run: node tools/reader_logic_probe.mjs
       - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_input.sh
       - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_engines.sh
       - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_typography.sh
+      - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_formats.sh
+        env:
+          BUSYBOOKS_COMIC_DECODER: ${{ github.workspace }}/build/linux/x64/release/bundle/busybooks_comic_archive
+      - run: xvfb-run -a dbus-run-session -- bash tools/probe_linux_format_review.sh
+      - name: Chromium format review
+        run: |
+          if [ -x /usr/bin/google-chrome ]; then node --experimental-websocket tools/probe_chromium_format_review.mjs; fi
+      - run: xvfb-run -a dbus-run-session -- python3 tools/probe_linux_opening.py
       - uses: actions/upload-artifact@v6
         with:
           name: busybooks-linux-release
@@ -44,6 +66,13 @@ jobs:
       - run: dart run tools/cache_probe.dart
       - run: dart run tools/annotation_order_probe.dart
       - run: flutter build windows --release
+      - run: python tools/qualify_rar.py build/windows/x64/runner/Release/busybooks_comic_archive.exe
+      - run: dart run tools/format_probe.dart
+        env:
+          BUSYBOOKS_COMIC_DECODER: ${{ github.workspace }}\build\windows\x64\runner\Release\busybooks_comic_archive.exe
+      - run: dart run tools/format_resources_probe.dart
+        env:
+          BUSYBOOKS_COMIC_DECODER: ${{ github.workspace }}\build\windows\x64\runner\Release\busybooks_comic_archive.exe
       - run: cmake -S tools/native_font_probe -B build/native-font-probe
       - run: cmake --build build/native-font-probe --config Release
       - run: ./build/native-font-probe/Release/busybooks_native_font_probe.exe

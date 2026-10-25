@@ -3,18 +3,21 @@
   "pdfjsVersion": "5.5.207",
   "pdfjsRevision": "527964698",
   "modifiedVendorFiles": [
-    "assets/reader/vendor/foliate/fixed-layout.js"
+    "assets/reader/vendor/foliate/epub.js",
+    "assets/reader/vendor/foliate/fixed-layout.js",
+    "assets/reader/vendor/foliate/paginator.js",
+    "assets/reader/vendor/foliate/search.js"
   ],
   "sha256": {
     "assets/reader/vendor/foliate/LICENSE": "e1f89c849cd60c2a9beb044784a30a2d6e11813800d44099915fcd9eca63dfe4",
     "assets/reader/vendor/foliate/README.md": "05cac7af6cb29881708883997b8b5f91924b85b595ed098ae0b6ef5b8afaea63",
-    "assets/reader/vendor/foliate/epub.js": "c19fe950a696e20c0f9ba1bd255d6609f41986ea06b8c45b91f6304a6297dcfb",
+    "assets/reader/vendor/foliate/epub.js": "0f69ae0c84586c907cf027fa9cf62276aa02d8c25cc2409948237f6306d1dc77",
     "assets/reader/vendor/foliate/epubcfi.js": "a95b746fa484590691ea9d82f520ac079773584e243b9bd910aaa3b2c8f00a06",
-    "assets/reader/vendor/foliate/fixed-layout.js": "59f9f8c853044b7949507864659c1848c11ee9354f1e3eb3ebf414143db7be19",
+    "assets/reader/vendor/foliate/fixed-layout.js": "1eca49a8da69707b079c96b7261efb8f3a91e6b519ba693b3b51f7280751098e",
     "assets/reader/vendor/foliate/overlayer.js": "5377b9c1c7840e00d1df886913d4b295a7db10e0f52107aa320292612a4cafec",
-    "assets/reader/vendor/foliate/paginator.js": "30754962d6dd1f2d5ddec4216d889ea9eb4cf1dfe84b8e2ddc1aa3efcc8d7c4b",
+    "assets/reader/vendor/foliate/paginator.js": "aff9fe1e1a08727171123d36ac74ba152c5355da437d1eddc8178160fee3fc8b",
     "assets/reader/vendor/foliate/progress.js": "84b0bbd3bc5b036d24cb54e6b0bf4f9c5393bab319cee37d00d71d6b2e10a2a7",
-    "assets/reader/vendor/foliate/search.js": "f29c0d671b5ac2385845da43103d25cf1e49a60a4dc14b5f826d2444cd01c86b",
+    "assets/reader/vendor/foliate/search.js": "8f4cdd61263904e01b23fe203f297b211aec34645d1594b471a2d8bab65ab074",
     "assets/reader/vendor/foliate/text-walker.js": "1112fee10fb142d3740d604ace067b39424b46e85c2b6447f6dcb3c28c8be3e2",
     "assets/reader/vendor/foliate/tts.js": "c80c7d0baabbc810fcfd482185672bcd9320a21ce4b0acaaa0f69359d9bb5b06",
     "assets/reader/vendor/foliate/view.js": "52a2cc975d54d25852b5f3b75f220dd0058d551478c72b0bd0d57b282aa99569",
@@ -219,6 +222,13 @@
     "assets/reader/vendor/pdfjs/wasm/jbig2.wasm": "e6bee67724a7b5436fe8162638e3708cfc8d52b6342db69a49715e30ff27cfdc",
     "assets/reader/vendor/pdfjs/wasm/openjpeg.wasm": "67b8e2b162da472e98cb48d3d32e3e38fff481b9b32ff4818e78bb248af88ab2",
     "assets/reader/vendor/pdfjs/wasm/openjpeg_nowasm_fallback.js": "07c3c3361827308741bc31c561b59e705ebb4d1e8efb84e4d24884e230dbb894",
-    "assets/reader/vendor/pdfjs/wasm/qcms_bg.wasm": "6017eca5939cde1836e88e6d8cd27ae039246f206515ea4487bdfd0e3fb16e26"
-  }
+    "assets/reader/vendor/pdfjs/wasm/qcms_bg.wasm": "6017eca5939cde1836e88e6d8cd27ae039246f206515ea4487bdfd0e3fb16e26",
+    "native/vendor/unrar/license.txt": "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a",
+    "native/vendor/unrar/unrarsrc-7.2.6.tar.gz": "d1afa67ef4121ebc5986815699e05db0ce8648499e5dca854f282a4c3f72c003",
+    "native/vendor/unrar/acknow.txt": "6aa07945033641cc693aa4a2ab3404c68c1e39acc0c672293aad4d4c290102fc",
+    "native/vendor/unrar/README.md": "6ae53c2a8e39a3d13ed4b6c9966499ce014421f79c53ca3f162bb109c732c6c5"
+  },
+  "unrarVersion": "7.21",
+  "unrarSource": "https://www.rarlab.com/rar/unrarsrc-7.2.6.tar.gz",
+  "unrarLicense": "UnRAR (RAR decoding and redistribution permitted; RAR-compatible compression prohibited)"
 }

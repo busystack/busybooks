@@ -6,10 +6,10 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <developer id="io.busystack"><name>BusyStack</name></developer>
-  <description><p>Open DRM-free EPUB 3 and PDF files directly, organize named database collections, and read offline. Review and edit saved passages and private notes in Notebook, even when originals are unavailable. Back up reading data and collections without duplicating original books.</p></description>
+  <description><p>Open DRM-free EPUB 2/3, PDF, FB2 and CBZ/CBR comic files directly, organize named database collections, and read offline. Review and edit saved passages, page and region notes in Notebook, even when originals are unavailable. Back up reading data and collections without duplicating original books.</p></description>
   <launchable type="desktop-id">io.busystack.busybooks.desktop</launchable>
   <url type="homepage">https://github.com/busystack/busybooks</url>
-  <provides><binary>busybooks</binary><mediatype>application/epub+zip</mediatype><mediatype>application/pdf</mediatype></provides>
+  <provides><binary>busybooks</binary><mediatype>application/epub+zip</mediatype><mediatype>application/pdf</mediatype><mediatype>application/x-fictionbook+xml</mediatype><mediatype>application/x-zip-compressed-fb2</mediatype><mediatype>application/vnd.comicbook+zip</mediatype><mediatype>application/vnd.comicbook-rar</mediatype></provides>
   <supports><control>pointing</control><control>keyboard</control></supports>
   <requires><display_length compare="ge">800</display_length></requires>
   <content_rating type="oars-1.1"/>

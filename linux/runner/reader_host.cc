@@ -12,6 +12,7 @@
 struct BusyBooksReaderHost {
   BusyBooksReaderSurface* surface;
   ReaderPopover* popover = nullptr;
+  GtkWidget* chrome = nullptr;
   WebKitWebView* web = nullptr;
   WebKitWebContext* context;
   FlMethodChannel* channel;
@@ -22,7 +23,12 @@ struct BusyBooksReaderHost {
   std::string session;
 };
 static void emit(BusyBooksReaderHost* host, const char* json, std::size_t limit = 1048576) {
-  if (!host->channel || !json || strlen(json) > limit) return;
+  if (!host->channel || !json) return;
+  if (strlen(json) > limit) {
+    const std::string error="{\"type\":\"bridgeError\",\"session\":\""+host->session+"\",\"direction\":\"event\",\"message\":\"Reader bridge frame limit exceeded\"}";
+    emit(host,error.c_str());
+    return;
+  }
   g_autoptr(FlValue) arg = fl_value_new_string(json);
   fl_method_channel_invoke_method(host->channel, "event", arg, nullptr, nullptr, nullptr);
 }
@@ -124,11 +130,11 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
     if(gtk_widget_get_mapped(widget)&&GTK_IS_WINDOW(window)&&gtk_window_is_active(GTK_WINDOW(window)))gtk_widget_grab_focus(widget);
   } else if (strcmp(name, "open") == 0) {
     h->popover->Hide();
-    auto* path_value = args && fl_value_get_type(args)==FL_VALUE_TYPE_MAP ? fl_value_lookup_string(args,"path") : nullptr;
+    auto* path_value = args && fl_value_get_type(args)==FL_VALUE_TYPE_MAP ? fl_value_lookup_string(args,"publicationPath") : nullptr;
     auto* cache_value = args && fl_value_get_type(args)==FL_VALUE_TYPE_MAP ? fl_value_lookup_string(args,"cacheDirectory") : nullptr;
     const char* path = path_value && fl_value_get_type(path_value)==FL_VALUE_TYPE_STRING ? fl_value_get_string(path_value) : nullptr;
     const char* cache = cache_value && fl_value_get_type(cache_value)==FL_VALUE_TYPE_STRING ? fl_value_get_string(cache_value) : nullptr;
-    if (!path || !cache || !g_path_is_absolute(path) || !g_path_is_absolute(cache)) { fl_method_call_respond_error(method,"reader-path","Absolute original and cache paths are required",nullptr,nullptr);return; }
+    if (!path || !cache || !g_path_is_absolute(path) || !g_path_is_absolute(cache)) { fl_method_call_respond_error(method,"reader-path","Absolute publication and cache paths are required",nullptr,nullptr);return; }
     h->publication=path; h->cache_directory=cache;
     auto* session_value=fl_value_lookup_string(args,"session");
     const char* session=session_value&&fl_value_get_type(session_value)==FL_VALUE_TYPE_STRING?fl_value_get_string(session_value):"";
@@ -143,11 +149,24 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
     h->popover->Hide();
     h->surface->SetBounds(number("x"),number("y"),number("width"),number("height"));
   } else if (strcmp(name,"visible") == 0) {
-    if (!fl_value_get_bool(args)) h->popover->Hide();
-    h->surface->SetVisible(fl_value_get_bool(args));
+    const bool visible = fl_value_get_bool(args);
+    if (!visible) h->popover->Hide();
+    h->surface->SetVisible(visible);
+    // WebKit may retain GTK keyboard ownership after it is hidden for Notebook
+    // or a Flutter dialog. Return it to the owning main view, without activating
+    // an inactive application or focusing a transient editor.
+    if (!visible && gtk_widget_get_mapped(h->chrome)) {
+      auto* window = gtk_widget_get_toplevel(h->chrome);
+      if (GTK_IS_WINDOW(window) && gtk_window_is_active(GTK_WINDOW(window)))
+        gtk_widget_grab_focus(h->chrome);
+    }
   } else if (strcmp(name,"dispatch") == 0) {
     const char* json=fl_value_get_string(args);
-    if (!json || strlen(json)>1048576) {fl_method_call_respond_error(method,"reader-message","Invalid message",nullptr,nullptr);return;}
+    if (!json || strlen(json)>1048576) {
+      const std::string error="{\"type\":\"bridgeError\",\"session\":\""+h->session+"\",\"direction\":\"command\",\"message\":\"Reader bridge frame limit exceeded\"}";
+      emit(h,error.c_str());
+      fl_method_call_respond_error(method,"reader-bridge-limit","Reader bridge frame limit exceeded",nullptr,nullptr);return;
+    }
     std::string script="window.busybooks?.dispatch("+std::string(json)+")";
     webkit_web_view_evaluate_javascript(h->web,script.c_str(),-1,nullptr,nullptr,nullptr,nullptr,nullptr);
   } else if (strcmp(name,"close") == 0) {
@@ -160,10 +179,12 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
 }
 BusyBooksReaderHost* busybooks_reader_host_new(GtkWidget* overlay, FlView* view) {
   auto* h=new BusyBooksReaderHost{};
+  h->chrome=GTK_WIDGET(g_object_ref(view));
   g_autofree char* exe=g_file_read_link("/proc/self/exe",nullptr);
   g_autofree char* dir=g_path_get_dirname(exe);
   h->assets=std::string(dir)+"/data/flutter_assets/assets/reader";
   h->context=webkit_web_context_new_ephemeral();
+  webkit_web_context_set_cache_model(h->context,WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
   webkit_web_context_register_uri_scheme(h->context,"busybooks",scheme,h,nullptr);
   auto* security=webkit_web_context_get_security_manager(h->context);
   webkit_security_manager_register_uri_scheme_as_secure(security,"busybooks");
@@ -201,5 +222,6 @@ void busybooks_reader_host_free(BusyBooksReaderHost* h) {
   delete h->surface;
   fl_method_channel_set_method_call_handler(h->fonts,nullptr,nullptr,nullptr);
   g_clear_object(&h->fonts);
+  g_clear_object(&h->chrome);
   g_clear_object(&h->channel);g_clear_object(&h->context);delete h;
 }

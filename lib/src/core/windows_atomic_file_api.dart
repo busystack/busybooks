@@ -41,6 +41,7 @@ final class WindowsAtomicFileApi {
     String staged,
     String target, {
     required bool overwrite,
+    void Function()? beforePublish,
     Future<bool> Function(String)? acceptReplaced,
   }) async {
     final source = staged.toNativeUtf16(),
@@ -58,6 +59,7 @@ final class WindowsAtomicFileApi {
         }
       }
       if (overwrite && acceptReplaced != null && await File(target).exists()) {
+        beforePublish?.call();
         if (_replace(dest, source, backup, 0, nullptr, nullptr) == 0) {
           throw FileSystemException(
             'Atomic replacement failed',
@@ -85,6 +87,7 @@ final class WindowsAtomicFileApi {
       // MOVEFILE_WRITE_THROUGH; omission of REPLACE_EXISTING is a kernel-enforced
       // no-replace operation, including the final collision window.
       final flags = 8 | (overwrite && acceptReplaced == null ? 1 : 0);
+      beforePublish?.call();
       if (_move(source, dest, flags) == 0) {
         final code = _error();
         if (code == 80 || code == 183) {

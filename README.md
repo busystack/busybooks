@@ -4,16 +4,17 @@ A book reader for Linux and Windows.
 
 Features:
 
-- **Open Book** reads an original EPUB/PDF directly from its filesystem location.
+- **Open Book** reads original PDF, EPUB 2/3, FB2, CBZ and CBR files directly.
+  FB2 accepts `.fb2`, `.fb2.zip` and `.fbz`; DRM-free `.kepub.epub` uses the EPUB reader.
 - **Create Collection** asks for a name and opens a database collection.
 - **Open Collection** lists every saved collection, including those outside Recent.
 - **Recent** contains books and collections by stable identity.
 - **Notebook** reviews and edits a book's saved passages, bookmarks and private
-  notes, including while the original file is unavailable.
+  notes, including comic page/region notes and while the original is unavailable.
 - **Move Book** moves the selected original with a recoverable journal;
   **Locate Book** reconnects matching content without moving it.
 - **Backup & Restore Reading Data** includes collections and application-owned
-  data. Original EPUB/PDF files are excluded.
+  data. Original books and disposable rendering resources are excluded.
 
 A book can belong to multiple collections or none. Positions, annotations and
 appearance follow its SHA-256 identity. Collection removal leaves original files
@@ -22,11 +23,14 @@ and reading data intact. There are no filesystem collection workspaces or import
 ## Build and run
 
 Use official Flutter **3.47.5**, its bundled Dart SDK and the checked-in lockfile.
-Linux build dependencies: clang, CMake, Ninja, pkg-config, GTK 3 development
+Linux build dependencies: clang, CMake, Ninja, pkg-config, shared-mime-info, GTK 3 development
 headers, libhandy 1 development headers and WebKitGTK 4.1 development headers.
 Local typography also uses PangoCairo/PangoFc 1.48+ and Fontconfig 2.13+ development
 libraries (included by the GTK development dependencies on Ubuntu 24.04).
 Runtime: GTK 3, libhandy 1, WebKitGTK 4.1, SQLite 3 and bundled Flutter libraries.
+The bundled RAR-only helper is built from pinned UnRAR source; no external
+`unrar` command or runtime decoder download is needed. Its redistribution license
+and acknowledgements ship under `share/licenses/unrar`.
 Install `libspeechd2`, `speech-dispatcher` and an offline voice such as
 `speech-dispatcher-espeak-ng` for read-aloud. Use current WebKit security updates.
 
@@ -43,10 +47,13 @@ dart run tools/annotation_order_probe.dart
 node tools/reader_logic_probe.mjs
 bash tools/probe_linux_typography.sh
 flutter build linux --release
+BUSYBOOKS_COMIC_DECODER="$PWD/build/linux/x64/release/bundle/busybooks_comic_archive" dart run tools/format_probe.dart
+bash tools/probe_linux_formats.sh
+bash tools/probe_linux_format_review.sh
 BUSYBOOKS_PROFILE="$(mktemp -d /tmp/busybooks-demo-XXXXXX)" build/linux/x64/release/bundle/busybooks test/fixtures/reflowable.epub
 ```
 
-Run without a path for Home. Supply an EPUB/PDF file as a launch argument.
+Run without a path for Home. Supply a supported book file as a launch argument.
 Open saved collections inside BusyBooks. Keep the whole Linux bundle together. `BUSYBOOKS_PROFILE`
 must be absolute; omit it to use BusyBooks' own application-support directory.
 Use disposable profiles and fixture books for testing. Windows instructions are
@@ -75,5 +82,7 @@ reading-data database. See [storage.md](docs/development/storage.md).
 - [Reading workspace controls and native popovers](docs/development/reading-workspace.md)
 - [Shared typography and local fonts](docs/development/typography.md)
 - [Reader engines and content boundary](docs/development/readers.md)
+- [Format profiles, limits and executed verification](docs/development/format-verification.md)
+- [Format review corrections and regression evidence](docs/development/format-review-verification.md)
 - [Books, database collections, backup and recovery](docs/development/storage.md)
-- [Third-party sources](NOTICE) and licenses under `assets/reader/vendor`
+- [Third-party sources](NOTICE) and licenses under `assets/reader/vendor` and `native/vendor`
