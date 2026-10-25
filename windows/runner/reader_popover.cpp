@@ -191,9 +191,9 @@ void ReaderPopover::Hide() {
     auto presentation = map->find(EncodableValue("presentation"));
     if (session != map->end() && presentation != map->end()) {
       const auto* text = std::get_if<std::string>(&session->second);
-      const auto* small = std::get_if<int32_t>(&presentation->second);
-      const auto* large = std::get_if<int64_t>(&presentation->second);
-      if (text && (small || large)) event_(ReaderPopoverHiddenEvent(*text, small ? *small : *large));
+      const auto* presentation32 = std::get_if<int32_t>(&presentation->second);
+      const auto* presentation64 = std::get_if<int64_t>(&presentation->second);
+      if (text && (presentation32 || presentation64)) event_(ReaderPopoverHiddenEvent(*text, presentation32 ? *presentation32 : *presentation64));
     }
   }
 }

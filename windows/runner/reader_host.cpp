@@ -9,7 +9,16 @@
 #include <shellapi.h>
 #include <sapi.h>
 #include <dwmapi.h>
+// The SDK's SAPI helper definitions still call GetVersionExW internally.
+// Isolate that external-header deprecation; application warnings stay fatal.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
 #include <sphelper.h>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 #include <filesystem>
 #include <vector>
 #include <algorithm>
@@ -40,7 +49,7 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
     if(name=="surface"){
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       auto color=map?field(*map,"canvas"):nullptr;
-      if(color){if(auto v=std::get_if<int64_t>(color))background_=static_cast<uint32_t>(*v);else if(auto v=std::get_if<int32_t>(color))background_=static_cast<uint32_t>(*v);}
+      if(color){if(auto color64=std::get_if<int64_t>(color))background_=static_cast<uint32_t>(*color64);else if(auto color32=std::get_if<int32_t>(color))background_=static_cast<uint32_t>(*color32);}
       Microsoft::WRL::ComPtr<ICoreWebView2Controller2> themed;
       if(controller_&&SUCCEEDED(controller_.As(&themed)))themed->put_DefaultBackgroundColor({255,static_cast<BYTE>(background_>>16),static_cast<BYTE>(background_>>8),static_cast<BYTE>(background_)});
     }else if(name=="popoverResult"){

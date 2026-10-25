@@ -16,6 +16,11 @@ set(unrar_objects rar strlist strfn pathfn smallfn global file filefn filcreat
   rdwrfn consio options errhnd rarvm secpassword rijndael getbits sha1 sha256
   blake2s hash extinfo extract volume list find unpack headers threadpool rs16
   cmddata ui largepage filestr scantree dll qopen)
+# The Unix makefile omits these Windows implementations. RARDLL still needs
+# native version detection and Mark of the Web support on Windows.
+if(WIN32)
+  list(APPEND unrar_objects isnt motw)
+endif()
 set(unrar_sources)
 foreach(source IN LISTS unrar_objects)
   list(APPEND unrar_sources "${unrar}/${source}.cpp")

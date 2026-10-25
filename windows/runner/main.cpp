@@ -15,10 +15,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   SetCurrentProcessExplicitAppUserModelID(L"io.busystack.busybooks");
   wchar_t profile[32768]{};GetEnvironmentVariableW(L"BUSYBOOKS_PROFILE",profile,32768);
-  std::wstring instance=L"io.busystack.busybooks.instance."+std::to_wstring(std::hash<std::wstring>{}(profile));
-  HANDLE mutex=CreateMutexW(nullptr,FALSE,instance.c_str());
+  std::wstring instance_name=L"io.busystack.busybooks.instance."+std::to_wstring(std::hash<std::wstring>{}(profile));
+  HANDLE mutex=CreateMutexW(nullptr,FALSE,instance_name.c_str());
   if(mutex&&GetLastError()==ERROR_ALREADY_EXISTS){
-    std::pair<const wchar_t*,HWND> found{instance.c_str(),nullptr};
+    std::pair<const wchar_t*,HWND> found{instance_name.c_str(),nullptr};
     for(int attempt=0;attempt<50&&!found.second;attempt++){EnumWindows(find_instance,reinterpret_cast<LPARAM>(&found));if(!found.second)Sleep(100);}
     if(!found.second){CloseHandle(mutex);return EXIT_FAILURE;}
     int count=0;auto** argv=CommandLineToArgvW(GetCommandLineW(),&count);
@@ -49,7 +49,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (!window.Create(L"BusyBooks", origin, size)) {
     return EXIT_FAILURE;
   }
-  SetPropW(window.GetHandle(),instance.c_str(),reinterpret_cast<HANDLE>(1));
+  SetPropW(window.GetHandle(),instance_name.c_str(),reinterpret_cast<HANDLE>(1));
   window.SetQuitOnClose(true);
 
   ::MSG msg;
