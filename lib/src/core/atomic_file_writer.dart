@@ -42,6 +42,7 @@ class AtomicFileWriter {
     List<int> bytes, {
     required bool overwrite,
     FutureOr<void> Function()? beforePublish,
+    void Function(String target)? validateTarget,
     Future<void> Function(File)? writeStaged,
     FutureOr<bool> Function(String replacedPath)? acceptReplaced,
   }) async {
@@ -75,6 +76,7 @@ class AtomicFileWriter {
           stagedFile.path,
           absoluteTarget,
           overwrite: overwrite,
+          beforePublish: () => validateTarget?.call(absoluteTarget),
           acceptReplaced: acceptReplaced == null
               ? null
               : (path) async => await acceptReplaced(path),
@@ -98,6 +100,7 @@ class AtomicFileWriter {
         }
         if (acceptReplaced != null) {
           if (targetType == FileSystemEntityType.notFound) {
+            validateTarget?.call(absoluteTarget);
             final errorNumber = LinuxAtomicFileApi.instance.publishNoReplace(
               stagedFile.absolute.path,
               absoluteTarget,
@@ -119,6 +122,7 @@ class AtomicFileWriter {
               absoluteTarget,
             );
           }
+          validateTarget?.call(absoluteTarget);
           final exchangeError = atomicApi.exchange(
             stagedFile.absolute.path,
             absoluteTarget,
@@ -149,10 +153,28 @@ class AtomicFileWriter {
           }
           return;
         }
-        await stagedFile.rename(absoluteTarget);
+        if (validateTarget != null) {
+          // Keep the protection check and native publication synchronous: no
+          // event-loop turn can invalidate the decision after staged generation.
+          validateTarget(absoluteTarget);
+          final error = LinuxAtomicFileApi.instance.replace(
+            stagedFile.path,
+            absoluteTarget,
+          );
+          if (error != null) {
+            throw FileSystemException(
+              'Atomic publication failed',
+              absoluteTarget,
+              OSError('renameat2', error),
+            );
+          }
+        } else {
+          await stagedFile.rename(absoluteTarget);
+        }
         return;
       }
 
+      validateTarget?.call(absoluteTarget);
       final errorNumber = LinuxAtomicFileApi.instance.publishNoReplace(
         stagedFile.absolute.path,
         absoluteTarget,
@@ -184,8 +206,14 @@ class AtomicFileWriter {
     String target,
     Future<void> Function(File) producer, {
     required bool overwrite,
-  }) =>
-      writeBytes(target, const [], overwrite: overwrite, writeStaged: producer);
+    void Function(String target)? validateTarget,
+  }) => writeBytes(
+    target,
+    const [],
+    overwrite: overwrite,
+    writeStaged: producer,
+    validateTarget: validateTarget,
+  );
 
   Future<void> _deleteBestEffort(File file) async {
     try {

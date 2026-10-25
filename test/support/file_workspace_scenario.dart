@@ -353,14 +353,21 @@ Future<Map<String, dynamic>> runFileWorkspaceScenario() async {
     final reconnected =
         await restored.call('relocate', {'id': id, 'path': moved.path}) as Map;
     check(
-      reconnected['id'] == id && reconnected['path'] == moved.path,
+      reconnected['id'] == id &&
+          await FileSystemEntity.identical(
+            reconnected['path'] as String,
+            moved.path,
+          ),
       'Locate exact content',
     );
     check(
-      ((await restored.call('openCollection', {'id': bId}) as Map)['books']
-                  as List)
-              .singleWhere((b) => b['id'] == id)['path'] ==
-          moved.path,
+      await FileSystemEntity.identical(
+        ((await restored.call('openCollection', {'id': bId}) as Map)['books']
+                    as List)
+                .singleWhere((b) => b['id'] == id)['path']
+            as String,
+        moved.path,
+      ),
       'Locate updates all collections',
     );
     final originalBefore = await moved.readAsBytes();
@@ -483,7 +490,10 @@ Future<Map<String, dynamic>> runFileWorkspaceScenario() async {
       'move destination verified',
     );
     check(
-      (await restored.call('book', id) as Map)['path'] == target,
+      await FileSystemEntity.identical(
+        (await restored.call('book', id) as Map)['path'] as String,
+        target,
+      ),
       'move location committed',
     );
     check(

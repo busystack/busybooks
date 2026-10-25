@@ -69,11 +69,17 @@ final class LinuxAtomicFileApi {
   bool get isAvailable => _renameAt2 != null && _errnoLocation != null;
 
   /// Returns `null` on success, otherwise the Linux errno value.
-  int? exchange(String firstPath, String secondPath) {
+  int? exchange(String firstPath, String secondPath) =>
+      _rename(firstPath, secondPath, _renameExchange);
+
+  int? replace(String source, String destination) =>
+      _rename(source, destination, 0);
+
+  int? _rename(String firstPath, String secondPath, int flags) {
     final renameAt2 = _renameAt2;
     final errnoLocation = _errnoLocation;
     if (renameAt2 == null || errnoLocation == null) {
-      return null;
+      return _operationNotSupportedError;
     }
     final nativeFirstPath = firstPath.toNativeUtf8();
     final nativeSecondPath = secondPath.toNativeUtf8();
@@ -83,7 +89,7 @@ final class LinuxAtomicFileApi {
         nativeFirstPath,
         _atCurrentWorkingDirectory,
         nativeSecondPath,
-        _renameExchange,
+        flags,
       );
       return result == 0 ? null : errnoLocation().value;
     } finally {

@@ -185,3 +185,21 @@ Windows source and move identity uses GetFileInformationByHandleEx(FileIdInfo):
 the full 64-bit volume serial and 128-bit file ID. The attribute/reparse guard
 uses FileAttributeTagInfo. Unsupported identity queries fail closed; legacy
 64-bit move-journal identities are not accepted as physical-instance proof.
+
+
+Original locations use filesystem resolution before lookup. Existing files resolve
+through directory links, Windows junctions and short names. Missing locations
+resolve their nearest existing ancestor and retain the missing name components.
+Location comparisons use the ancestor's physical directory identity and name
+semantics: Linux names remain case-sensitive, and Windows queries the directory's
+case-sensitive flag before ordinal name comparison. Book content still requires
+SHA-256 verification; equivalent locations never waive that check.
+
+Original export, Markdown export and backup resolve their actual destination
+before staging, protect saved locations (including missing and relocated originals)
+and all pending move paths, then repeat the same synchronous guard immediately
+before native atomic publication. Generation cannot leave an asynchronous gap
+between the final guard and publication. Move selection and journal matching use
+the same location policy; cross-volume verification and recovery ownership remain
+unchanged. Disposable publication caches and durable reader locators keep their
+existing formats.

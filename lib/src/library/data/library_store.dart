@@ -561,24 +561,31 @@ class _ReadingWorker {
         bookId: expected,
       );
     }
-    final absolute = p.normalize(p.absolute(input));
-    final previousRows = database.select(
-      'SELECT book_id FROM locations WHERE path=? ORDER BY verified DESC LIMIT 1',
-      [absolute],
-    );
+    final BookPathIdentity identity;
+    try {
+      identity = BookPathIdentity.resolve(input);
+    } on FileSystemException catch (error) {
+      throw WorkspaceException(
+        [5, 13].contains(error.osError?.errorCode) ? 'denied' : 'missing',
+        input,
+        'The saved book location is unavailable. Reading data has been preserved.',
+        bookId: expected,
+      );
+    }
+    final canonical = identity.path;
+    final previousRows = locationsFor(identity);
     final previous = previousRows.isEmpty
         ? null
-        : book(previousRows.single['book_id'] as String);
+        : book(previousRows.first['book_id'] as String);
     expected ??= acceptChanged ? null : previous?['id'] as String?;
-    if (await FileSystemEntity.type(absolute) != FileSystemEntityType.file) {
+    if (await FileSystemEntity.type(canonical) != FileSystemEntityType.file) {
       throw WorkspaceException(
         'missing',
-        absolute,
+        canonical,
         'Book not found at its saved location. It may have been moved, deleted, or be on an unavailable drive.',
         bookId: expected,
       );
     }
-    final canonical = p.normalize(await File(absolute).resolveSymbolicLinks());
     _validated.clear();
     _inspectedFb2 = null;
     await _clearInspectedComic();
@@ -597,7 +604,7 @@ class _ReadingWorker {
             );
             throw WorkspaceException(
               'changed',
-              absolute,
+              canonical,
               'Book contents differ from the saved identity. Reading data has been preserved.',
               bookId: expected,
             );
@@ -636,7 +643,7 @@ class _ReadingWorker {
               ).hasMatch(error.toString())
             ? 'unsupported'
             : 'damaged',
-        absolute,
+        canonical,
         error.toString(),
         bookId: expected,
       );
@@ -650,7 +657,7 @@ class _ReadingWorker {
       );
       throw WorkspaceException(
         'changed',
-        absolute,
+        canonical,
         'Book contents differ from the saved identity. Reading data has been preserved.',
         bookId: expected,
       );
@@ -659,7 +666,7 @@ class _ReadingWorker {
     final paths = [
       ...(existing?['paths'] as List? ?? <String>[]).cast<String>(),
     ];
-    if (!paths.any((x) => p.equals(x, canonical))) paths.add(canonical);
+    if (!paths.any((x) => matchesLocation(identity, x))) paths.add(canonical);
     transaction(() {
       put({...metadata, ...?existing, 'paths': paths}, 'book');
       database.execute('UPDATE locations SET preferred=0 WHERE book_id=?', [
@@ -873,14 +880,16 @@ class _ReadingWorker {
           recordRecent: false,
         );
       case 'moveBook':
-        final id = args['id'] as String,
-            source = p.normalize(p.absolute(args['source'] as String)),
-            target = p.normalize(p.absolute(args['destination'] as String));
-        if (book(id) == null ||
-            database.select(
-              'SELECT path FROM locations WHERE book_id=? AND path=?',
-              [id, source],
-            ).isEmpty) {
+        final id = args['id'] as String;
+        final sourceIdentity = BookPathIdentity.resolve(
+          args['source'] as String,
+        );
+        final targetIdentity = BookPathIdentity.resolve(
+          args['destination'] as String,
+        );
+        final source = sourceIdentity.path, target = targetIdentity.path;
+        final selectedLocations = locationsFor(sourceIdentity, bookId: id);
+        if (book(id) == null || selectedLocations.isEmpty) {
           throw const FormatException('Unknown selected book location');
         }
         final journal = database
@@ -892,8 +901,8 @@ class _ReadingWorker {
             .where(
               (r) =>
                   r['bookId'] == id &&
-                  r['source'] == source &&
-                  r['destination'] == target,
+                  matchesLocation(sourceIdentity, r['source'] as String) &&
+                  matchesLocation(targetIdentity, r['destination'] as String),
             )
             .firstOrNull;
         final result = await BookMoveService(
@@ -916,7 +925,9 @@ class _ReadingWorker {
               final value = book(bookId)!;
               value['paths'] = [
                 ...(value['paths'] as List).where(
-                  (p) => p != oldPath && p != newPath,
+                  (path) =>
+                      !matchesLocation(sourceIdentity, path as String) &&
+                      !matchesLocation(targetIdentity, path),
                 ),
                 newPath,
               ];
@@ -934,19 +945,23 @@ class _ReadingWorker {
                   DateTime.now().millisecondsSinceEpoch,
                 ],
               );
-              database.execute(
-                'UPDATE locations SET status=? WHERE book_id=? AND path=?',
-                ['unverified', bookId, oldPath],
-              );
+              for (final row in selectedLocations) {
+                database.execute(
+                  'UPDATE locations SET status=? WHERE book_id=? AND path=?',
+                  ['unverified', bookId, row['path']],
+                );
+              }
             });
           },
           cancelled: () => cancelled,
         ).move(id, source, target, recovery: journal);
         if (result['status'] == 'moved') {
-          database.execute('DELETE FROM locations WHERE book_id=? AND path=?', [
-            id,
-            source,
-          ]);
+          for (final row in selectedLocations) {
+            database.execute(
+              'DELETE FROM locations WHERE book_id=? AND path=?',
+              [id, row['path']],
+            );
+          }
         }
         return result;
       case 'dismissMove':
@@ -1155,32 +1170,29 @@ class _ReadingWorker {
       case 'exportOriginal':
         final value = book(args['id'] as String)!;
         final source = await verifiedPath(value, args['source'] as String?);
-        final target = p.normalize(p.absolute(args['path'] as String));
-        await protectOriginalTarget(target);
-        if (p.equals(source, target) ||
-            (await File(target).exists() &&
-                p.equals(source, await File(target).resolveSymbolicLinks()))) {
-          throw const FileSystemException(
-            'Choose a different export destination from the original book',
-          );
-        }
-        await const AtomicFileWriter().writeGenerated(target, (staged) async {
-          final sink = staged.openWrite();
-          try {
-            await sink.addStream(File(source).openRead());
-          } finally {
-            await sink.close();
-          }
-          if ((await sha256.bind(staged.openRead()).first).toString() !=
-              value['id']) {
-            throw const FileSystemException(
-              'Original book changed during export',
-            );
-          }
-        }, overwrite: args['overwrite'] == true);
+        final target = protectOriginalTarget(args['path'] as String);
+        await const AtomicFileWriter().writeGenerated(
+          target,
+          (staged) async {
+            final sink = staged.openWrite();
+            try {
+              await sink.addStream(File(source).openRead());
+            } finally {
+              await sink.close();
+            }
+            if ((await sha256.bind(staged.openRead()).first).toString() !=
+                value['id']) {
+              throw const FileSystemException(
+                'Original book changed during export',
+              );
+            }
+          },
+          overwrite: args['overwrite'] == true,
+          validateTarget: protectOriginalTarget,
+        );
         return null;
       case 'exportMarkdown':
-        await protectOriginalTarget(args['path'] as String);
+        final target = protectOriginalTarget(args['path'] as String);
         final value = book(args['id'] as String)!;
         final annotations = this.annotations(value['id'] as String)
           ..sort(compareAnnotationLocations);
@@ -1222,13 +1234,14 @@ class _ReadingWorker {
           );
         }
         await const AtomicFileWriter().writeBytes(
-          args['path'] as String,
+          target,
           utf8.encode(output.toString()),
           overwrite: args['overwrite'] == true,
+          validateTarget: protectOriginalTarget,
         );
         return null;
       case 'backup':
-        await protectOriginalTarget(args['path'] as String);
+        final target = protectOriginalTarget(args['path'] as String);
         // Serialized worker + a read transaction gives one logical snapshot.
         late List<Map<String, dynamic>> exported;
         transaction(() {
@@ -1241,23 +1254,26 @@ class _ReadingWorker {
             (args['preferences'] as Map).cast<String, dynamic>(),
           ),
         );
-        await const AtomicFileWriter().writeGenerated(args['path'] as String, (
-          staged,
-        ) async {
-          final encoder = ZipFileEncoder()
-            ..create(
-              staged.path,
-              level: ZipFileEncoder.store,
-              modified: DateTime.utc(2000),
-            );
-          try {
-            encoder.addArchiveFile(
-              ArchiveFile('manifest.json', bytes.length, bytes),
-            );
-          } finally {
-            await encoder.close();
-          }
-        }, overwrite: args['overwrite'] == true);
+        await const AtomicFileWriter().writeGenerated(
+          target,
+          (staged) async {
+            final encoder = ZipFileEncoder()
+              ..create(
+                staged.path,
+                level: ZipFileEncoder.store,
+                modified: DateTime.utc(2000),
+              );
+            try {
+              encoder.addArchiveFile(
+                ArchiveFile('manifest.json', bytes.length, bytes),
+              );
+            } finally {
+              await encoder.close();
+            }
+          },
+          overwrite: args['overwrite'] == true,
+          validateTarget: protectOriginalTarget,
+        );
         return null;
       case 'restore':
         return restore(args as String);
@@ -1286,34 +1302,55 @@ class _ReadingWorker {
     }
   }
 
-  Future<void> protectOriginalTarget(String target) async {
-    final absolute = p.normalize(p.absolute(target));
-    final paths = {absolute};
-    if (await File(absolute).exists()) {
-      paths.add(await File(absolute).resolveSymbolicLinks());
+  // These checks deliberately stay synchronous. AtomicFileWriter invokes the
+  // same guard immediately before its native publication, after generation and
+  // all asynchronous destination queries have completed.
+  bool matchesLocation(BookPathIdentity identity, String savedPath) {
+    if (!isNativeAbsoluteReference(savedPath)) return false;
+    try {
+      return identity.sameLocation(BookPathIdentity.resolve(savedPath));
+    } on FileSystemException {
+      // An unavailable foreign drive cannot alias an accessible destination.
+      // Exact saved locations remain protected even while inaccessible.
+      return identity.path == savedPath;
     }
-    for (final path in paths) {
-      if (database.select(
-        'SELECT book_id FROM locations WHERE path=? LIMIT 1',
-        [path],
-      ).isNotEmpty) {
-        throw const FileSystemException(
-          'An export or backup cannot overwrite a saved original book location',
-        );
-      }
+  }
+
+  List<Row> locationsFor(BookPathIdentity identity, {String? bookId}) {
+    final rows = database.select(
+      'SELECT book_id,path FROM locations '
+      '${bookId == null ? '' : 'WHERE book_id=? '}'
+      'ORDER BY verified DESC',
+      [if (bookId != null) bookId],
+    );
+    return rows
+        .where(
+          (row) =>
+              row['path'] == identity.path ||
+              matchesLocation(identity, row['path'] as String),
+        )
+        .toList();
+  }
+
+  String protectOriginalTarget(String target) {
+    final identity = BookPathIdentity.resolve(target);
+    if (locationsFor(identity).isNotEmpty) {
+      throw const FileSystemException(
+        'An export or backup cannot overwrite a saved original book location',
+      );
     }
     for (final row in database.select('SELECT json FROM move_operations')) {
       final operation = jsonDecode(row['json'] as String) as Map;
       for (final key in ['source', 'destination', 'stagePath', 'quarantine']) {
         final ownedPath = operation[key];
-        if (ownedPath is String &&
-            paths.any((path) => p.equals(path, ownedPath))) {
+        if (ownedPath is String && matchesLocation(identity, ownedPath)) {
           throw const FileSystemException(
             'An export or backup cannot overwrite a pending Move Book location',
           );
         }
       }
     }
+    return identity.path;
   }
 
   Future<String> verifiedPath(
