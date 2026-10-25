@@ -369,6 +369,7 @@ class BusyBooksCommandRegistry {
     return {
       for (final command in commands)
         if (scopes.contains(command.scope) &&
+            command.visible() &&
             command.shortcut != null &&
             !excludedIds.contains(command.id))
           for (final activator in activators(command.id))
