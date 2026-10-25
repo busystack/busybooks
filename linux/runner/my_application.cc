@@ -1072,6 +1072,27 @@ static void first_frame_cb(MyApplication*, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+static void release_window_resources(MyApplication* self) {
+  // Release native children and their channels before GTK destroys the main
+  // Flutter view/overlay. Application disposal happens after that destruction.
+  busybooks_reader_host_free(self->reader_host);
+  self->reader_host = nullptr;
+  busybooks_linux_chrome_host_free(self->chrome_host);
+  self->chrome_host = nullptr;
+  busybooks_gtk_accent_host_free(self->gtk_accent_host);
+  self->gtk_accent_host = nullptr;
+  g_clear_object(&self->native_menu_channel);
+  g_clear_object(&self->asset_input_channel);
+  self->input_ready = FALSE;
+  self->main_window = nullptr;
+  self->flutter_view = nullptr;
+  self->flutter_overlay = nullptr;
+}
+
+static void window_destroy_cb(GtkWidget*, gpointer data) {
+  release_window_resources(MY_APPLICATION(data));
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -1131,6 +1152,7 @@ static void my_application_activate(GApplication* application) {
   register_native_menu_channel(self, view);
   register_asset_input_channel(self, view);
   self->reader_host = busybooks_reader_host_new(self->flutter_overlay, view);
+  g_signal_connect(window, "destroy", G_CALLBACK(window_destroy_cb), self);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
@@ -1173,23 +1195,13 @@ static void my_application_shutdown(GApplication* application) {
 
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
-  busybooks_linux_chrome_host_free(self->chrome_host);
-  self->chrome_host = nullptr;
-  busybooks_gtk_accent_host_free(self->gtk_accent_host);
-  self->gtk_accent_host = nullptr;
+  release_window_resources(self);
   if (self->native_surface_css_provider != nullptr) {
     GdkScreen* screen = gdk_screen_get_default();
     if (screen != nullptr) gtk_style_context_remove_provider_for_screen(screen, GTK_STYLE_PROVIDER(self->native_surface_css_provider));
   }
   g_clear_object(&self->native_surface_css_provider);
-  g_clear_object(&self->native_menu_channel);
-
-  g_clear_object(&self->asset_input_channel);
   g_clear_pointer(&self->pending_paths,g_ptr_array_unref);
-
-
-  busybooks_reader_host_free(self->reader_host);
-  self->reader_host = nullptr;
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }

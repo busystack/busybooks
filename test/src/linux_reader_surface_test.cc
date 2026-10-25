@@ -144,6 +144,25 @@ int main(int argc, char** argv) {
   g_assert_cmpint(flutter_clicks, ==, 7);
   gtk_widget_destroy(window);
   Settle();
+
+  // The runner releases its native owner in the window's destroy signal,
+  // before GTK disposes the overlay and removes its signal handlers.
+  auto* closing_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  auto* closing_overlay = gtk_overlay_new();
+  auto* closing_book = InputWidget(&book_clicks);
+  gtk_container_add(GTK_CONTAINER(closing_window), closing_overlay);
+  auto* closing_surface = new BusyBooksReaderSurface(
+      GTK_OVERLAY(closing_overlay), closing_book);
+  g_signal_connect(closing_window, "destroy", G_CALLBACK(+[](GtkWidget*, gpointer data) {
+    auto** surface = static_cast<BusyBooksReaderSurface**>(data);
+    delete *surface;
+    *surface = nullptr;
+  }), &closing_surface);
+  gtk_widget_show_all(closing_window);
+  Settle();
+  gtk_widget_destroy(closing_window);
+  g_assert_null(closing_surface);
+  Settle();
   std::puts("INPUT_RESULT welcome=1 chrome=1 book=1 resize=1 modal=1 teardown=1");
   return 0;
 }
