@@ -37,17 +37,25 @@ class Pointer {
     button_ = reinterpret_cast<Button>(dlsym(library_, "XTestFakeButtonEvent"));
     g_assert_nonnull(motion_);
     g_assert_nonnull(button_);
+    // Own the XTest connection so its extension state is released before the
+    // dynamically loaded library. GTK keeps its separate display connection.
+    native_display_ = XOpenDisplay(DisplayString(gdk_x11_display_get_xdisplay(display_)));
+    g_assert_nonnull(native_display_);
   }
-  ~Pointer() { dlclose(library_); }
+  ~Pointer() {
+    XCloseDisplay(native_display_);
+    dlclose(library_);
+  }
 
   void Click(int x, int y) {
     int origin_x, origin_y;
     gdk_window_get_origin(gtk_widget_get_window(window_), &origin_x, &origin_y);
-    auto* native = gdk_x11_display_get_xdisplay(display_);
+    auto* native = native_display_;
     g_assert_true(motion_(native, DefaultScreen(native), origin_x + x,
                           origin_y + y, 0));
     g_assert_true(button_(native, 1, True, 0));
     g_assert_true(button_(native, 1, False, 0));
+    XSync(native, False);
     gdk_display_sync(display_);
     Settle();
   }
@@ -57,6 +65,7 @@ class Pointer {
   using Button = int (*)(Display*, unsigned int, int, unsigned long);
   GtkWidget* window_;
   GdkDisplay* display_;
+  Display* native_display_;
   void* library_;
   Motion motion_;
   Button button_;
@@ -164,5 +173,6 @@ int main(int argc, char** argv) {
   g_assert_null(closing_surface);
   Settle();
   std::puts("INPUT_RESULT welcome=1 chrome=1 book=1 resize=1 modal=1 teardown=1");
+  std::fflush(stdout);
   return 0;
 }

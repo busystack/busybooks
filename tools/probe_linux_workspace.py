@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import select
 import shutil
 import sqlite3
@@ -31,7 +32,12 @@ parser.add_argument('seed', type=Path)
 parser.add_argument('evidence', type=Path)
 parser.add_argument('--binary', type=Path, default=Path('build/linux/x64/release/bundle/busybooks'))
 parser.add_argument('--xdotool', default=shutil.which('xdotool'))
+parser.add_argument('--wayland-display')
+parser.add_argument('--wayland-runtime', type=Path)
+parser.add_argument('--nested-wayland-window')
 args = parser.parse_args()
+if args.wayland_display and not (args.wayland_runtime and args.nested_wayland_window):
+    raise SystemExit('Supply the private Wayland runtime and its nested X11 compositor window')
 if not args.xdotool or not (args.seed / 'input.json').is_file():
     raise SystemExit('Supply xdotool and a prepared, disposable seed directory')
 args.evidence.mkdir(parents=True, exist_ok=True)
@@ -62,11 +68,21 @@ def x(*values):
 
 
 def geometry(identity):
-    return {key: int(value) for key, value in
+    rect = {key: int(value) for key, value in
             (line.split('=') for line in x('getwindowgeometry', '--shell', identity).splitlines())}
+    if args.wayland_display:
+        # Read root-space client coordinates without creating a foreign GTK
+        # window wrapper that can affect the compositor's WM properties.
+        info = subprocess.check_output(['xwininfo', '-id', str(identity)], text=True)
+        rect['X'] = int(re.search(r'Absolute upper-left X:\s+(-?\d+)', info)[1])
+        rect['Y'] = int(re.search(r'Absolute upper-left Y:\s+(-?\d+)', info)[1])
+    return rect
 
 
 def locate():
+    if args.wayland_display:
+        geometry(args.nested_wayland_window)
+        return args.nested_wayland_window
     candidates = x('search', '--onlyvisible', '--pid', process.pid).splitlines()
     windows = [(identity, geometry(identity)) for identity in candidates]
     return max(windows, key=lambda pair: pair[1]['WIDTH'] * pair[1]['HEIGHT'])[0]
@@ -122,6 +138,12 @@ def run(command):
                            'GDK_BACKEND': 'x11', 'GDK_SCALE': str(scale),
                            'GTK_THEME': command.get('gtkTheme', 'Yaru'),
                            'GSETTINGS_BACKEND': 'keyfile', 'XDG_CONFIG_HOME': str(desktop_config), 'GIO_USE_VFS': 'local'}
+        if args.wayland_display:
+            application_env.update({'GDK_BACKEND': 'wayland',
+                                    'WAYLAND_DISPLAY': args.wayland_display,
+                                    'XDG_RUNTIME_DIR': str(args.wayland_runtime)})
+        if command.get('ime'):
+            application_env.update({'GTK_IM_MODULE': 'ibus', 'XMODIFIERS': '@im=ibus'})
         subprocess.run(['gsettings', 'set', 'org.gnome.desktop.interface', 'text-scaling-factor',
                         str(command.get('textScale', 1.0))], env=application_env, check=True)
         log = (args.evidence / (command['tag'] + '.log')).open('w')
@@ -143,6 +165,7 @@ def run(command):
         x('windowactivate', '--sync', window)
         pause(min(5, max(0, float(command.get('settle', 1)))))
         return {'pid': process.pid, 'runtime': str(runtime), 'window': window, 'scale': scale,
+                'backend': application_env['GDK_BACKEND'],
                 'textScale': command.get('textScale', 1.0), 'theme': command.get('theme', 'light'),
                 'portalTextScale': subprocess.check_output(['gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop', '--object-path', '/org/freedesktop/portal/desktop', '--method', 'org.freedesktop.portal.Settings.Read', 'org.gnome.desktop.interface', 'text-scaling-factor'], text=True).strip()}
     if action == 'open':
@@ -155,6 +178,8 @@ def run(command):
         return {'opened': command['file'], 'startedMs': started}
     if action == 'key':
         x('key', '--clearmodifiers', command['keys'])
+    elif action == 'type':
+        x('type', '--clearmodifiers', '--', command['text'])
     elif action == 'click':
         rect = geometry(window)
         x('mousemove', rect['X'] + command['x'], rect['Y'] + command['y'], 'click', command.get('button', 1))
