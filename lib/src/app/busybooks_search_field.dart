@@ -65,6 +65,7 @@ class BusyBooksSearchField extends StatefulWidget {
     this.onEscape,
     this.clearButtonSemanticLabel,
     this.clearOnEscape = true,
+    this.tooltipPositionDelegate,
   });
 
   final TextEditingController? controller;
@@ -81,6 +82,7 @@ class BusyBooksSearchField extends StatefulWidget {
   final VoidCallback? onEscape;
   final String? clearButtonSemanticLabel;
   final bool clearOnEscape;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   @override
   State<BusyBooksSearchField> createState() => _BusyBooksSearchFieldState();
@@ -222,10 +224,13 @@ class _BusyBooksSearchFieldState extends State<BusyBooksSearchField> {
               ),
               suffixIcon: _textIsEmpty
                   ? null
-                  : IconButton(
-                      tooltip: clearLabel,
-                      onPressed: _clear,
-                      icon: const Icon(YaruIcons.edit_clear),
+                  : Tooltip(
+                      message: clearLabel,
+                      positionDelegate: widget.tooltipPositionDelegate,
+                      child: IconButton(
+                        onPressed: _clear,
+                        icon: const Icon(YaruIcons.edit_clear),
+                      ),
                     ),
               suffixIconConstraints: const BoxConstraints.tightFor(
                 width: kYaruTitleBarItemHeight,

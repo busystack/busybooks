@@ -790,8 +790,9 @@ class _HeaderWindow implements NativeWindowController {
 Future<void> _mountHeaderApplication(
   WidgetTester tester,
   _ReaderFixture f,
-  String route,
-) async {
+  String route, {
+  bool settle = true,
+}) async {
   tester.view.physicalSize = const Size(1200, 850);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -846,7 +847,7 @@ Future<void> _mountHeaderApplication(
       return find.byType(ReadingContent).evaluate().isNotEmpty;
     }
     return true;
-  });
+  }, settle: settle);
 }
 
 List<Map> _nativeLeaves(List entries) {
@@ -4785,11 +4786,16 @@ void main() {
           if (mode == 'printed PDF') {
             expect(find.text('Page 23'), findsNothing);
             expect(
-              find.byTooltip(
-                'Go to Location · Page 23 · Physical page 49 / 322',
+              find.bySemanticsLabel(
+                RegExp(
+                  RegExp.escape(
+                    'Go to Location · Page 23 · Physical page 49 / 322',
+                  ),
+                ),
               ),
               findsOneWidget,
             );
+            expect(find.byTooltip('Go to Location'), findsOneWidget);
           }
           final anchor = f.state.location;
           for (final width in [1200.0, 1000.0]) {
@@ -4958,9 +4964,16 @@ void main() {
         expect(tester.getRect(location).width, lessThanOrEqualTo(132));
         expect(find.text('281 / 322'), findsNothing);
         expect(
-          find.byTooltip('Go to Location · Page 255 · Physical page 281 / 322'),
+          find.bySemanticsLabel(
+            RegExp(
+              RegExp.escape(
+                'Go to Location · Page 255 · Physical page 281 / 322',
+              ),
+            ),
+          ),
           findsOneWidget,
         );
+        expect(find.byTooltip('Go to Location'), findsOneWidget);
         tester.view.physicalSize = const Size(640, 850);
         await tester.pumpAndSettle();
         expect(previous, findsOneWidget);
@@ -8118,6 +8131,18 @@ void _professionalWorkspaceTests() {
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await tester.pumpAndSettle();
+        final home = find.descendant(
+          of: find.byKey(const ValueKey('book-home')),
+          matching: find.byType(Tooltip),
+        );
+        tester.state<TooltipState>(home).ensureTooltipVisible();
+        await tester.pump(const Duration(seconds: 1));
+        final homeBounds = tester.getRect(find.text('Home'));
+        final headerBounds = tester.getRect(find.byType(BookHeader));
+        expect(homeBounds.top, greaterThanOrEqualTo(headerBounds.top));
+        expect(homeBounds.bottom, lessThanOrEqualTo(headerBounds.bottom));
+        Tooltip.dismissAllToolTips();
+        await tester.pumpAndSettle();
         final selector = find.descendant(
           of: find.byKey(const ValueKey('reader-sidebar-view-menu')),
           matching: find.byType(Tooltip),
@@ -8125,9 +8150,30 @@ void _professionalWorkspaceTests() {
         tester.state<TooltipState>(selector).ensureTooltipVisible();
         await tester.pump(const Duration(seconds: 1));
         expect(find.text('Sidebar View'), findsOneWidget);
-        await _readerAction(tester, f.searchController.open);
+        await _readerAction(
+          tester,
+          () => f.searchController.open(
+            category: BookSearchCategory.notebook,
+            query: 'query',
+          ),
+        );
         await tester.pump(const Duration(seconds: 1));
         expect(find.text('Sidebar View'), findsNothing);
+        final clear = find.descendant(
+          of: find.byKey(const ValueKey('book-header-search')),
+          matching: find.byType(Tooltip),
+        );
+        final clearLabel = MaterialLocalizations.of(
+          tester.element(clear),
+        ).clearButtonTooltip;
+        expect(tester.widget<Tooltip>(clear).message, clearLabel);
+        tester.state<TooltipState>(clear).ensureTooltipVisible();
+        await tester.pump(const Duration(seconds: 1));
+        final clearBounds = tester.getRect(find.text(clearLabel));
+        expect(clearBounds.top, greaterThanOrEqualTo(headerBounds.top));
+        expect(clearBounds.bottom, lessThanOrEqualTo(headerBounds.bottom));
+        Tooltip.dismissAllToolTips();
+        await tester.pumpAndSettle();
         final close = find.byWidgetPredicate(
           (widget) => widget is Tooltip && widget.message == 'Close Search',
         );
@@ -8180,7 +8226,14 @@ void _professionalWorkspaceTests() {
         });
       });
       try {
-        await _mountHeaderApplication(tester, f, '/notebook/${f.state.bookId}');
+        // Wait for the actual cache read before settling animations. An
+        // indeterminate progress indicator cannot settle a fake test clock.
+        await _mountHeaderApplication(
+          tester,
+          f,
+          '/notebook/${f.state.bookId}',
+          settle: false,
+        );
         final preview = find.byType(NotebookRegionPreview);
         await _pumpUntil(
           tester,

@@ -417,6 +417,41 @@ abstract final class BusyBooksLinuxPalette {
 /// Keeping the palette and shape here lets each toolkit retain its native
 /// layout, positioning, focus, and motion while presenting the same surface.
 abstract final class BusyBooksTooltipStyle {
+  /// Place book-header hints beside their trigger, within Flutter's header.
+  static Offset insideHeader(
+    BuildContext context,
+    TooltipPositionContext info,
+  ) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null ||
+        !box.hasSize ||
+        !box.constraints.hasBoundedWidth ||
+        !box.constraints.hasBoundedHeight) {
+      return info.target;
+    }
+    final origin = box.localToGlobal(Offset.zero),
+        left = origin.dx + BusyBooksSpacing.sm,
+        right = origin.dx + box.constraints.maxWidth - BusyBooksSpacing.sm;
+    final after =
+        info.target.dx + info.targetSize.width / 2 + BusyBooksSpacing.sm;
+    final before =
+        info.target.dx -
+        info.targetSize.width / 2 -
+        BusyBooksSpacing.sm -
+        info.tooltipSize.width;
+    return Offset(
+      (after + info.tooltipSize.width <= right ? after : before).clamp(
+        left,
+        math.max(left, right - info.tooltipSize.width),
+      ),
+      origin.dy +
+          math.max(
+            0,
+            (box.constraints.maxHeight - info.tooltipSize.height) / 2,
+          ),
+    );
+  }
+
   /// Keep sidebar tooltips inside their Flutter surface, above native content.
   static Offset positionWithin(
     BuildContext context,
@@ -906,6 +941,7 @@ class BusyBooksHeaderControlStyleScope extends InheritedWidget {
     required this.disabledForegroundColor,
     required this.backgroundColor,
     required this.overlayColor,
+    this.tooltipPositionDelegate,
     required super.child,
   });
 
@@ -913,6 +949,7 @@ class BusyBooksHeaderControlStyleScope extends InheritedWidget {
   final Color disabledForegroundColor;
   final WidgetStateProperty<Color?> backgroundColor;
   final WidgetStateProperty<Color?> overlayColor;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   static BusyBooksHeaderControlStyleScope? maybeOf(
     BuildContext context,
@@ -924,7 +961,8 @@ class BusyBooksHeaderControlStyleScope extends InheritedWidget {
       foregroundColor != oldWidget.foregroundColor ||
       disabledForegroundColor != oldWidget.disabledForegroundColor ||
       backgroundColor != oldWidget.backgroundColor ||
-      overlayColor != oldWidget.overlayColor;
+      overlayColor != oldWidget.overlayColor ||
+      tooltipPositionDelegate != oldWidget.tooltipPositionDelegate;
 }
 
 class BusyBooksHeaderIconButton extends StatelessWidget {
@@ -971,9 +1009,10 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final colors = BusyBooksSurfaceColors.of(context);
-    final inheritedStyle = accented
-        ? null
-        : BusyBooksHeaderControlStyleScope.maybeOf(context);
+    final controlStyle = BusyBooksHeaderControlStyleScope.maybeOf(context),
+        inheritedStyle = accented ? null : controlStyle,
+        tooltipPosition =
+            tooltipPositionDelegate ?? controlStyle?.tooltipPositionDelegate;
     final semanticStyle = busyBooksHeaderIconButtonStyle(
       foregroundColor:
           foregroundColor ??
@@ -1018,7 +1057,7 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     ).defaultStyleOf(context);
     final button = IconButton(
       isSelected: selected,
-      tooltip: tooltipPositionDelegate == null
+      tooltip: tooltipPosition == null
           ? (shortcut == null ? tooltip : '$tooltip ($shortcut)')
           : null,
       icon: BusyBooksGtkHeaderIcon(icon, nativeIcon: nativeIcon),
@@ -1026,11 +1065,11 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
       style: style.merge(yaruDefaults),
       onPressed: onPressed,
     );
-    final labeledButton = tooltipPositionDelegate == null
+    final labeledButton = tooltipPosition == null
         ? button
         : Tooltip(
             message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
-            positionDelegate: tooltipPositionDelegate,
+            positionDelegate: tooltipPosition,
             child: button,
           );
     return YaruTheme.maybeOf(context)?.focusBorders == true

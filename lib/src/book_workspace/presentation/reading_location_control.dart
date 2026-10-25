@@ -44,7 +44,10 @@ class ReadingLocationControl extends ConsumerWidget {
             progress,
           ].where((v) => v.isNotEmpty).join(' · ');
     return Tooltip(
-      message: '${l.goTo} · $reference',
+      message: l.goTo,
+      positionDelegate: BusyBooksHeaderControlStyleScope.maybeOf(
+        context,
+      )?.tooltipPositionDelegate,
       child: Semantics(
         button: true,
         label: '${l.goTo} · $reference',

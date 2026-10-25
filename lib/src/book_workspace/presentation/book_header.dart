@@ -82,6 +82,8 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
     String? binding(String id) => registry[id]?.shortcut?.label;
     return LayoutBuilder(
       builder: (context, constraints) {
+        Offset tooltipPosition(TooltipPositionContext info) =>
+            BusyBooksTooltipStyle.insideHeader(context, info);
         final insets = LinuxPageHeaderInsetsScope.of(context);
         final available =
             constraints.maxWidth -
@@ -102,6 +104,7 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
               ? BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls
               : BusyBooksLinuxHeaderCenterAllocation.centeredBetweenControls,
           leading: BusyBooksLinuxHeaderControlGroup(
+            tooltipPositionDelegate: tooltipPosition,
             children: [
               BusyBooksHeaderIconButton(
                 key: const ValueKey('book-sidebar-toggle'),
@@ -170,13 +173,17 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
             ],
           ),
           title: search.active
-              ? BookSearchHeaderField(bookId: widget.bookId)
+              ? BookSearchHeaderField(
+                  bookId: widget.bookId,
+                  tooltipPositionDelegate: tooltipPosition,
+                )
               : BusyBooksLinuxHeaderTitle(
                   reading
                       ? book?.title ?? l.reader
                       : '${l.notebook} · ${book?.title ?? l.book}',
                 ),
           trailing: BusyBooksLinuxHeaderControlGroup(
+            tooltipPositionDelegate: tooltipPosition,
             children: [
               if (selector)
                 BookViewSelector(id: widget.bookId, view: widget.view),

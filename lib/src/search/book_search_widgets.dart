@@ -88,8 +88,13 @@ Future<void> activateBookSearchResult(
 }
 
 class BookSearchHeaderField extends ConsumerStatefulWidget {
-  const BookSearchHeaderField({super.key, required this.bookId});
+  const BookSearchHeaderField({
+    super.key,
+    required this.bookId,
+    this.tooltipPositionDelegate,
+  });
   final String bookId;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
   @override
   ConsumerState<BookSearchHeaderField> createState() =>
       _BookSearchHeaderFieldState();
@@ -115,6 +120,7 @@ class _BookSearchHeaderFieldState extends ConsumerState<BookSearchHeaderField> {
     final controller = ref.read(bookSearchProvider(widget.bookId).notifier);
     return BusyBooksSearchField(
       key: const ValueKey('book-header-search'),
+      tooltipPositionDelegate: widget.tooltipPositionDelegate,
       controller: _text,
       hintText: bookSearchCategoryLabel(context, state.category),
       autofocus: state.active,
