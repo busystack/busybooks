@@ -39,6 +39,8 @@ class BookContextMenu extends ConsumerWidget {
       tooltip: l.bookActions,
       icon: BusyBooksGlyphs.menuHorizontal,
       itemBuilder: (_) => [
+        item(BusyBooksCommandIds.bookProperties, icon: BusyBooksGlyphs.info),
+        const PopupMenuDivider(),
         if (reading) ...[
           if (!pageControlsVisible) ...[
             item(BusyBooksCommandIds.previous, icon: BusyBooksGlyphs.back),

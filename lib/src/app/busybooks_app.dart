@@ -172,6 +172,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
     const sharedBookCommands = {
       BusyBooksCommandIds.viewReading,
       BusyBooksCommandIds.viewNotebook,
+      BusyBooksCommandIds.bookProperties,
       BusyBooksCommandIds.moveBook,
       BusyBooksCommandIds.locateBook,
       BusyBooksCommandIds.export,
@@ -189,6 +190,12 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           openReading(context, ref, activeBook()!),
       BusyBooksCommandIds.viewNotebook: () =>
           openNotebook(context, ref, activeBook()!),
+      BusyBooksCommandIds.bookProperties: () async {
+        final book = ref
+            .read(workspaceControllerProvider)
+            .bookById(activeBook());
+        if (book != null) await bookProperties(context, ref, book);
+      },
       BusyBooksCommandIds.moveBook: () async {
         final book = ref
             .read(workspaceControllerProvider)
@@ -398,6 +405,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           BusyBooksCommandIds.annotations,
           BusyBooksCommandIds.viewReading,
           BusyBooksCommandIds.viewNotebook,
+          BusyBooksCommandIds.bookProperties,
           BusyBooksCommandIds.moveBook,
           BusyBooksCommandIds.locateBook,
           BusyBooksCommandIds.export,

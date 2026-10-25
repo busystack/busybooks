@@ -235,6 +235,8 @@ class ReaderController extends Notifier<ReaderState> {
         !state.ready) {
       return;
     }
+    await focusChrome();
+    if (target.session != _session) return;
     events.add({
       'type': 'searchSelection',
       'bookId': target.bookId,
@@ -1489,10 +1491,19 @@ class ReaderController extends Notifier<ReaderState> {
     }
   }
 
+  Future<void> focusChrome() async {
+    if (state.bookId == null || _popoverActive) return;
+    await readerChannel.invokeMethod<void>('focusChrome', {
+      'session': _session,
+    });
+  }
+
   Future<bool> _dismissForSidebar() async {
     final session = _session;
     try {
-      await dismissPopover();
+      await dismissPopover(restoreFocus: false);
+      if (session != _session) return false;
+      await focusChrome();
       return session == _session;
     } catch (error) {
       if (session == _session) {

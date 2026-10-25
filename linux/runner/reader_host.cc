@@ -124,6 +124,16 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
         ? fl_value_lookup_string(args, "restoreFocus") : nullptr;
     if (!restore || fl_value_get_type(restore) != FL_VALUE_TYPE_BOOL || fl_value_get_bool(restore))
       gtk_widget_grab_focus(GTK_WIDGET(h->web));
+  } else if (strcmp(name, "focusChrome") == 0) {
+    auto* session = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
+        ? fl_value_lookup_string(args, "session") : nullptr;
+    if (!session || fl_value_get_type(session) != FL_VALUE_TYPE_STRING) {
+      fl_method_call_respond_error(method, "reader-focus", "Missing focus owner", nullptr, nullptr); return;
+    }
+    auto* window = gtk_widget_get_toplevel(h->chrome);
+    if (h->session == fl_value_get_string(session) && !h->popover->IsRequested() &&
+        gtk_widget_get_mapped(h->chrome) && GTK_IS_WINDOW(window) &&
+        gtk_window_is_active(GTK_WINDOW(window))) gtk_widget_grab_focus(h->chrome);
   } else if (strcmp(name, "focus") == 0) {
     auto* widget=GTK_WIDGET(h->web);
     auto* window=gtk_widget_get_toplevel(widget);

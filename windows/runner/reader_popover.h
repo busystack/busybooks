@@ -14,6 +14,7 @@ class ReaderPopover {
   ~ReaderPopover();
   void Show(const flutter::EncodableValue& data, std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void Hide();
+  bool IsRequested() const { return requested_; }
   void Result(const flutter::EncodableValue& data);
   void Capture(const flutter::EncodableValue* args,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);

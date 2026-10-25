@@ -730,6 +730,7 @@ Future<void> backupReadingData(
         context,
         context.l10n.restore,
         context.l10n.restoreWarning,
+        acceptLabel: context.l10n.restore,
       )) {
         return;
       }

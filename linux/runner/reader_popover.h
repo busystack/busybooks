@@ -13,6 +13,7 @@ class ReaderPopover {
   ~ReaderPopover();
   void Show(FlMethodCall* call);
   void Hide();
+  bool IsRequested() const { return requested_; }
   void Result(FlValue* data);
   void Capture(FlMethodCall* call);
  private:

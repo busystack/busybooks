@@ -7225,6 +7225,27 @@ void main() {
       }
     },
   );
+  test(
+    'preparing shared chrome transfers native focus without restoring the publication',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      try {
+        f.calls.clear();
+        expect(await f.reader.prepareChromeChange(), true);
+        final dismissal = f.calls.singleWhere(
+          (call) => call.method == 'dismissPopover',
+        );
+        expect((dismissal.arguments as Map)['restoreFocus'], false);
+        expect(
+          f.calls.singleWhere((call) => call.method == 'focusChrome').arguments,
+          {'session': f.reader.sessionId},
+        );
+        expect(f.dispatches.where((d) => d['action'] == 'focus'), isEmpty);
+      } finally {
+        await f.dispose();
+      }
+    },
+  );
   test('native focus handoff only runs on the visible ready reader', () async {
     final f = await _ReaderFixture.create('fixed-layout.epub');
     try {
@@ -8079,6 +8100,94 @@ void main() {
 }
 
 void _professionalWorkspaceTests() {
+  testWidgets(
+    'returning to an edited Notebook preserves active header search focus',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        await f.select();
+        await f.reader.annotation('highlight', note: 'Private note');
+        f.notes.revealAnnotation(
+          f.state.bookId!,
+          f.reader.annotations.single.id,
+        );
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/notebook/${f.state.bookId}');
+        await _readerAction(
+          tester,
+          () => f.searchController.open(
+            category: BookSearchCategory.notebook,
+            query: 'Private',
+          ),
+        );
+        final focus = FocusManager.instance.primaryFocus;
+        await _readerAction(
+          tester,
+          () => _appCommands(tester).execute(BusyBooksCommandIds.viewReading),
+          settle: false,
+        );
+        await _pumpUntil(
+          tester,
+          () => f.state.surfaceVisible && !f.search.loading,
+        );
+        await _readerAction(
+          tester,
+          () => _appCommands(tester).execute(BusyBooksCommandIds.viewNotebook),
+          settle: false,
+        );
+        await _pumpUntil(tester, () => !f.search.loading);
+        expect(FocusManager.instance.primaryFocus, same(focus));
+        expect(f.search.query, 'Private');
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  testWidgets(
+    'book properties remain reachable from Notebook without renderer readiness',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/notebook/${f.state.bookId}');
+        expect(f.reader.interactive, false);
+        await _mainMenuSelect(
+          tester,
+          'Book Properties',
+          tooltip: 'Book Actions',
+        );
+        await _pumpUntil(
+          tester,
+          () => find.byType(BusyBooksDialogShell).evaluate().isNotEmpty,
+        );
+        expect(find.text('Book Properties'), findsOneWidget);
+        expect(
+          tester
+              .widgetList<TextField>(find.byType(TextField))
+              .any((field) => field.controller?.text == f.reader.book!.title),
+          true,
+        );
+        await tester.tap(find.widgetWithText(BusyBooksDialogButton, 'Cancel'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
   testWidgets(
     'narrow Book Text search runs behind its overlay and activation restores the owned surface',
     (tester) async {

@@ -355,6 +355,7 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
   }
 
   void leaveFocus(bool backwards) {
+    unawaited(_reader.focusChrome());
     if (backwards) {
       _focus.previousFocus();
     } else {

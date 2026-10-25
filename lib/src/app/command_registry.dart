@@ -466,6 +466,7 @@ abstract final class BusyBooksCommandIds {
   static const export = 'book.exportAnnotations';
   static const viewReading = 'book.viewReading';
   static const viewNotebook = 'book.viewNotebook';
+  static const bookProperties = 'book.properties';
   static const moveBook = 'book.move';
   static const locateBook = 'book.locate';
 }
@@ -524,6 +525,17 @@ abstract final class BusyBooksCommandCatalog {
         LogicalKeyboardKey.digit2,
         control: true,
         alt: true,
+      ),
+      BusyBooksCommand(
+        id: BusyBooksCommandIds.bookProperties,
+        label:
+            labels[BusyBooksCommandIds.bookProperties] ??
+            (c) => c.l10n.properties,
+        category: (c) => c.l10n.book,
+        scope: BusyBooksCommandScope.documentView,
+        execute: executions[BusyBooksCommandIds.bookProperties],
+        enabled: enabled[BusyBooksCommandIds.bookProperties] ?? () => true,
+        visible: visible[BusyBooksCommandIds.bookProperties] ?? () => true,
       ),
       command(
         BusyBooksCommandIds.moveBook,

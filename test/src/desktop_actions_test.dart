@@ -818,7 +818,9 @@ void main() {
         });
         await tester.pumpAndSettle();
         // This is the production confirmation dialog, not a test replacement.
-        await tester.tap(find.widgetWithText(BusyBooksDialogButton, 'Open'));
+        await tester.tap(
+          find.widgetWithText(BusyBooksDialogButton, 'Restore Backup'),
+        );
         await _until(tester, () => gated.entered.isCompleted);
         await tester.pumpAndSettle();
         expect(settingsContext.mounted, isFalse);
