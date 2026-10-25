@@ -1,18 +1,34 @@
-import 'package:busybooks/src/core/reading_preferences.dart';
-import 'package:busybooks/src/app/app_router.dart';
-import 'package:busybooks/src/reading/domain/reading_navigation.dart';
-import 'package:busybooks/src/reading/domain/publication_outline.dart';
-import 'package:busybooks/src/reading/application/reader_sidebar_state.dart';
+import 'package:busybooks/src/annotations/domain/annotation_filter.dart';
 import 'package:busybooks/src/annotations/presentation/annotation_presentation.dart';
-import 'package:busybooks/src/library/application/collection_view_controller.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
+import 'package:busybooks/src/app/app_router.dart';
+import 'package:busybooks/src/app/app_settings.dart';
 import 'package:busybooks/src/app/command_registry.dart';
 import 'package:busybooks/src/app/shortcut_binding.dart';
+import 'package:busybooks/src/book_workspace/application/book_sidebar_controller.dart';
+import 'package:busybooks/src/core/reading_preferences.dart';
+import 'package:busybooks/src/library/application/collection_view_controller.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
+import 'package:busybooks/src/reading/domain/publication_outline.dart';
+import 'package:busybooks/src/reading/domain/reading_navigation.dart';
+import 'package:busybooks/src/workspace/workspace_controller.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+class _SidebarWorkspace extends WorkspaceController {
+  @override
+  WorkspaceState build() => const WorkspaceState();
+}
+
+class _SidebarSettings implements LocalSettingsStore {
+  @override
+  Future<Map<String, dynamic>> load() async => {};
+  @override
+  Future<void> save(Map<String, dynamic> value) async {}
+}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'Settings return targets allow only known internal book and workspace routes',
     () {
@@ -124,10 +140,17 @@ void main() {
   );
   test(
     'sidebar state retains deliberate collapse and each book view across metadata and panel changes',
-    () {
-      final container = ProviderContainer();
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          workspaceControllerProvider.overrideWith(_SidebarWorkspace.new),
+          startupAppSettingsProvider.overrideWithValue(
+            StartupAppSettings(AppSettings(), _SidebarSettings()),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
-      final controller = container.read(readerSidebarProvider('one').notifier);
+      final controller = container.read(bookSidebarProvider('one').notifier);
       final tree = PublicationOutline.fromRecords([
         {'id': 'group', 'label': 'Repeated', 'depth': 0},
         {
@@ -138,17 +161,13 @@ void main() {
         },
       ], pdf: false);
       controller.reconcile(tree);
-      expect(container.read(readerSidebarProvider('one')).expanded, {'group'});
+      expect(container.read(bookSidebarProvider('one')).expanded, {'group'});
       controller.toggle('group');
       controller.scrolled('outline', 240);
       controller.scrolled('annotations', 64);
-      controller.filter(kind: 'bookmark', withNotes: true);
-      controller.remember(
-        panel: 'annotations',
-        open: false,
-        query: 'passage',
-        currentMatch: 2,
-      );
+      controller.filter(type: AnnotationTypeFilter.bookmarks, withNotes: true);
+      await controller.selectPanel(BookSidebarPanel.marks);
+      await controller.setOpen(false);
       controller.reconcile(
         PublicationOutline.fromRecords([
           {'id': 'group', 'label': 'Repeated', 'depth': 0},
@@ -161,15 +180,19 @@ void main() {
           },
         ], pdf: false),
       );
-      final state = container.read(readerSidebarProvider('one'));
+      final state = container.read(bookSidebarProvider('one'));
       expect(state.expanded, isEmpty);
       expect(state.scroll, {'outline': 240.0, 'annotations': 64.0});
-      expect(state.filter, 'bookmark');
+      expect(state.filter, AnnotationTypeFilter.bookmarks);
       expect(state.withNotes, isTrue);
-      expect(state.query, 'passage');
-      expect(container.read(readerSidebarProvider('two')).expanded, isEmpty);
-      expect(container.read(readerSidebarProvider('two')).scroll, isEmpty);
-      expect(container.read(readerSidebarProvider('two')).filter, 'all');
+      expect(state.panel, BookSidebarPanel.marks);
+      expect(state.open, false);
+      expect(container.read(bookSidebarProvider('two')).expanded, isEmpty);
+      expect(container.read(bookSidebarProvider('two')).scroll, isEmpty);
+      expect(
+        container.read(bookSidebarProvider('two')).filter,
+        AnnotationTypeFilter.all,
+      );
     },
   );
   test(
@@ -256,10 +279,7 @@ void main() {
   });
   test('reader failures survive unrelated sidebar and selection updates', () {
     const error = ReaderState(bookId: 'fixture', error: 'Original unavailable');
-    expect(
-      error.copy(panel: 'annotations', panelOpen: true).error,
-      'Original unavailable',
-    );
+    expect(error.copy(clearSelection: true).error, 'Original unavailable');
   });
   test(
     'Go To separates physical page numbers from supplied labels and rejects invalid or ambiguous input',
@@ -335,8 +355,15 @@ void main() {
   );
   test(
     'collection view sessions retain query filter position and selected book by collection identity',
-    () {
-      final container = ProviderContainer();
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          workspaceControllerProvider.overrideWith(_SidebarWorkspace.new),
+          startupAppSettingsProvider.overrideWithValue(
+            StartupAppSettings(AppSettings(), _SidebarSettings()),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
       container
           .read(collectionViewProvider('collection:${'a' * 32}').notifier)
@@ -360,6 +387,23 @@ void main() {
         container.read(collectionViewProvider('collection:${'b' * 32}')).query,
         'other',
       );
+    },
+  );
+  test(
+    'compact page input resolves physical numbers and explicit printed labels deterministically',
+    () {
+      const labels = ['i', 'ii', '1', '2', 'A', 'A'];
+      int? resolve(String text) =>
+          resolvePageDestination(text, pages: 6, labels: labels);
+      expect(resolve('1'), 0);
+      expect(resolve('=1'), 2);
+      expect(resolve('ii'), 1);
+      expect(resolve('=A'), isNull);
+      expect(resolve('0'), isNull);
+      expect(resolve('7'), isNull);
+      expect(resolve('=7'), isNull);
+      expect(resolve(' =2 '), 3);
+      expect(resolvePageDestination('2', pages: 3, labels: const []), 1);
     },
   );
 }

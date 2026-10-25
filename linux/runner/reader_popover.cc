@@ -1,5 +1,4 @@
 #include "reader_popover.h"
-#include "reading_font_channel.h"
 #include "../../native/reader_action_limits.h"
 #include "../../native/reader_popover_events.h"
 #include <gdk/gdkkeysyms.h>
@@ -13,8 +12,6 @@ ReaderPopover::~ReaderPopover() {
   Complete("popover-cancelled");
   if (channel_) fl_method_channel_set_method_call_handler(channel_, nullptr, nullptr, nullptr);
   if (view_) g_signal_handlers_disconnect_by_data(view_, this);
-  if (fonts_) fl_method_channel_set_method_call_handler(fonts_, nullptr, nullptr, nullptr);
-  g_clear_object(&fonts_);
   if (popover_) { gtk_widget_destroy(popover_); g_object_unref(popover_); }
   g_clear_object(&channel_);
   g_clear_object(&view_);
@@ -25,8 +22,6 @@ void ReaderPopover::EnsureView() {
   if (restart_) {
     if (channel_) fl_method_channel_set_method_call_handler(channel_, nullptr, nullptr, nullptr);
     if (view_) g_signal_handlers_disconnect_by_data(view_, this);
-    if (fonts_) fl_method_channel_set_method_call_handler(fonts_, nullptr, nullptr, nullptr);
-    g_clear_object(&fonts_);
     if (popover_) { gtk_widget_destroy(popover_); g_object_unref(popover_); popover_ = nullptr; }
     g_clear_object(&channel_); g_clear_object(&view_);
     ready_ = false; frame_ = false; restart_ = false;
@@ -38,10 +33,6 @@ void ReaderPopover::EnsureView() {
   gtk_popover_set_modal(GTK_POPOVER(popover_), TRUE);
   g_signal_connect(popover_, "key-press-event", G_CALLBACK(+[](GtkWidget*, GdkEventKey* key, gpointer data) -> gboolean {
     auto* self = static_cast<ReaderPopover*>(data);
-    if (key->keyval == GDK_KEY_Escape && self->font_chooser_ && self->requested_ && self->channel_) {
-      fl_method_channel_invoke_method(self->channel_, "escapeFontChooser", self->data_, nullptr, nullptr, nullptr);
-      return TRUE;
-    }
     if (key->keyval == GDK_KEY_Escape) self->keyboard_dismissal_ = true;
     return FALSE;
   }), this);
@@ -62,7 +53,6 @@ void ReaderPopover::EnsureView() {
   view_ = fl_view_new(project);
   g_object_ref_sink(view_);
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  fonts_ = busybooks_reading_font_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view_)));
   channel_ = fl_method_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view_)),
       "io.busystack.busybooks/reader_popover", FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(channel_, Call, this, nullptr);
@@ -173,7 +163,6 @@ void ReaderPopover::Hide() {
   const bool keyboard = keyboard_dismissal_;
   keyboard_dismissal_ = false;
   requested_ = false;
-  font_chooser_ = false;
   painted_ = false;
   Complete("popover-cancelled");
   if (popover_) gtk_popover_popdown(GTK_POPOVER(popover_));
@@ -214,14 +203,6 @@ void ReaderPopover::Call(FlMethodChannel* channel, FlMethodCall* call, gpointer 
   auto* self = static_cast<ReaderPopover*>(data);
   if (channel != self->channel_) { fl_method_call_respond_error(call, "popover-cancelled", "Reader controls were replaced", nullptr, nullptr); return; }
   const char* name = fl_method_call_get_name(call);
-  if (strcmp(name, "fontChooser") == 0) {
-    auto* args = fl_method_call_get_args(call);
-    if (self->requested_ && self->Matches(args)) {
-      auto* visible = fl_value_lookup_string(args, "visible");
-      self->font_chooser_ = visible && fl_value_get_type(visible) == FL_VALUE_TYPE_BOOL && fl_value_get_bool(visible);
-    }
-    fl_method_call_respond_success(call, nullptr, nullptr); return;
-  }
   if (strcmp(name, "ready") == 0) {
     self->ready_ = true;
     fl_method_call_respond_success(call, nullptr, nullptr);
@@ -236,7 +217,7 @@ void ReaderPopover::Call(FlMethodChannel* channel, FlMethodCall* call, gpointer 
         auto* height = fl_value_lookup_string(value, "height");
         auto* kind = fl_value_lookup_string(self->data_, "kind");
         if (height && fl_value_get_type(height) == FL_VALUE_TYPE_FLOAT && kind &&
-            (strcmp(fl_value_get_string(kind), "goto") == 0 || strcmp(fl_value_get_string(kind), "lookup") == 0)) {
+            (strcmp(fl_value_get_string(kind), "goto") == 0 || strcmp(fl_value_get_string(kind), "lookup") == 0 || strcmp(fl_value_get_string(kind), "appearance") == 0)) {
           const double n = fl_value_get_float(height);
           if (std::isfinite(n) && n > 0) {
             int width = 0, maximum = 0; gtk_widget_get_size_request(GTK_WIDGET(self->view_), &width, &maximum);

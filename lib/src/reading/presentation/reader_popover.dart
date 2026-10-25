@@ -1,22 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+
 import '../../../l10n/generated/app_localizations.dart';
 import '../../annotations/presentation/annotation_presentation.dart';
-import '../domain/publication_outline.dart';
-import 'publication_location.dart';
 import '../../app/app_theme.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
 import '../../app/localization.dart';
-import '../../platform/native_menu_service.dart';
-import '../domain/reading_navigation.dart';
-import '../domain/reader_action.dart';
-import '../../library/domain/annotation_limits.dart';
-import 'appearance_panel.dart';
 import '../../core/typography.dart';
+import '../../library/domain/annotation_limits.dart';
+import '../../platform/native_menu_service.dart';
+import '../domain/publication_outline.dart';
+import '../domain/reader_action.dart';
+import '../domain/reading_navigation.dart';
+import 'compact_reading_appearance.dart';
+import 'publication_location.dart';
 
 const readerPopoverChannel = MethodChannel(
   'io.busystack.busybooks/reader_popover',
@@ -73,23 +75,13 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
     };
     ErrorWidget.builder = _errorBuilder;
     readerPopoverChannel.setMethodCallHandler((call) async {
-      if ((call.method == 'escapeFontChooser' || call.method == 'hidden') &&
-          call.arguments is Map) {
+      if (call.method == 'hidden' && call.arguments is Map) {
         final owner = call.arguments as Map;
         if (mounted &&
             data?['kind'] == 'appearance' &&
             owner['session'] == data?['session'] &&
             owner['presentation'] == data?['presentation']) {
-          setState(
-            () => data = {
-              ...data!,
-              if (call.method == 'hidden')
-                'appearanceVisible': false
-              else
-                'fontChooserEscape':
-                    (data?['fontChooserEscape'] as int? ?? 0) + 1,
-            },
-          );
+          setState(() => data = {...data!, 'appearanceVisible': false});
         }
         return null;
       }
@@ -509,7 +501,7 @@ class _PopoverContentsState extends State<_PopoverContents> {
   );
   final entry = TextEditingController();
   final _naturalContents = GlobalKey(), _feedback = GlobalKey();
-  bool editing = false, printedLabel = false;
+  bool editing = false, confirmingDelete = false;
   String? error, operationError;
   bool invalidNote = false, navigating = false;
   late String color = widget.data['color'] as String? ?? 'yellow';
@@ -566,7 +558,8 @@ class _PopoverContentsState extends State<_PopoverContents> {
       );
     },
     child: Column(
-      mainAxisSize: ['goto', 'lookup'].contains(widget.data['kind'])
+      mainAxisSize:
+          ['goto', 'lookup', 'appearance'].contains(widget.data['kind'])
           ? MainAxisSize.min
           : MainAxisSize.max,
       children: [
@@ -591,7 +584,7 @@ class _PopoverContentsState extends State<_PopoverContents> {
               ),
           ],
         ),
-        if (['goto', 'lookup'].contains(widget.data['kind']))
+        if (['goto', 'lookup', 'appearance'].contains(widget.data['kind']))
           Flexible(child: _contents(context))
         else
           Expanded(child: _contents(context)),
@@ -605,34 +598,22 @@ class _PopoverContentsState extends State<_PopoverContents> {
     if (kind == 'lookup') return _lookup(context);
     if (kind == 'appearance') {
       if (d['appearanceVisible'] == false) return const SizedBox.expand();
-      return ReadingAppearanceControls(
-        fontChooserEscape: d['fontChooserEscape'] as int? ?? 0,
-        onFontChooserChanged: (visible) {
-          unawaited(
-            readerPopoverChannel
-                .invokeMethod<void>('fontChooser', {
-                  'session': d['session'],
-                  'presentation': d['presentation'],
-                  'visible': visible,
-                })
-                .catchError((Object error) {
-                  if (mounted) {
-                    setState(() => operationError = error.toString());
-                  }
-                }),
-          );
-        },
-        preferences: preferences,
-        capabilities: TypographyCapabilities.fromJson(d['typography']),
-        pdf: d['pdf'] == true,
-        comic: d['comic'] == true,
-        noText: (d['location'] as Map?)?['noText'] == true,
-        onChanged: (v) async {
-          await widget.action('appearance', {'value': v});
-          if (mounted) setState(() => preferences = {...preferences, ...v});
-        },
-        onReset: () => act('resetAppearance'),
-        onSaveDefaults: () => act('saveDefaults'),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(BusyBooksSpacing.lg),
+        child: CompactReadingAppearance(
+          key: _naturalContents,
+          preferences: preferences,
+          capabilities: TypographyCapabilities.fromJson(d['typography']),
+          pdf: d['pdf'] == true,
+          comic: d['comic'] == true,
+          onChanged: (value) async {
+            await widget.action('appearance', {'value': value});
+            if (mounted) {
+              setState(() => preferences = {...preferences, ...value});
+            }
+          },
+          onMore: () => act('readingSettings'),
+        ),
       );
     }
     if (kind == 'goto') return _goTo(context);
@@ -775,6 +756,22 @@ class _PopoverContentsState extends State<_PopoverContents> {
             maxLines: 4,
           ),
           const SizedBox(height: BusyBooksSpacing.sm),
+          if (confirmingDelete) ...[
+            Text(l.removeAnnotationHelp),
+            Wrap(
+              spacing: BusyBooksSpacing.sm,
+              children: [
+                TextButton(
+                  onPressed: () => setState(() => confirmingDelete = false),
+                  child: Text(l.cancel),
+                ),
+                TextButton(
+                  onPressed: saving ? null : () => act('deleteAnnotation'),
+                  child: Text(l.delete),
+                ),
+              ],
+            ),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -785,7 +782,9 @@ class _PopoverContentsState extends State<_PopoverContents> {
                   onPressed: saving
                       ? null
                       : () {
-                          if (!widget.isSaving()) act('deleteAnnotation');
+                          if (!widget.isSaving()) {
+                            setState(() => confirmingDelete = true);
+                          }
                         },
                 ),
               BusyBooksPushButton.standard(
@@ -943,11 +942,12 @@ class _PopoverContentsState extends State<_PopoverContents> {
       if (navigating) return;
       Map<String, dynamic>? anchor;
       if (pdf) {
-        final page = resolvePdfPage(
+        final page = resolvePageDestination(
           entry.text,
           pages: d['pages'] as int,
-          labels: (d['labels'] as List).cast<String>(),
-          printedLabel: printedLabel,
+          labels: d['comic'] == true
+              ? const []
+              : (d['labels'] as List).cast<String>(),
         );
         if (page != null) anchor = {'page': page};
       } else {
@@ -978,20 +978,9 @@ class _PopoverContentsState extends State<_PopoverContents> {
               _pdfReference(context),
               style: Theme.of(context).textTheme.bodySmall,
             ),
-          if (pdf && d['comic'] != true)
-            BusyBooksComboRow<bool>(
-              title: l.location,
-              values: const [false, true],
-              selected: printedLabel,
-              labelFor: (v) => v ? l.pageLabel : l.pageNumber,
-              onSelected: (v) => setState(() {
-                printedLabel = v;
-                error = null;
-              }),
-            ),
           BusyBooksGroupedTextEntry(
             label: pdf
-                ? (printedLabel ? l.pageLabel : l.pageNumber)
+                ? (d['comic'] == true ? l.pageNumber : l.pageDestination)
                 : l.bookProgress,
             controller: entry,
             autofocus: true,
@@ -1001,9 +990,9 @@ class _PopoverContentsState extends State<_PopoverContents> {
           ),
           Text(
             pdf
-                ? (printedLabel
-                      ? l.pageLabelHelp
-                      : '${l.pageNumberHelp} 1–${d['pages']}')
+                ? (d['comic'] == true
+                      ? '${l.pageNumberHelp} 1–${d['pages']}'
+                      : l.pageDestinationHelp)
                 : l.generatedPages,
             style: Theme.of(context).textTheme.bodySmall,
           ),

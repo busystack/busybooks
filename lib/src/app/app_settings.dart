@@ -2,11 +2,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/atomic_file_writer.dart';
-import 'shortcut_binding.dart';
 import '../core/reading_preferences.dart';
+import 'shortcut_binding.dart';
 export '../core/reading_preferences.dart' show defaultReadingAppearance;
 
 class AppSettings {
@@ -104,10 +106,8 @@ class AppSettingsController extends Notifier<AppSettings> {
   Future<void> waitUntilLoaded() => Future.value();
   Future<void> update(Map<String, dynamic> changes) {
     state = state.copy(changes);
-    final snapshot = state.data;
-    final save = _tail.then(
-      (_) => ref.read(localSettingsStoreProvider).save(snapshot),
-    );
+    final snapshot = state.data, store = ref.read(localSettingsStoreProvider);
+    final save = _tail.then((_) => store.save(snapshot));
     _tail = save
         .then<void>((_) {
           _saveError = null;

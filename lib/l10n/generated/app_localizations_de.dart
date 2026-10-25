@@ -687,7 +687,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get invalidPage =>
-      'Eine gültige Seitennummer oder eine genaue vorhandene Seitenbezeichnung eingeben.';
+      'Physische Seite im gültigen Bereich oder genaue Druckseitenbezeichnung eingeben. Für numerische Bezeichnungen = voranstellen.';
 
   @override
   String get bookProgress => 'Buchfortschritt (%)';
@@ -826,7 +826,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get noteSaveFailed =>
-      'Notiz konnte nicht gespeichert werden. Der Entwurf bleibt erhalten; erneut speichern.';
+      'Die Notiz konnte nicht gespeichert werden. Ihr Entwurf bleibt erhalten.';
 
   @override
   String get discard => 'Verwerfen';
@@ -1125,4 +1125,119 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get lastPage => 'Letzte Seite';
+
+  @override
+  String get home => 'Startseite';
+
+  @override
+  String get marks => 'Markierungen';
+
+  @override
+  String get bookText => 'Buchtext';
+
+  @override
+  String get chapters => 'Kapitel';
+
+  @override
+  String get searchCategory => 'Suchkategorie';
+
+  @override
+  String get closeSearch => 'Suche schließen';
+
+  @override
+  String get searchNeedsReading =>
+      'Öffnen Sie die Leseansicht, um das Buch zu durchsuchen oder Seitenvorschauen zu laden.';
+
+  @override
+  String get enterSearch => 'Suchbegriff eingeben';
+
+  @override
+  String get noResults => 'Keine Ergebnisse';
+
+  @override
+  String get allTypes => 'Alle Typen';
+
+  @override
+  String get bookOrder => 'Buchreihenfolge';
+
+  @override
+  String get type => 'Typ';
+
+  @override
+  String get noNotebookResults => 'Keine Einträge entsprechen diesen Filtern.';
+
+  @override
+  String get clearFilters => 'Filter zurücksetzen';
+
+  @override
+  String get saved => 'Gespeichert';
+
+  @override
+  String get showFullNote => 'Vollständige Notiz anzeigen';
+
+  @override
+  String get showLess => 'Weniger anzeigen';
+
+  @override
+  String get bookActions => 'Buchaktionen';
+
+  @override
+  String get aboutBusyBooks => 'Über BusyBooks';
+
+  @override
+  String get data => 'Daten';
+
+  @override
+  String get systemControlled => 'Vom System gesteuert';
+
+  @override
+  String get motionReduced => 'Reduziert';
+
+  @override
+  String get motionEnabled => 'Animationen aktiviert';
+
+  @override
+  String get moreReadingSettings => 'Weitere Leseeinstellungen…';
+
+  @override
+  String get pageDestination => 'Seitenzahl oder gedruckte Seitenbezeichnung';
+
+  @override
+  String get pageDestinationHelp =>
+      'Zahlen wählen physische Seiten. Verwenden Sie =Bezeichnung für gedruckte Seitenbezeichnungen.';
+
+  @override
+  String bareBookmarks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Lesezeichen ohne Notizen',
+      one: '1 Lesezeichen ohne Notiz',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get search => 'Suche';
+
+  @override
+  String get actions => 'Aktionen';
+
+  @override
+  String get sortBy => 'Sortieren nach';
+
+  @override
+  String get readingDefaults => 'Lesevorgaben';
+
+  @override
+  String get closeCollection => 'Sammlung schließen';
+
+  @override
+  String get refresh => 'Aktualisieren';
+
+  @override
+  String get anyNotes => 'Notiz optional';
+
+  @override
+  String get dateUnavailable => 'Datum nicht verfügbar';
 }

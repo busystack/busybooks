@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../app/app_router.dart';
-import '../../app/product_actions.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
 import '../../app/command_registry.dart';
 import '../../app/localization.dart';
+import '../../app/product_actions.dart';
+import '../../book_workspace/application/book_sidebar_controller.dart';
+import '../../reading/application/reader_controller.dart';
+import '../../search/book_search_session.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/notebook_controller.dart';
-import '../../reading/application/reader_controller.dart';
 
 enum BookView { reading, notebook }
+
+Future<void> _dismissBookOverlay(
+  ProviderContainer container,
+  String id,
+  bool narrow,
+) async {
+  if (!narrow) return;
+  container.read(bookSearchProvider(id).notifier).close(restoreFocus: false);
+  await container.read(bookSidebarProvider(id).notifier).setOpen(false);
+}
 
 Future<void> openNotebook(
   BuildContext context,
@@ -18,6 +31,9 @@ Future<void> openNotebook(
   String id, {
   String? annotationId,
 }) async {
+  final narrow =
+      MediaQuery.sizeOf(context).width <
+      BusyBooksSizes.workspaceSidebarBreakpoint;
   final container = ProviderScope.containerOf(context, listen: false);
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
@@ -25,9 +41,11 @@ Future<void> openNotebook(
   bool current() => router.routeInformationProvider.value.uri == origin;
   await container.read(workspaceControllerProvider.notifier).navigate(() async {
     if (!current()) return;
-    await container
-        .read(workspaceControllerProvider.notifier)
-        .loadBook(id, activate: true, isCurrent: current);
+    if (container.read(workspaceControllerProvider).openedBook?.id != id) {
+      await container
+          .read(workspaceControllerProvider.notifier)
+          .loadBook(id, activate: true, isCurrent: current);
+    }
     if (!current()) return;
     if (origin.path != '/read/$id' && origin.path != '/notebook/$id') {
       await container
@@ -38,6 +56,8 @@ Future<void> openNotebook(
     await container.read(readerControllerProvider.notifier).suspend();
     if (!current()) return;
     if (annotationId != null) {
+      await _dismissBookOverlay(container, id, narrow);
+      if (!current()) return;
       container
           .read(notebookControllerProvider.notifier)
           .revealAnnotation(id, annotationId);
@@ -52,6 +72,9 @@ Future<void> openReading(
   String id, {
   Map<String, dynamic>? anchor,
 }) async {
+  final narrow =
+      MediaQuery.sizeOf(context).width <
+      BusyBooksSizes.workspaceSidebarBreakpoint;
   final container = ProviderScope.containerOf(context, listen: false);
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
@@ -59,11 +82,28 @@ Future<void> openReading(
   bool current() => router.routeInformationProvider.value.uri == origin;
   await container.read(workspaceControllerProvider.notifier).navigate(() async {
     if (!current()) return;
-    await container
-        .read(workspaceControllerProvider.notifier)
-        .loadBook(id, activate: true, isCurrent: current);
+    if (container.read(workspaceControllerProvider).openedBook?.id != id) {
+      await container
+          .read(workspaceControllerProvider.notifier)
+          .loadBook(id, activate: true, isCurrent: current);
+    }
     if (!current()) return;
-    container.read(readerControllerProvider.notifier).pendingJump = anchor;
+    final reader = container.read(readerControllerProvider.notifier);
+    if (anchor != null) {
+      await _dismissBookOverlay(container, id, narrow);
+      if (!current()) return;
+      if (origin.path == '/read/$id' &&
+          reader.stateBookId == id &&
+          !reader.suspended) {
+        await reader.setWorkspaceVisible(true);
+        if (!current()) return;
+        if (reader.interactive) {
+          await reader.navigateFromSidebar(anchor, bookId: id);
+          return;
+        }
+      }
+    }
+    reader.pendingJump = anchor;
     router.go('/read/$id');
   });
 }

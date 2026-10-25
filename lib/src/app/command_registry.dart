@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'busybooks_shortcuts.dart';
+import 'localization.dart';
 import 'shortcut_binding.dart';
 import 'shortcut_capture.dart';
-import 'localization.dart';
 
 typedef BusyBooksCommandCallback = FutureOr<void> Function();
 typedef BusyBooksCommandPredicate = bool Function();
@@ -678,7 +678,7 @@ abstract final class BusyBooksCommandCatalog {
         ),
       command(
         BusyBooksCommandIds.annotations,
-        (c) => c.l10n.annotations,
+        (c) => c.l10n.marks,
         LogicalKeyboardKey.keyH,
         control: true,
         shift: true,

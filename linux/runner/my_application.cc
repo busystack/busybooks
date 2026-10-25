@@ -389,6 +389,7 @@ static void native_menu_deactivate_cb(GtkMenuShell*, gpointer user_data) {
 static void native_menu_action_activated_cb(GSimpleAction* action,
                                             GVariant*,
                                             gpointer user_data) {
+  if (!g_action_get_enabled(G_ACTION(action))) return;
   auto* session = static_cast<NativeMenuSession*>(user_data);
   session->pending_selected_index =
       GPOINTER_TO_INT(

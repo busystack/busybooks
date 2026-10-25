@@ -1,34 +1,39 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ubuntu_localizations/ubuntu_localizations.dart';
+
 import '../../l10n/generated/app_localizations.dart';
-import '../workspace/workspace_controller.dart';
-import '../reading/application/reader_controller.dart';
-import '../reading/application/narration_controller.dart';
+import '../book_workspace/application/book_sidebar_controller.dart';
+import '../library/application/collection_view_controller.dart';
+import '../notebook/application/notebook_controller.dart';
+import '../notebook/presentation/book_view_selector.dart';
 import '../platform/gtk_animation_settings_service.dart';
+import '../platform/gtk_header_icon_service.dart';
 import '../platform/speech_service.dart';
+import '../reading/application/narration_controller.dart';
+import '../reading/application/reader_controller.dart';
+import '../search/book_search_session.dart';
+import '../search/book_search_widgets.dart';
+import '../workspace/workspace_controller.dart';
+import 'app_locale.dart';
 import 'app_router.dart';
 import 'app_settings.dart';
-import '../library/application/collection_view_controller.dart';
 import 'app_theme.dart';
-import 'app_locale.dart';
 import 'busybooks_toast.dart';
 import 'command_registry.dart';
 import 'command_shortcuts.dart';
-import 'command_palette.dart';
-import 'keymap_controller.dart';
-import 'shortcut_binding.dart';
 import 'desktop_frame.dart';
+import 'keymap_controller.dart';
 import 'localization.dart';
 import 'product_actions.dart';
-import '../notebook/application/notebook_controller.dart';
-import '../notebook/presentation/book_view_selector.dart';
+import 'settings_page.dart';
+import 'shortcut_binding.dart';
 import 'startup_path.dart';
-import '../platform/gtk_header_icon_service.dart';
 import 'system_accent.dart';
 import 'window_control_service.dart';
 
@@ -95,6 +100,19 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
       event,
     ) {
       if (event['type'] == 'key') unawaited(_nativeKey(event));
+      if (event['type'] == 'readingSettings') {
+        final context = rootNavigatorKey.currentContext;
+        if (context != null && context.mounted) {
+          unawaited(
+            openSettings(
+              context,
+              ref,
+              page: SettingsPage.reading,
+              bookPreferences: true,
+            ),
+          );
+        }
+      }
     });
   }
 
@@ -120,6 +138,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             origin &&
         ref.read(workspaceControllerProvider).workspace?.id == workspaceId;
     bool reading() =>
+        ref.read(readerControllerProvider).surfaceVisible &&
         ref.read(readerControllerProvider).ready &&
         ref.read(readerControllerProvider).error == null &&
         ref
@@ -157,6 +176,13 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
       BusyBooksCommandIds.locateBook,
       BusyBooksCommandIds.export,
       BusyBooksCommandIds.search,
+      BusyBooksCommandIds.sidebar,
+      BusyBooksCommandIds.outline,
+      BusyBooksCommandIds.thumbnails,
+      BusyBooksCommandIds.readerBooks,
+      BusyBooksCommandIds.annotations,
+      BusyBooksCommandIds.nextResult,
+      BusyBooksCommandIds.previousResult,
     };
     final actions = <String, BusyBooksCommandCallback>{
       BusyBooksCommandIds.viewReading: () =>
@@ -183,19 +209,41 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
       BusyBooksCommandIds.settings: () => openSettings(context, ref),
       BusyBooksCommandIds.fullScreen: () =>
           ref.read(windowControlServiceProvider).toggleFullScreen(),
-      BusyBooksCommandIds.outline: () => reader.panel('outline'),
-      BusyBooksCommandIds.thumbnails: () => reader.panel('thumbnails'),
-      BusyBooksCommandIds.readerBooks: () => reader.panel('books'),
+      BusyBooksCommandIds.outline: () async {
+        ref
+            .read(bookSearchProvider(activeBook()!).notifier)
+            .close(restoreFocus: false);
+        await ref
+            .read(bookSidebarProvider(activeBook()!).notifier)
+            .selectPanel(BookSidebarPanel.outline);
+      },
+      BusyBooksCommandIds.thumbnails: () async {
+        ref
+            .read(bookSearchProvider(activeBook()!).notifier)
+            .close(restoreFocus: false);
+        await ref
+            .read(bookSidebarProvider(activeBook()!).notifier)
+            .selectPanel(BookSidebarPanel.thumbnails);
+      },
+      BusyBooksCommandIds.readerBooks: () async {
+        ref
+            .read(bookSearchProvider(activeBook()!).notifier)
+            .close(restoreFocus: false);
+        await ref
+            .read(bookSidebarProvider(activeBook()!).notifier)
+            .selectPanel(BookSidebarPanel.books);
+      },
       BusyBooksCommandIds.search: () async {
-        if (notebook()) {
-          final id = activeBook()!;
-          final view = ref.read(notebookControllerProvider).view(id);
-          ref
-              .read(notebookControllerProvider.notifier)
-              .view(id, searchVisible: !view.searchVisible, focus: true);
-        } else {
-          await reader.toggleSearch();
-        }
+        final id = activeBook()!;
+        final search = ref.read(bookSearchProvider(id).notifier);
+        await search.toggle(
+          category: notebook()
+              ? BookSearchCategory.notebook
+              : search.categories.contains(BookSearchCategory.bookText)
+              ? BookSearchCategory.bookText
+              : BookSearchCategory.notebook,
+          actions: bookSearchActions(context, _registry(context)),
+        );
       },
       BusyBooksCommandIds.searchCollection: () {
         final path = ref.read(workspaceControllerProvider).workspace?.id;
@@ -203,15 +251,33 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           ref.read(collectionViewProvider(path).notifier).update(focus: true);
         }
       },
-      BusyBooksCommandIds.sidebar: reader.toggleSidebar,
+      BusyBooksCommandIds.sidebar: () async {
+        final search = ref.read(bookSearchProvider(activeBook()!).notifier);
+        if (ref.read(bookSearchProvider(activeBook()!)).active) {
+          search.close();
+        } else {
+          await ref
+              .read(bookSidebarProvider(activeBook()!).notifier)
+              .toggleOpen();
+        }
+      },
       BusyBooksCommandIds.goTo: () => reader.showPopover('goto'),
       BusyBooksCommandIds.backToCollection: () =>
           returnToWorkspace(context, ref),
       BusyBooksCommandIds.returnToPassage: () => reader.send('back'),
-      BusyBooksCommandIds.nextResult: () => reader.stepMatch(1),
-      BusyBooksCommandIds.previousResult: () => reader.stepMatch(-1),
+      BusyBooksCommandIds.nextResult: () =>
+          _activateSearchStep(context, activeBook()!, 1),
+      BusyBooksCommandIds.previousResult: () =>
+          _activateSearchStep(context, activeBook()!, -1),
       BusyBooksCommandIds.addNote: reader.addNote,
-      BusyBooksCommandIds.annotations: () => reader.panel('annotations'),
+      BusyBooksCommandIds.annotations: () async {
+        ref
+            .read(bookSearchProvider(activeBook()!).notifier)
+            .close(restoreFocus: false);
+        await ref
+            .read(bookSidebarProvider(activeBook()!).notifier)
+            .selectPanel(BookSidebarPanel.marks);
+      },
       BusyBooksCommandIds.appearance: () => reader.showPopover(
         'appearance',
         anchor: reader.appearanceAnchor?.call(),
@@ -249,8 +315,15 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             if (!ownsContext()) return;
             await runAppAction(context, entry.value);
           },
-        BusyBooksCommandIds.commandPalette: () =>
-            showCommandPalette(context, _registry(context)),
+        BusyBooksCommandIds.commandPalette: () async {
+          final id = bookView() ? activeBook()! : applicationSearchId;
+          await ref
+              .read(bookSearchProvider(id).notifier)
+              .open(
+                category: BookSearchCategory.actions,
+                actions: bookSearchActions(context, _registry(context)),
+              );
+        },
       },
       visible: {
         BusyBooksCommandIds.searchCollection: () =>
@@ -272,8 +345,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             c.id: () =>
                 bookView() &&
                 (!notebook() || sharedBookCommands.contains(c.id)),
-        BusyBooksCommandIds.search: () =>
-            notebook() || reading() && reader.textInteraction,
+        BusyBooksCommandIds.search: () => hasBook(),
         BusyBooksCommandIds.readAloud: () =>
             reading() && reader.textInteraction,
         BusyBooksCommandIds.dictionary: () =>
@@ -281,9 +353,15 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         BusyBooksCommandIds.highlight: () =>
             reading() && reader.textInteraction,
         BusyBooksCommandIds.thumbnails: () =>
-            reading() && reader.panelAvailable('thumbnails'),
+            hasBook() &&
+            ref
+                .read(bookSidebarProvider(activeBook()!).notifier)
+                .available(BookSidebarPanel.thumbnails),
         BusyBooksCommandIds.readerBooks: () =>
-            reading() && reader.panelAvailable('books'),
+            hasBook() &&
+            ref
+                .read(bookSidebarProvider(activeBook()!).notifier)
+                .available(BookSidebarPanel.books),
       },
       enabled: {
         BusyBooksCommandIds.settings: () =>
@@ -315,6 +393,9 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           if (c.scope == BusyBooksCommandScope.documentView)
             c.id: () => reading(),
         for (final id in [
+          BusyBooksCommandIds.sidebar,
+          BusyBooksCommandIds.outline,
+          BusyBooksCommandIds.annotations,
           BusyBooksCommandIds.viewReading,
           BusyBooksCommandIds.viewNotebook,
           BusyBooksCommandIds.moveBook,
@@ -324,11 +405,16 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         ])
           id: () => hasBook(),
         BusyBooksCommandIds.thumbnails: () =>
-            reading() && reader.panelAvailable('thumbnails'),
+            hasBook() &&
+            ref
+                .read(bookSidebarProvider(activeBook()!).notifier)
+                .available(BookSidebarPanel.thumbnails),
         BusyBooksCommandIds.readerBooks: () =>
-            reading() && reader.panelAvailable('books'),
-        BusyBooksCommandIds.search: () =>
-            notebook() || reading() && reader.textInteraction,
+            hasBook() &&
+            ref
+                .read(bookSidebarProvider(activeBook()!).notifier)
+                .available(BookSidebarPanel.books),
+        BusyBooksCommandIds.search: () => hasBook(),
         BusyBooksCommandIds.readAloud: () =>
             reading() &&
             reader.textInteraction &&
@@ -352,9 +438,13 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             (reader.regionNotes ||
                 ref.read(readerControllerProvider).selection != null),
         BusyBooksCommandIds.nextResult: () =>
-            reading() && ref.read(readerControllerProvider).matches.isNotEmpty,
+            hasBook() &&
+            ref.read(bookSearchProvider(activeBook()!)).active &&
+            ref.read(bookSearchProvider(activeBook()!)).results.isNotEmpty,
         BusyBooksCommandIds.previousResult: () =>
-            reading() && ref.read(readerControllerProvider).matches.isNotEmpty,
+            hasBook() &&
+            ref.read(bookSearchProvider(activeBook()!)).active &&
+            ref.read(bookSearchProvider(activeBook()!)).results.isNotEmpty,
         BusyBooksCommandIds.highlight: () =>
             reading() &&
             reader.textInteraction &&
@@ -369,6 +459,29 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
       defaults,
       ref.read(appSettingsControllerProvider).shortcutOverrides,
     );
+  }
+
+  Future<void> _activateSearchStep(
+    BuildContext context,
+    String bookId,
+    int delta,
+  ) async {
+    final controller = ref.read(bookSearchProvider(bookId).notifier);
+    controller.moveSelection(delta);
+    final result = controller.selectedResult;
+    if (ref.read(bookSearchProvider(bookId)).category ==
+        BookSearchCategory.actions) {
+      return;
+    }
+    if (result != null) {
+      await activateBookSearchResult(
+        context,
+        ref,
+        bookId,
+        result,
+        ref.read(bookSearchProvider(bookId)).generation,
+      );
+    }
   }
 
   Future<void> _nativeKey(Map<String, dynamic> e) async {
@@ -402,7 +515,16 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         ),
         registry = _registry(context);
     if (key == 'Escape') {
-      ref.read(readerControllerProvider.notifier).toggleSearch(visible: false);
+      final path = ref
+          .read(appRouterProvider)
+          .routeInformationProvider
+          .value
+          .uri
+          .path;
+      final id = RegExp(r'^/(read|notebook)/').hasMatch(path)
+          ? path.split('/').last
+          : applicationSearchId;
+      ref.read(bookSearchProvider(id).notifier).close();
       return;
     }
     final command = registry.commandForNativeBinding(binding);

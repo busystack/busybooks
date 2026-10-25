@@ -1,112 +1,52 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../annotations/domain/annotation_order.dart';
+import 'package:intl/intl.dart';
+
+import '../../annotations/domain/annotation_filter.dart';
 import '../../annotations/presentation/annotation_presentation.dart';
-import '../../annotations/presentation/annotation_actions.dart' as actions;
 import '../../app/busybooks_design.dart';
-import '../../app/command_registry.dart';
-import '../../app/busybooks_glyphs.dart';
-import '../../app/busybooks_main_menu.dart';
-import '../../app/busybooks_search_field.dart';
 import '../../app/localization.dart';
-import '../../app/linux/linux_page_frame.dart';
-import '../../app/linux/linux_header_style.dart';
 import '../../app/product_actions.dart';
 import '../../library/domain/book.dart';
-import '../../library/data/record_validation.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/notebook_controller.dart';
-import 'book_view_selector.dart';
+import '../application/notebook_view.dart';
+import 'notebook_item.dart';
 
-String? _sectionKey(ReadingAnnotation a) {
-  if (a.anchor['page'] is int) return 'page:${a.anchor['page']}';
-  if (a.anchor['index'] is int) return 'section:${a.anchor['index']}';
-  final match = RegExp(
-    r'^epubcfi\(/6/(\d+)',
-  ).firstMatch(a.anchor['cfi']?.toString() ?? '');
-  return match == null ? null : 'spine:${match[1]}';
-}
+String notebookSortLabel(BuildContext context, NotebookSort sort) =>
+    switch (sort) {
+      NotebookSort.recentlyAdded => context.l10n.recentlyAdded,
+      NotebookSort.bookOrder => context.l10n.bookOrder,
+      NotebookSort.type => context.l10n.type,
+    };
 
-class NotebookScreen extends ConsumerStatefulWidget {
-  const NotebookScreen({super.key, required this.id});
+class NotebookContent extends ConsumerStatefulWidget {
+  const NotebookContent({super.key, required this.id, required this.active});
   final String id;
+  final bool active;
   @override
-  ConsumerState<NotebookScreen> createState() => _NotebookScreenState();
+  ConsumerState<NotebookContent> createState() => _NotebookContentState();
 }
 
-class _NotebookScreenState extends ConsumerState<NotebookScreen> {
-  late final TextEditingController _query;
+class _NotebookContentState extends ConsumerState<NotebookContent> {
   late final ScrollController _scroll;
-  final _revealKey = GlobalKey();
-  final _builtForReveal = <int>{};
-  int _revealRequest = -1, _revealPass = 0, _seekingRequest = -1;
-  double? _revealLow, _revealHigh;
-  void _revealItem(int index, int count, NotebookViewState view) {
-    if (_revealRequest == view.revealRequest || view.revealRequest == 0) return;
-    if (_seekingRequest != view.revealRequest) {
-      _seekingRequest = view.revealRequest;
-      _revealPass = 0;
-      _revealLow = null;
-      _revealHigh = null;
-      _builtForReveal.clear();
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          ref.read(notebookControllerProvider).view(widget.id).revealRequest !=
-              view.revealRequest) {
-        return;
-      }
-      final target = _revealKey.currentContext;
-      if (target != null) {
-        _revealRequest = view.revealRequest;
-        unawaited(Scrollable.ensureVisible(target, alignment: .25));
-        controller.acknowledgeReveal(widget.id, view.revealRequest);
-        return;
-      }
-      if (!_scroll.hasClients || _revealPass++ >= 24) {
-        _revealRequest = view.revealRequest;
-        return;
-      }
-      final position = _scroll.position;
-      if (_builtForReveal.isNotEmpty) {
-        final minimum = _builtForReveal.reduce((a, b) => a < b ? a : b),
-            maximum = _builtForReveal.reduce((a, b) => a > b ? a : b);
-        if (index > maximum) _revealLow = position.pixels;
-        if (index < minimum) _revealHigh = position.pixels;
-      }
-      final low = (_revealLow ?? 0).clamp(0.0, position.maxScrollExtent),
-          high = (_revealHigh ?? position.maxScrollExtent).clamp(
-            low,
-            position.maxScrollExtent,
-          );
-      final estimated = _revealPass == 1
-          ? position.maxScrollExtent * index / (count > 1 ? count - 1 : 1)
-          : (low + high) / 2;
-      _builtForReveal.clear();
-      _scroll.jumpTo(estimated.clamp(0.0, position.maxScrollExtent));
-      if (mounted) setState(() {});
-    });
-  }
-
+  final _centerKey = GlobalKey();
+  final _listFocus = FocusNode(debugLabel: 'Notebook items');
+  int _revealed = -1, _layout = 0;
+  String? _unavailable;
   NotebookController get controller =>
       ref.read(notebookControllerProvider.notifier);
   @override
   void initState() {
     super.initState();
-    final view = ref.read(notebookControllerProvider).view(widget.id);
-    _query = TextEditingController(text: view.query);
-    _scroll = ScrollController(initialScrollOffset: view.scroll)
-      ..addListener(_saveScroll);
-    Future.microtask(() async {
-      try {
-        await ref
-            .read(workspaceControllerProvider.notifier)
-            .loadBook(widget.id);
-      } catch (e) {
-        if (mounted) await showError(context, e);
-      }
-    });
+    _scroll = ScrollController(
+      initialScrollOffset: ref
+          .read(notebookControllerProvider)
+          .view(widget.id)
+          .scroll,
+      keepScrollOffset: false,
+    )..addListener(_saveScroll);
   }
 
   void _saveScroll() => controller.view(widget.id, scroll: _scroll.offset);
@@ -114,450 +54,341 @@ class _NotebookScreenState extends ConsumerState<NotebookScreen> {
   void dispose() {
     _scroll.removeListener(_saveScroll);
     _scroll.dispose();
-    _query.dispose();
+    _listFocus.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(
+      notebookControllerProvider.select((s) {
+        final view = s.view(widget.id);
+        return (
+          view.filter,
+          view.sort,
+          view.withNotes,
+          view.selected,
+          view.revealRequest,
+          view.revealAnnotation,
+          view.editFocusRequest,
+          view.editFocused,
+          view.scrollCenter,
+          s.drafts,
+          s.sources,
+        );
+      }),
+    );
     final data = ref.watch(workspaceControllerProvider),
-        notebook = ref.watch(notebookControllerProvider),
-        view = notebook.view(widget.id),
-        l = context.l10n;
-    final book = data.bookById(widget.id);
-    final showViewSelector = book != null && !view.searchVisible;
-    final sourceItems = notebook.annotationsFor(widget.id, data.annotations);
-    final items = sourceItems.where((a) {
-      if (a.bookId != widget.id ||
-          view.filter != 'all' && a.kind != view.filter) {
-        return false;
-      }
-      final note = notebook.effectiveNote(a);
-      return (!view.withNotes || note.trim().isNotEmpty) &&
-          '${a.text}\n$note'.toLowerCase().contains(view.query.toLowerCase());
-    }).toList()..sort((a, b) => compareAnnotationLocations(a.data, b.data));
-    final target = items.indexWhere((a) => a.id == view.revealAnnotation);
-    if (target >= 0) _revealItem(target, items.length, view);
-    return Focus(
-      autofocus: !view.searchVisible,
-      skipTraversal: true,
-      child: Scaffold(
-        body: LinuxPageFrame(
-          sidebarAvailable: false,
-          sidebarExpanded: false,
-          header: BusyBooksLinuxHeaderLayout(
-            leading: BusyBooksHeaderIconButton(
-              key: const ValueKey('notebook-home'),
-              tooltip: l.welcome,
-              icon: BusyBooksGlyphs.home,
-              onPressed: () async {
-                final registry = BusyBooksCommandRegistryScope.maybeOf(context);
-                await (registry?[BusyBooksCommandIds.welcome]?.execute != null
-                    ? registry!.execute(BusyBooksCommandIds.welcome)
-                    : closeWorkspace(context, ref));
-              },
-            ),
-            centerAllocation: view.searchVisible
-                ? BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls
-                : BusyBooksLinuxHeaderCenterAllocation.centeredBetweenControls,
-            title: view.searchVisible
-                ? BusyBooksSearchField(
-                    controller: _query,
-                    hintText: l.searchNotebook,
-                    focusRequest: view.focusRequest,
-                    autofocus: true,
-                    onChanged: (v) => controller.view(widget.id, query: v),
-                    onEscape: () =>
-                        controller.view(widget.id, searchVisible: false),
-                  )
-                : BusyBooksLinuxHeaderTitle(
-                    '${book?.title ?? l.book} · ${l.notebook}',
-                  ),
-            trailing: BusyBooksLinuxHeaderControlGroup(
-              children: [
-                if (showViewSelector)
-                  BookViewSelector(id: widget.id, view: BookView.notebook),
-                BusyBooksHeaderIconButton(
-                  tooltip: l.searchNotebook,
-                  icon: BusyBooksGlyphs.search,
-                  selected: view.searchVisible,
-                  shortcut: BusyBooksCommandRegistryScope.maybeOf(
-                    context,
-                  )?[BusyBooksCommandIds.search]?.shortcut?.label,
-                  onPressed: () {
-                    final registry = BusyBooksCommandRegistryScope.maybeOf(
-                      context,
-                    );
-                    if (registry?[BusyBooksCommandIds.search]?.execute !=
-                        null) {
-                      registry!.execute(BusyBooksCommandIds.search);
-                    } else {
-                      controller.view(
-                        widget.id,
-                        searchVisible: !view.searchVisible,
-                        focus: true,
-                      );
-                    }
-                  },
-                ),
-                BusyBooksMainMenuButton(
-                  bookViewSelectorVisible: showViewSelector,
-                ),
-              ],
-            ),
-          ),
-          body: Semantics(
-            label: l.notebook,
-            container: true,
-            child: ColoredBox(
-              color: BusyBooksSurfaceColors.of(context).view,
-              child: Column(
-                children: [
-                  if (data.loading) ...[
-                    LinearProgressIndicator(
-                      value: (data.progress['total'] as int? ?? 0) > 0
-                          ? (data.progress['done'] as int) /
-                                (data.progress['total'] as int)
-                          : null,
-                    ),
-                    BusyBooksActionRow(
-                      title: l.busy,
-                      subtitle: data.progress['name']?.toString(),
-                      trailing: BusyBooksDialogButton(
-                        label: l.cancel,
-                        onPressed: () => ref
-                            .read(workspaceControllerProvider.notifier)
-                            .cancel(),
-                      ),
-                    ),
-                  ],
-                  if (book != null && !book.available)
-                    BusyBooksBanner(
-                      title: l.missingBookNotebook,
-                      actionLabel: l.locateBook,
-                      onAction: () => locateBook(context, ref, book.id),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.all(BusyBooksSpacing.md),
-                    child: Row(
-                      children: [
-                        for (final filter in [
-                          ('all', l.allItems),
-                          ('highlight', l.highlights),
-                          ('bookmark', l.bookmarks),
-                          ('region', l.regionNotes),
-                        ])
-                          Padding(
-                            padding: const EdgeInsetsDirectional.only(end: 8),
-                            child: BusyBooksPushButton.standard(
-                              onPressed: () =>
-                                  controller.view(widget.id, filter: filter.$1),
-                              child: Semantics(
-                                selected: view.filter == filter.$1,
-                                child: Text(
-                                  '${view.filter == filter.$1 ? '✓ ' : ''}${filter.$2}',
-                                ),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(width: 12),
-                        Checkbox(
-                          value: view.withNotes,
-                          onChanged: (v) =>
-                              controller.view(widget.id, withNotes: v),
-                        ),
-                        Flexible(child: Text(l.withNotes)),
-                      ],
-                    ),
-                  ),
-                  if (view.searchVisible)
-                    Padding(
-                      padding: BusyBooksInsets.sectionLabel,
-                      child: Text(l.notebookSearchScope),
-                    ),
-                  Expanded(
-                    child: items.isEmpty
-                        ? Center(child: Text(l.notebookEmpty))
-                        : ListView.builder(
-                            controller: _scroll,
-                            itemCount: items.length,
-                            itemBuilder: (c, i) {
-                              _builtForReveal.add(i);
-                              final a = items[i];
-                              final card = BusyBooksClamp(
-                                maxWidth: 1000,
-                                scrollable: false,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 10,
-                                  ),
-                                  child: _NotebookItem(
-                                    key: ValueKey(a.id),
-                                    annotation: a,
-                                    selected: view.selected == a.id,
-                                    onSelect: () => controller.view(
-                                      widget.id,
-                                      selected: a.id,
-                                    ),
-                                  ),
-                                ),
-                              );
-                              final section = _sectionKey(a);
-                              final heading =
-                                  section != null &&
-                                  (i == 0 ||
-                                      _sectionKey(items[i - 1]) != section);
-                              return Column(
-                                key: a.id == view.revealAnnotation
-                                    ? _revealKey
-                                    : null,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  if (heading)
-                                    BusyBooksClamp(
-                                      scrollable: false,
-                                      maxWidth: 1000,
-                                      child: Semantics(
-                                        header: true,
-                                        child: Text(
-                                          annotationReference(
-                                            c,
-                                            a,
-                                            book: book,
-                                          ).split(' · ').first,
-                                          style: Theme.of(
-                                            c,
-                                          ).textTheme.titleMedium,
-                                        ),
-                                      ),
-                                    ),
-                                  card,
-                                ],
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NotebookItem extends ConsumerStatefulWidget {
-  const _NotebookItem({
-    super.key,
-    required this.annotation,
-    required this.selected,
-    required this.onSelect,
-  });
-  final ReadingAnnotation annotation;
-  final bool selected;
-  final VoidCallback onSelect;
-  @override
-  ConsumerState<_NotebookItem> createState() => _NotebookItemState();
-}
-
-class _NotebookItemState extends ConsumerState<_NotebookItem> {
-  late final TextEditingController _note;
-  @override
-  void initState() {
-    super.initState();
-    _note = TextEditingController(
-      text: ref
-          .read(notebookControllerProvider)
-          .effectiveNote(widget.annotation),
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _NotebookItem old) {
-    super.didUpdateWidget(old);
-    final value = ref
-        .read(notebookControllerProvider)
-        .effectiveNote(widget.annotation);
-    if (_note.text != value) _note.text = value;
-  }
-
-  @override
-  void dispose() {
-    _note.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final notes = ref.watch(notebookControllerProvider);
-    final a = widget.annotation,
+        notes = ref.read(notebookControllerProvider),
+        view = notes.view(widget.id),
         l = context.l10n,
-        draft = notes.drafts[a.id],
-        resolving = notes.resolving.contains(a.id),
-        controller = ref.read(notebookControllerProvider.notifier);
-    return BusyBooksGroupedSurface(
-      focused: widget.selected,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+        book = data.bookById(widget.id);
+    final source = notes.annotationsFor(widget.id, data.annotations);
+    final bareBookmarks = source
+        .where(
+          (a) => a.kind == 'bookmark' && notes.effectiveNote(a).trim().isEmpty,
+        )
+        .length;
+    final items =
+        source
+            .where(
+              (a) =>
+                  view.filter.includes(a) &&
+                  (!view.withNotes ||
+                      notes.effectiveNote(a).trim().isNotEmpty) &&
+                  (view.filter != AnnotationTypeFilter.all ||
+                      a.kind != 'bookmark' ||
+                      notes.effectiveNote(a).trim().isNotEmpty),
+            )
+            .toList()
+          ..sort((a, b) => compareNotebookAnnotations(a, b, view.sort));
+    var center = items.indexWhere((a) => a.id == view.scrollCenter);
+    if (center < 0) center = 0;
+    if (view.revealRequest != _revealed &&
+        view.revealAnnotation != null &&
+        widget.active) {
+      _revealed = view.revealRequest;
+      _layout++;
+      final request = view.revealRequest;
+      final found = items.any((a) => a.id == view.revealAnnotation);
+      _unavailable = found ? null : l.noteItemUnavailable;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            ref
+                    .read(notebookControllerProvider)
+                    .view(widget.id)
+                    .revealRequest !=
+                request) {
+          return;
+        }
+        if (_scroll.hasClients && found) _scroll.jumpTo(0);
+        controller.acknowledgeReveal(widget.id, request);
+      });
+    }
+    final locale = Localizations.localeOf(context).toString();
+    String group(ReadingAnnotation a) => switch (view.sort) {
+      NotebookSort.recentlyAdded =>
+        annotationCreationTime(a) == null
+            ? l.dateUnavailable
+            : DateFormat.yMMMMd(locale).format(annotationCreationTime(a)!),
+      NotebookSort.bookOrder => annotationReference(
+        context,
+        a,
+        book: book,
+      ).split(' · ').first,
+      NotebookSort.type => annotationTypeLabel(context, a.kind),
+    };
+    final indices = {for (var i = 0; i < items.length; i++) items[i].id: i};
+    Widget item(int index) {
+      final a = items[index];
+      return BusyBooksClamp(
+        key: ValueKey(a.id),
+        maxWidth: BusyBooksSizes.contentWidth,
+        scrollable: false,
+        margin: EdgeInsets.zero,
+        padding: const EdgeInsets.symmetric(
+          horizontal: BusyBooksSpacing.lg,
+          vertical: BusyBooksSpacing.sm,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Icon(
-                  a.kind != 'bookmark'
-                      ? BusyBooksGlyphs.edit
-                      : BusyBooksGlyphs.bookmark,
+            if (index == 0 || group(items[index - 1]) != group(a))
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: BusyBooksSpacing.md,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
+                child: Semantics(
+                  header: true,
                   child: Text(
-                    '${a.kind == 'region'
-                        ? l.regionNote
-                        : a.kind == 'highlight'
-                        ? l.highlight
-                        : l.bookmark} · ${annotationReference(context, a, book: ref.read(workspaceControllerProvider).bookById(a.bookId))}',
+                    group(a),
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
-                BusyBooksHeaderPopupMenuButton<String>(
-                  tooltip: l.annotationActions,
-                  icon: BusyBooksGlyphs.menuVertical,
-                  itemBuilder: (_) => [
-                    BusyBooksPopupMenuItem(
-                      value: 'jump',
-                      label: l.showInReading,
-                    ),
-                    BusyBooksPopupMenuItem(value: 'edit', label: l.editNote),
-                    if (a.kind != 'bookmark')
-                      for (final color in annotationColors)
-                        BusyBooksPopupMenuItem(
-                          value: color,
-                          label: switch (color) {
-                            'green' => l.green,
-                            'blue' => l.blue,
-                            'pink' => l.pink,
-                            'purple' => l.purple,
-                            _ => l.yellow,
-                          },
-                          checked: color == a.color,
-                          trailingCheck: true,
-                        ),
-                    BusyBooksPopupMenuItem(value: 'remove', label: l.delete),
-                  ],
-                  onSelected: (action) async {
-                    try {
-                      if (action == 'edit') {
-                        widget.onSelect();
-                        return;
-                      }
-                      if (action == 'jump') {
-                        await openReading(
-                          context,
-                          ref,
-                          a.bookId,
-                          anchor: a.anchor,
-                        );
-                        return;
-                      }
-                      if (action == 'remove') {
-                        await actions.deleteAnnotation(context, ref, a);
-                      } else {
-                        await ref
-                            .read(workspaceControllerProvider.notifier)
-                            .updateAnnotation(a.id, {
-                              'color': action,
-                            }, bookId: a.bookId);
-                      }
-                    } catch (e) {
-                      if (context.mounted) await showError(context, e);
-                    }
-                  },
-                ),
-              ],
+              ),
+            NotebookItem(
+              key: ValueKey('notebook-item-${a.id}'),
+              annotation: a,
+              selected: view.selected == a.id,
+              active: widget.active,
+              focusRequest: view.editFocused ? view.editFocusRequest : 0,
+              onSelect: () =>
+                  controller.view(widget.id, selected: a.id, focusEditor: true),
             ),
-            if (a.text.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Semantics(
-                  label: l.savedPassage,
-                  child: SelectableText(
-                    a.text,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
+          ],
+        ),
+      );
+    }
+
+    return Focus(
+      focusNode: _listFocus,
+      autofocus: widget.active,
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape &&
+            view.editFocused) {
+          controller.view(widget.id, focusEditor: false);
+          _listFocus.requestFocus();
+          return KeyEventResult.handled;
+        }
+        if (event is! KeyDownEvent ||
+            FocusManager.instance.primaryFocus?.context
+                    ?.findAncestorWidgetOfExactType<EditableText>() !=
+                null) {
+          return KeyEventResult.ignored;
+        }
+        if (items.isEmpty) return KeyEventResult.ignored;
+        final selected = items.indexWhere((a) => a.id == view.selected);
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+            event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          final index =
+              (selected +
+                      (event.logicalKey == LogicalKeyboardKey.arrowDown
+                          ? 1
+                          : -1))
+                  .clamp(0, items.length - 1);
+          controller.revealAnnotation(
+            widget.id,
+            items[index].id,
+            focusEditor: false,
+          );
+          _listFocus.requestFocus();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.enter && selected >= 0) {
+          controller.view(
+            widget.id,
+            selected: items[selected].id,
+            focusEditor: true,
+          );
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: ColoredBox(
+        color: BusyBooksSurfaceColors.of(context).view,
+        child: Column(
+          children: [
+            if (book != null && !book.available)
+              BusyBooksBanner(
+                title: l.missingBookNotebook,
+                actionLabel: l.locateBook,
+                onAction: () => locateBook(context, ref, book.id),
               ),
-            const SizedBox(height: 12),
-            if (widget.selected) ...[
-              BusyBooksGroupedTextEntry(
-                label: l.privateNote,
-                controller: _note,
-                minLines: 4,
-                maxLines: 16,
-                onChanged: (v) => controller.edit(a, v),
+            if (_unavailable != null)
+              BusyBooksBanner(
+                title: _unavailable!,
+                actionLabel: l.close,
+                onAction: () => setState(() => _unavailable = null),
               ),
-              Row(
+            Padding(
+              padding: const EdgeInsets.all(BusyBooksSpacing.md),
+              child: Wrap(
+                spacing: BusyBooksSpacing.sm,
+                runSpacing: BusyBooksSpacing.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  BusyBooksDialogButton(
-                    label: l.save,
-                    onPressed: resolving
-                        ? null
-                        : () async {
-                            try {
-                              await controller.save(a.id);
-                            } catch (_) {}
-                          },
+                  BusyBooksPopupSelector<NotebookSort>(
+                    value: view.sort,
+                    label: notebookSortLabel(context, view.sort),
+                    tooltip: l.sortBy,
+                    options: [
+                      for (final sort in NotebookSort.values)
+                        BusyBooksPopupSelectorOption(
+                          value: sort,
+                          label: notebookSortLabel(context, sort),
+                        ),
+                    ],
+                    onSelected: (sort) {
+                      controller.view(widget.id, sort: sort);
+                      _resetScroll();
+                    },
                   ),
-                  if (draft != null) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        draft.error == null
-                            ? l.unsavedNote
-                            : draft.actionFailed
-                            ? l.noteActionFailed
-                            : l.noteSaveFailed,
+                  BusyBooksPopupSelector<AnnotationTypeFilter>(
+                    value: view.filter,
+                    label: annotationFilterLabel(context, view.filter),
+                    tooltip: l.type,
+                    options: [
+                      for (final filter in AnnotationTypeFilter.values)
+                        BusyBooksPopupSelectorOption(
+                          value: filter,
+                          label: annotationFilterLabel(context, filter),
+                        ),
+                    ],
+                    onSelected: (filter) {
+                      controller.view(widget.id, filter: filter);
+                      _resetScroll();
+                    },
+                  ),
+                  BusyBooksPopupSelector<bool>(
+                    value: view.withNotes,
+                    label: view.withNotes ? l.withNotes : l.anyNotes,
+                    tooltip: l.privateNote,
+                    options: [
+                      BusyBooksPopupSelectorOption(
+                        value: false,
+                        label: l.anyNotes,
                       ),
+                      BusyBooksPopupSelectorOption(
+                        value: true,
+                        label: l.withNotes,
+                      ),
+                    ],
+                    onSelected: (value) {
+                      controller.view(widget.id, withNotes: value);
+                      _resetScroll();
+                    },
+                  ),
+                  if (bareBookmarks > 0 &&
+                      view.filter == AnnotationTypeFilter.all)
+                    TextButton(
+                      onPressed: () {
+                        controller.view(
+                          widget.id,
+                          filter: AnnotationTypeFilter.bookmarks,
+                        );
+                        _resetScroll();
+                      },
+                      child: Text(l.bareBookmarks(bareBookmarks)),
                     ),
-                    BusyBooksDialogButton(
-                      label: l.discard,
-                      onPressed: resolving
-                          ? null
-                          : () async {
-                              try {
-                                await controller.discard(
-                                  a.id,
-                                  confirm: () => confirm(
-                                    context,
-                                    l.discard,
-                                    l.discardNoteHelp,
-                                    acceptLabel: l.discard,
-                                  ),
-                                );
-                              } catch (error) {
-                                if (context.mounted) {
-                                  await showError(context, error);
-                                }
-                              }
-                            },
-                    ),
-                  ],
                 ],
               ),
-              if (draft?.error != null) SelectableText(draft!.error!),
-            ] else
-              BusyBooksActionRow(
-                title: l.privateNote,
-                subtitle: (draft?.text ?? a.note).isEmpty
-                    ? l.addNote
-                    : draft?.text ?? a.note,
-                onTap: widget.onSelect,
-              ),
+            ),
+            Expanded(
+              child: items.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(BusyBooksSpacing.lg),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              source.isEmpty
+                                  ? l.noAnnotations
+                                  : l.noNotebookResults,
+                            ),
+                            if (source.isNotEmpty)
+                              TextButton(
+                                onPressed: () {
+                                  controller.view(
+                                    widget.id,
+                                    filter: AnnotationTypeFilter.all,
+                                    withNotes: false,
+                                  );
+                                  _resetScroll();
+                                },
+                                child: Text(l.clearFilters),
+                              ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : CustomScrollView(
+                      key: ValueKey(_layout),
+                      controller: _scroll,
+                      center: _centerKey,
+                      anchor: center == 0 ? 0 : .15,
+                      slivers: [
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => item(center - 1 - index),
+                            childCount: center,
+                            findChildIndexCallback: (key) {
+                              final index =
+                                  indices[(key as ValueKey<String>).value];
+                              return index != null && index < center
+                                  ? center - 1 - index
+                                  : null;
+                            },
+                          ),
+                        ),
+                        SliverList(
+                          key: _centerKey,
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => item(center + index),
+                            childCount: items.length - center,
+                            findChildIndexCallback: (key) {
+                              final index =
+                                  indices[(key as ValueKey<String>).value];
+                              return index != null && index >= center
+                                  ? index - center
+                                  : null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _resetScroll() {
+    _layout++;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
+    });
   }
 }

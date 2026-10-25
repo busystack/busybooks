@@ -1,27 +1,30 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:busybooks/l10n/generated/app_localizations.dart';
-import 'package:busybooks/src/app/app_theme.dart';
 import 'package:busybooks/src/app/app_router.dart';
 import 'package:busybooks/src/app/app_settings.dart';
-import 'package:busybooks/src/app/product_actions.dart';
-import 'package:busybooks/src/reading/application/reader_controller.dart';
-import 'package:busybooks/src/app/system_accent.dart';
-import 'package:busybooks/src/app/command_registry.dart';
+import 'package:busybooks/src/app/app_theme.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
+import 'package:busybooks/src/app/command_registry.dart';
+import 'package:busybooks/src/app/product_actions.dart';
+import 'package:busybooks/src/app/system_accent.dart';
+import 'package:busybooks/src/book_workspace/presentation/book_workspace_screen.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/domain/book.dart';
-import 'package:busybooks/src/notebook/presentation/notebook_screen.dart';
+import 'package:busybooks/src/notebook/presentation/book_view_selector.dart';
+import 'package:busybooks/src/reading/application/reader_controller.dart';
 import 'package:busybooks/src/workspace/presentation/welcome_screen.dart';
 import 'package:busybooks/src/workspace/workspace_controller.dart';
 import 'package:busybooks/src/workspace/workspace_model.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
+
 import '../support/historical_files_fixture.dart';
 
 class _WelcomeState extends WorkspaceController {
@@ -295,7 +298,7 @@ Future<void> _profileHome(WidgetTester tester, bool historical) async {
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: NotebookScreen(id: id),
+          home: BookWorkspaceScreen(view: BookView.notebook, id: id),
         ),
       ),
     );

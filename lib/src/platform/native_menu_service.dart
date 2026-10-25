@@ -182,10 +182,13 @@ class NativeMenuService {
     } on MissingPluginException {
       return false;
     } on PlatformException catch (error) {
-      if (error.code == 'unavailable') {
-        return false;
+      if (error.code == 'invalid-arguments' || error.code == 'bad-arguments') {
+        rethrow;
       }
-      rethrow;
+      debugPrint(
+        'Native menu ${session.id} dismissal failed: ${error.code}: ${error.message}',
+      );
+      return false;
     }
   }
 }

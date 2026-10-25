@@ -10,7 +10,7 @@ abstract final class BusyBooksGlyphs {
   static const IconData bookmark = YaruIcons.bookmark;
   static const IconData pause = YaruIcons.media_pause;
   static const IconData stop = YaruIcons.media_stop;
-  static const IconData annotations = YaruIcons.pen;
+  static const IconData annotations = YaruIcons.rule_and_pen;
   static const IconData notebookView = YaruIcons.pen;
   static const IconData back = YaruIcons.go_previous;
   static const IconData forward = YaruIcons.go_next;

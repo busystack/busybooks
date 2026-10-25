@@ -1,3 +1,31 @@
+/// A bare integer always means a physical page (1-based). Non-numeric labels
+/// resolve exactly; =label explicitly selects a numeric or otherwise ambiguous
+/// printed label. Repeated labels never choose an arbitrary page.
+int? resolvePageDestination(
+  String input, {
+  required int pages,
+  required List<String> labels,
+}) {
+  final text = input.trim();
+  if (text.startsWith('=')) {
+    return resolvePdfPage(
+      text.substring(1),
+      pages: pages,
+      labels: labels,
+      printedLabel: true,
+    );
+  }
+  if (int.tryParse(text) != null) {
+    return resolvePdfPage(
+      text,
+      pages: pages,
+      labels: labels,
+      printedLabel: false,
+    );
+  }
+  return resolvePdfPage(text, pages: pages, labels: labels, printedLabel: true);
+}
+
 /// Validate user-facing PDF coordinates without accepting renderer identifiers.
 int? resolvePdfPage(
   String input, {

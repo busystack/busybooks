@@ -1,17 +1,19 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../app/app_settings.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/localization.dart';
 import '../../core/reading_preferences.dart';
 import '../../core/typography.dart';
+import '../application/reader_controller.dart';
 import '../fonts/reading_font_service.dart';
 import 'font_chooser.dart';
-import '../application/reader_controller.dart';
 
-/// The same callback-driven controls are used in Settings and the owned reader
-/// popover. No persistence or renderer work runs inside these controls.
+/// Advanced/default typography controls for Settings. Preference ownership
+/// and renderer updates remain with the calling presentation/controller.
 class ReadingAppearanceControls extends StatefulWidget {
   const ReadingAppearanceControls({
     super.key,

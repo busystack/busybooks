@@ -2,30 +2,32 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import '../../../l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../l10n/generated/app_localizations.dart';
 import '../../app/app_settings.dart';
+import '../../book_workspace/application/book_sidebar_controller.dart';
 import '../../core/reading_preferences.dart';
 import '../../core/typography.dart';
-import '../fonts/reading_font_service.dart';
-import '../../workspace/workspace_controller.dart';
-import '../../workspace/workspace_model.dart';
-import '../../library/domain/book.dart';
 import '../../library/data/file_identity.dart';
-import '../domain/reader_bridge.dart';
 import '../../library/data/record_validation.dart' show validateAnchor;
 import '../../library/domain/annotation_limits.dart';
-import '../domain/reading_navigation.dart';
-import '../domain/publication_outline.dart';
-import '../domain/page_preview.dart';
-import 'reader_sidebar_state.dart';
-import '../domain/reader_action.dart';
-import '../domain/annotation_transfer.dart';
-import 'narration_controller.dart';
-import 'dictionary_service.dart';
+import '../../library/domain/book.dart';
 import '../../notebook/application/notebook_controller.dart';
+import '../../workspace/workspace_controller.dart';
+import '../../workspace/workspace_model.dart';
+import '../domain/annotation_transfer.dart';
+import '../domain/page_preview.dart';
+import '../domain/publication_outline.dart';
+import '../domain/reader_action.dart';
+import '../domain/reader_bridge.dart';
+import '../domain/reading_navigation.dart';
+import '../fonts/reading_font_service.dart';
+import 'dictionary_service.dart';
+import 'narration_controller.dart';
 
 const readerChannel = MethodChannel('io.busystack.busybooks/reader');
 final readerStartupTimeoutProvider = Provider<Duration>(
@@ -57,6 +59,7 @@ class ReaderState {
   const ReaderState({
     this.bookId,
     this.ready = false,
+    this.surfaceVisible = false,
     this.error,
     this.warning,
     this.popoverError,
@@ -73,11 +76,7 @@ class ReaderState {
     this.searchProgress = 0,
     this.query = '',
     this.searchStatus = 'idle',
-    this.searchVisible = false,
     this.currentMatch = -1,
-    this.searchFocus = 0,
-    this.panel = 'outline',
-    this.panelOpen = false,
     this.fixed = false,
     this.typography = TypographyCapabilities.none,
     this.pages = 0,
@@ -88,7 +87,7 @@ class ReaderState {
   });
   final String? bookId, error, warning, errorCode, popoverError;
   final String phase;
-  final bool ready, searching, panelOpen, fixed;
+  final bool ready, searching, fixed, surfaceVisible;
   final TypographyCapabilities typography;
   final int pages;
   final Map<String, dynamic>? selection;
@@ -101,9 +100,8 @@ class ReaderState {
       (navigation['speechNext'] as bool? ?? navigation['next'] == true);
   bool get canPrevious => ready && navigation['previous'] == true;
   final List<Map<String, dynamic>> toc, matches;
-  final String panel, query, searchStatus;
-  final bool searchVisible;
-  final int currentMatch, searchFocus;
+  final String query, searchStatus;
+  final int currentMatch;
   final double searchProgress;
   final List<String> labels;
   final Map<int, PagePreview> thumbnails;
@@ -114,6 +112,7 @@ class ReaderState {
   ReaderState copy({
     String? bookId,
     bool? ready,
+    bool? surfaceVisible,
     String? error,
     String? warning,
     String? errorCode,
@@ -131,11 +130,7 @@ class ReaderState {
     double? searchProgress,
     String? query,
     String? searchStatus,
-    bool? searchVisible,
     int? currentMatch,
-    int? searchFocus,
-    String? panel,
-    bool? panelOpen,
     bool? fixed,
     TypographyCapabilities? typography,
     int? pages,
@@ -148,6 +143,7 @@ class ReaderState {
   }) => ReaderState(
     bookId: bookId ?? this.bookId,
     ready: ready ?? this.ready,
+    surfaceVisible: surfaceVisible ?? this.surfaceVisible,
     error: error ?? this.error,
     warning: clearWarning ? null : warning ?? this.warning,
     popoverError: clearPopoverError ? null : popoverError ?? this.popoverError,
@@ -162,11 +158,7 @@ class ReaderState {
     searchProgress: searchProgress ?? this.searchProgress,
     query: query ?? this.query,
     searchStatus: searchStatus ?? this.searchStatus,
-    searchVisible: searchVisible ?? this.searchVisible,
     currentMatch: currentMatch ?? this.currentMatch,
-    searchFocus: searchFocus ?? this.searchFocus,
-    panel: panel ?? this.panel,
-    panelOpen: panelOpen ?? this.panelOpen,
     fixed: fixed ?? this.fixed,
     typography: typography ?? this.typography,
     pages: pages ?? this.pages,
@@ -181,7 +173,7 @@ class ReaderState {
 
 class ReaderController extends Notifier<ReaderState> {
   final events = StreamController<Map<String, dynamic>>.broadcast();
-  Timer? _saveTimer, _searchTimer, _startupTimer;
+  Timer? _saveTimer, _startupTimer;
   int _searchRevision = 0, _presentation = 0;
   Rect viewport = Rect.zero;
   Map<String, dynamic> _chrome = {};
@@ -243,18 +235,13 @@ class ReaderController extends Notifier<ReaderState> {
         !state.ready) {
       return;
     }
-    await toggleSearch(visible: true);
-    if (target.session != _session ||
-        target.bookId != state.bookId ||
-        target.presentation + 1 != _presentation ||
-        !_routeVisible ||
-        !state.ready) {
-      return;
-    }
-    // Submission intentionally advances an unchanged completed query. A
-    // selection action starts a fresh revision without navigating the passage.
-    search(target.text, immediate: true);
-    _rememberSidebar();
+    events.add({
+      'type': 'searchSelection',
+      'bookId': target.bookId,
+      'session': _session,
+      'presentation': _presentation,
+      'text': target.text,
+    });
   }
 
   Future<ReaderSelectionTarget?> prepareLookup() async {
@@ -349,9 +336,35 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   String? get stateBookId => state.bookId;
+  String get sessionId => _session;
+  int get presentationId => _presentation;
+  int get searchRevision => _searchRevision;
+  bool get interactive =>
+      state.ready &&
+      state.surfaceVisible &&
+      state.error == null &&
+      _routeVisible &&
+      _workspaceVisible &&
+      !_suspended;
   Map<String, dynamic>? pendingJump;
   bool _suspended = false;
+  bool _workspaceVisible = true;
+  bool get suspended => _suspended;
+  // Searching is safe while the reading surface is hidden behind a temporary
+  // sidebar. Navigation/focus still require visible, interactive ownership.
+  bool get canSearch =>
+      state.ready && state.error == null && _routeVisible && !_suspended;
+  Future<void> setWorkspaceVisible(bool value) {
+    _workspaceVisible = value;
+    return _applyVisibility();
+  }
+
   Future<void> suspend() async {
+    if (state.bookId == null) {
+      _suspended = true;
+      _routeVisible = false;
+      return;
+    }
     final session = _session, visible = _routeVisible;
     await ref.read(narrationControllerProvider.notifier).stop();
     _invalidateAppearanceWork();
@@ -359,6 +372,7 @@ class ReaderController extends Notifier<ReaderState> {
     await _eventTail;
     await dismissPopover();
     if (session != _session) return;
+    await cancelSearch();
     _suspended = true;
     _routeVisible = false;
     try {
@@ -562,7 +576,6 @@ class ReaderController extends Notifier<ReaderState> {
       _presentation++;
       _openRevision++;
       _saveTimer?.cancel();
-      _searchTimer?.cancel();
       _startupTimer?.cancel();
       _fileCheck?.cancel();
       _filePoll?.cancel();
@@ -659,7 +672,6 @@ class ReaderController extends Notifier<ReaderState> {
     }
     if (state.bookId != id || !state.ready) {
       _invalidateLookup();
-      _rememberSidebar();
       _invalidateAppearanceWork();
       if (state.ready) await send('cancelAppearance');
       _session = 'preparing:${++_generation}';
@@ -706,7 +718,6 @@ class ReaderController extends Notifier<ReaderState> {
       _filePoll?.cancel();
       _filePoll = null;
       await ref.read(narrationControllerProvider.notifier).stop();
-      _searchTimer?.cancel();
       _searchRevision++;
       _revealOnLocation = false;
       _outlineRevision = null;
@@ -719,26 +730,7 @@ class ReaderController extends Notifier<ReaderState> {
       _annotationId = null;
       _popoverActive = false;
       _presentation++;
-      final settings = ref.read(appSettingsControllerProvider).data;
-      final remembered = ref.read(readerSidebarProvider(id));
-      var panel = remembered.panel ?? settings['readerPanel'] as String;
-      if (panel == 'books' &&
-              ref.read(workspaceControllerProvider).workspace?.isBook !=
-                  false ||
-          panel == 'thumbnails' && !current.pageBased ||
-          panel == 'search' && !current.textInteraction) {
-        panel = 'outline';
-      }
-      state = ReaderState(
-        bookId: id,
-        phase: 'initializing',
-        panelOpen: remembered.open ?? settings['readerSidebar'] == true,
-        panel: panel,
-        query: remembered.query,
-        matches: remembered.matches,
-        currentMatch: remembered.currentMatch,
-        searchVisible: current.textInteraction && remembered.searchVisible,
-      );
+      state = ReaderState(bookId: id, phase: 'initializing');
       _sourcePath = path;
       _session = '$_sessionPrefix${++_generation}';
       final session = _session;
@@ -780,17 +772,8 @@ class ReaderController extends Notifier<ReaderState> {
       _failedPopover = null;
       await readerChannel.invokeMethod<void>('close');
       if (revision != _openRevision) return;
-      final remembered = ref.read(readerSidebarProvider(id));
       state = ReaderState(
         bookId: id,
-        panel: panelAvailable(remembered.panel ?? 'outline')
-            ? remembered.panel ?? 'outline'
-            : 'outline',
-        panelOpen: remembered.open ?? true,
-        query: remembered.query,
-        matches: remembered.matches,
-        currentMatch: remembered.currentMatch,
-        searchVisible: remembered.searchVisible,
         error: error.toString(),
         errorCode: error is WorkspaceException ? error.code : 'renderer',
       );
@@ -1027,7 +1010,7 @@ class ReaderController extends Notifier<ReaderState> {
           state = state.copy(location: event);
           if (_revealOnLocation && state.bookId != null) {
             _revealOnLocation = false;
-            ref.read(readerSidebarProvider(state.bookId!).notifier).reveal();
+            ref.read(bookSidebarProvider(state.bookId!).notifier).reveal();
           }
           if (state.bookId != null) _pendingLocations[state.bookId!] = event;
           _saveTimer?.cancel();
@@ -1223,8 +1206,13 @@ class ReaderController extends Notifier<ReaderState> {
         );
         if (state.bookId != null) {
           ref
-              .read(readerSidebarProvider(state.bookId!).notifier)
-              .reconcile(outline);
+              .read(bookSidebarProvider(state.bookId!).notifier)
+              .publication(
+                outline: outline,
+                status: state.outlineStatus,
+                pages: state.pages,
+                labels: state.labels,
+              );
         }
       case 'matches':
         state = state.copy(
@@ -1360,6 +1348,18 @@ class ReaderController extends Notifier<ReaderState> {
     Map<String, dynamic> args = const {},
   ]) async {
     final session = _session;
+    if ([
+          'goto',
+          'back',
+          'forward',
+          'next',
+          'previous',
+          'focus',
+        ].contains(action) &&
+        !interactive) {
+      return;
+    }
+    if (action == 'search' && !canSearch) return;
     if (['goto', 'back', 'forward', 'next', 'previous'].contains(action) &&
         ref.read(narrationControllerProvider).active) {
       await ref.read(narrationControllerProvider.notifier).stop();
@@ -1457,10 +1457,27 @@ class ReaderController extends Notifier<ReaderState> {
     return _applyVisibility();
   }
 
-  Future<void> _applyVisibility() => readerChannel.invokeMethod<void>(
-    'visible',
-    _routeVisible && !_suspended && state.bookId != null && state.error == null,
-  );
+  int _visibilityRevision = 0;
+  bool get _surfaceVisible =>
+      _routeVisible &&
+      _workspaceVisible &&
+      !_suspended &&
+      state.bookId != null &&
+      state.error == null;
+  Future<void> _applyVisibility() async {
+    final revision = ++_visibilityRevision, session = _session;
+    final visible = _surfaceVisible;
+    if (state.bookId == null) return;
+    await readerChannel.invokeMethod<void>('visible', visible);
+    if (ref.mounted &&
+        revision == _visibilityRevision &&
+        session == _session &&
+        visible == _surfaceVisible &&
+        state.surfaceVisible != visible) {
+      state = state.copy(surfaceVisible: visible);
+    }
+  }
+
   Future<void> reloadOutline({String? bookId}) async {
     if ((bookId != null && bookId != state.bookId) || !state.ready) return;
     final session = _session;
@@ -1486,54 +1503,13 @@ class ReaderController extends Notifier<ReaderState> {
     }
   }
 
-  void _rememberSidebar() {
-    final id = state.bookId;
-    if (id == null) return;
-    ref
-        .read(readerSidebarProvider(id).notifier)
-        .remember(
-          panel: state.panel,
-          open: state.panelOpen,
-          query: state.query,
-          matches: state.matches,
-          currentMatch: state.currentMatch,
-          searchVisible: state.searchVisible,
-        );
-  }
-
-  bool panelAvailable(String value) => switch (value) {
-    'books' => ref.read(workspaceControllerProvider).workspace?.isBook == false,
-    'thumbnails' => pageNavigation,
-    'search' => textInteraction,
-    'outline' || 'annotations' => true,
-    _ => false,
-  };
-  Future<void> panel(String value) async {
-    if (!panelAvailable(value)) return;
-    final session = _session;
-    if (_popoverActive && !await _dismissForSidebar()) return;
-    if (session != _session) return;
-    if (value != 'thumbnails') requestThumbnailWindow(const []);
-    state = state.copy(panel: value, panelOpen: true);
-    _rememberSidebar();
-    unawaited(_savePanel());
-  }
-
-  Future<void> toggleSidebar() async {
-    final session = _session;
-    if (_popoverActive && !await _dismissForSidebar()) return;
-    if (session != _session) return;
-    state = state.copy(panelOpen: !state.panelOpen);
-    if (!state.panelOpen) requestThumbnailWindow(const []);
-    _rememberSidebar();
-    unawaited(_savePanel());
-  }
+  Future<bool> prepareChromeChange() => _dismissForSidebar();
 
   Future<void> navigateFromSidebar(
     Map<String, dynamic> anchor, {
     required String bookId,
   }) async {
-    if (state.bookId != bookId) return;
+    if (state.bookId != bookId || !interactive) return;
     final session = _session;
     if (!await _dismissForSidebar()) return;
     if (session != _session || state.bookId != bookId) return;
@@ -1549,37 +1525,8 @@ class ReaderController extends Notifier<ReaderState> {
     await send('goto', {'anchor': anchor});
   }
 
-  Future<void> _savePanel() async {
-    try {
-      await ref.read(appSettingsControllerProvider.notifier).update({
-        'readerSidebar': state.panelOpen,
-        'readerPanel': state.panel,
-      });
-    } catch (error) {
-      if (ref.mounted) {
-        events.add({'type': 'feedback', 'message': error.toString()});
-      }
-    }
-  }
-
-  Future<void> toggleSearch({bool? visible}) async {
-    final session = _session;
-    if (_popoverActive && !await _dismissForSidebar()) return;
-    if (session != _session) return;
-    requestThumbnailWindow(const []);
-    final show = visible ?? !state.searchVisible;
-    state = state.copy(
-      searchVisible: show,
-      searchFocus: state.searchFocus + (show ? 1 : 0),
-      panel: show ? 'search' : state.panel,
-      panelOpen: show || state.panelOpen,
-    );
-    _rememberSidebar();
-  }
-
-  void search(String query, {bool immediate = false}) {
-    if (regionNotes) return;
-    _searchTimer?.cancel();
+  void search(String query) {
+    if (regionNotes || !canSearch) return;
     final revision = ++_searchRevision;
     if (state.ready) unawaited(send('cancelSearch', {'queryId': revision}));
     state = state.copy(
@@ -1593,15 +1540,10 @@ class ReaderController extends Notifier<ReaderState> {
     if (!state.ready || query.trim().isEmpty) return;
     void run() =>
         unawaited(send('search', {'query': query.trim(), 'queryId': revision}));
-    if (immediate) {
-      run();
-    } else {
-      _searchTimer = Timer(const Duration(milliseconds: 300), run);
-    }
+    run();
   }
 
   Future<void> cancelSearch() async {
-    _searchTimer?.cancel();
     ++_searchRevision;
     if (state.ready) await send('cancelSearch', {'queryId': _searchRevision});
     state = state.copy(
@@ -1611,33 +1553,16 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> selectMatch(int index) async {
-    if (!state.ready || index < 0 || index >= state.matches.length) return;
+    if (!interactive || index < 0 || index >= state.matches.length) return;
     state = state.copy(currentMatch: index);
     await send('goto', {'anchor': state.matches[index]['anchor']});
   }
 
-  void submitSearch(String query) {
-    if (query.trim() == state.query.trim() &&
-        state.matches.isNotEmpty &&
-        !state.searching) {
-      unawaited(stepMatch(1));
-    } else {
-      search(query, immediate: true);
-    }
-  }
-
-  Future<void> stepMatch(int delta) => state.matches.isEmpty
-      ? Future.value()
-      : selectMatch(
-          state.currentMatch < 0
-              ? (delta > 0 ? 0 : state.matches.length - 1)
-              : (state.currentMatch + delta) % state.matches.length,
-        );
   int _thumbnailRevision = 0;
   Set<int> _thumbnailWindow = {};
   void requestThumbnailWindow(Iterable<int> pages) {
     final next = pages.where((p) => p >= 0 && p < state.pages).take(12).toSet();
-    if (next.isNotEmpty && (!state.ready || !pageNavigation)) return;
+    if (next.isNotEmpty && (!interactive || !pageNavigation)) return;
     if (next.length == _thumbnailWindow.length &&
         next.containsAll(_thumbnailWindow)) {
       return;
@@ -1654,7 +1579,9 @@ class ReaderController extends Notifier<ReaderState> {
         .toSet();
 
     state = state.copy(thumbnailPending: needed);
-    if (!state.ready || !pageNavigation) return;
+    if (!state.ready || !pageNavigation || next.isNotEmpty && !interactive) {
+      return;
+    }
     unawaited(
       send('thumbnailWindow', {
         'pages': needed.toList(),
@@ -1888,7 +1815,7 @@ class ReaderController extends Notifier<ReaderState> {
             'anchorWidth': rect.width,
             'anchorHeight': rect.height,
             'width': kind == 'goto' ? 360.0 : 460.0,
-            'height': kind == 'goto'
+            'height': (kind == 'goto' || kind == 'appearance')
                 ? (viewport.height > 0 ? viewport.height : 420.0)
                 : kind == 'selection'
                 ? 340.0
@@ -2091,6 +2018,11 @@ class ReaderController extends Notifier<ReaderState> {
       case 'resetAppearance':
         await resetAppearance();
         if (current()) await showPopover('appearance');
+      case 'readingSettings':
+        await finish();
+        if (session == _session) {
+          events.add({'type': 'readingSettings', 'bookId': state.bookId});
+        }
       case 'saveDefaults':
         await setAppearance({}, defaults: true);
         await finish();
@@ -2278,7 +2210,6 @@ class ReaderController extends Notifier<ReaderState> {
     if (_preparationOwner != null) {
       await ref.read(readingDataStoreProvider).call('cancelPrepare');
     }
-    _rememberSidebar();
     requestThumbnailWindow(const []);
     final session = _session, presentation = _presentation;
     _startupTimer?.cancel();
@@ -2303,7 +2234,6 @@ class ReaderController extends Notifier<ReaderState> {
       await _applyVisibility();
       rethrow;
     }
-    _searchTimer?.cancel();
     _searchRevision++;
     if (revision != _openRevision) return;
     _fileCheck?.cancel();

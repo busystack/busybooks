@@ -21,6 +21,7 @@ class LinuxPageFrame extends StatefulWidget {
     this.sidebarExpanded = false,
     this.sidebarOverlay = false,
     this.sidebarTransitionGeneration = 0,
+    this.onSidebarDismiss,
   });
 
   final Widget header;
@@ -31,6 +32,7 @@ class LinuxPageFrame extends StatefulWidget {
   final bool sidebarExpanded;
   final bool sidebarOverlay;
   final int sidebarTransitionGeneration;
+  final VoidCallback? onSidebarDismiss;
 
   @override
   State<LinuxPageFrame> createState() => _LinuxPageFrameState();
@@ -202,19 +204,56 @@ class _LinuxPageFrameState extends State<LinuxPageFrame>
                         child: (mainChild! as _LinuxFrameMain).header,
                       ),
                     ),
-                    Expanded(child: (mainChild as _LinuxFrameMain).body),
+                    Expanded(
+                      child: ExcludeFocus(
+                        excluding: _targetVisible,
+                        child: ExcludeSemantics(
+                          excluding: _targetVisible,
+                          child: (mainChild as _LinuxFrameMain).body,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              if (_targetVisible && sidebarViewport != null)
+              if (_targetVisible && widget.onSidebarDismiss != null)
+                PositionedDirectional(
+                  start: BusyBooksSizes.sidebarWidth,
+                  end: 0,
+                  top: BusyBooksLinuxWindowMetrics.headerHeight,
+                  bottom: 0,
+                  child: Semantics(
+                    button: true,
+                    label: MaterialLocalizations.of(
+                      context,
+                    ).modalBarrierDismissLabel,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.onSidebarDismiss,
+                      child: ColoredBox(
+                        color: colors.foreground.withValues(alpha: .08),
+                      ),
+                    ),
+                  ),
+                ),
+              if (sidebarViewport != null)
                 PositionedDirectional(
                   start: 0,
                   top: BusyBooksLinuxWindowMetrics.headerHeight,
                   bottom: 0,
                   width: BusyBooksSizes.sidebarWidth,
-                  child: ColoredBox(
-                    color: colors.sidebar,
-                    child: retainedSidebar,
+                  child: Offstage(
+                    offstage: !_targetVisible,
+                    child: IgnorePointer(
+                      ignoring: !sidebarInteractive,
+                      child: ExcludeFocus(
+                        excluding: !sidebarInteractive,
+                        child: ColoredBox(
+                          color: colors.sidebar,
+                          child: retainedSidebar,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
             ],

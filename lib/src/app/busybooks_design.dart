@@ -1,16 +1,16 @@
 // Adapted from BusyMark (BusyStack, Apache-2.0); modified for BusyBooks.
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yaru/yaru.dart';
 
-import '../platform/native_menu_service.dart';
 import '../platform/gtk_header_icon_service.dart';
+import '../platform/native_menu_service.dart';
 import 'busybooks_glyphs.dart';
 import 'path_label.dart';
 
@@ -919,6 +919,7 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     this.backgroundColor,
     this.overlayColor,
     this.borderRadius = BusyBooksRadius.headerButton,
+    this.tooltipPositionDelegate,
   });
 
   final String tooltip;
@@ -938,6 +939,7 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
   final WidgetStateProperty<Color?>? backgroundColor;
   final WidgetStateProperty<Color?>? overlayColor;
   final double borderRadius;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   @override
   Widget build(BuildContext context) {
@@ -991,18 +993,27 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     ).defaultStyleOf(context);
     final button = IconButton(
       isSelected: selected,
-      tooltip: shortcut == null ? tooltip : '$tooltip ($shortcut)',
+      tooltip: tooltipPositionDelegate == null
+          ? (shortcut == null ? tooltip : '$tooltip ($shortcut)')
+          : null,
       icon: BusyBooksGtkHeaderIcon(icon, nativeIcon: nativeIcon),
       padding: EdgeInsets.zero,
       style: style.merge(yaruDefaults),
       onPressed: onPressed,
     );
+    final labeledButton = tooltipPositionDelegate == null
+        ? button
+        : Tooltip(
+            message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
+            positionDelegate: tooltipPositionDelegate,
+            child: button,
+          );
     return YaruTheme.maybeOf(context)?.focusBorders == true
         ? YaruFocusBorder.primary(
             borderRadius: BorderRadius.circular(BusyBooksRadius.pill),
-            child: button,
+            child: labeledButton,
           )
-        : button;
+        : labeledButton;
   }
 }
 
@@ -1082,6 +1093,7 @@ class BusyBooksHeaderPopupMenuButton<T> extends StatefulWidget {
     this.borderRadius = BusyBooksRadius.headerButton,
     this.highlightWhenOpen = true,
     this.nativeMenuService = const NativeMenuService(),
+    this.tooltipPositionDelegate,
   });
 
   final String tooltip;
@@ -1101,6 +1113,7 @@ class BusyBooksHeaderPopupMenuButton<T> extends StatefulWidget {
   final double borderRadius;
   final bool highlightWhenOpen;
   final NativeMenuService nativeMenuService;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   @override
   State<BusyBooksHeaderPopupMenuButton<T>> createState() =>
@@ -1132,6 +1145,7 @@ class _BusyBooksHeaderPopupMenuButtonState<T>
         expanded: _open,
         child: BusyBooksHeaderIconButton(
           tooltip: widget.tooltip,
+          tooltipPositionDelegate: widget.tooltipPositionDelegate,
           icon: widget.icon,
           shortcut: widget.shortcut,
           selected: widget.highlightWhenOpen && (_loading || _open),
@@ -2216,6 +2230,7 @@ class BusyBooksPopupSelector<T> extends StatelessWidget {
     final fallbackMenuWidth = (fullWidth ? popupMaxWidth : buttonMaxWidth)
         .clamp(popupMinWidth, popupMaxWidth);
     return Align(
+      widthFactor: fullWidth ? null : 1,
       alignment: AlignmentDirectional.centerEnd,
       child: ConstrainedBox(
         constraints: BoxConstraints(

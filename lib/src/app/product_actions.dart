@@ -1,26 +1,29 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:path/path.dart' as p;
-import '../workspace/workspace_model.dart';
-import '../notebook/application/notebook_controller.dart';
-import '../notebook/presentation/book_view_selector.dart';
-import 'busybooks_glyphs.dart';
-import 'app_router.dart';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
-import '../workspace/workspace_controller.dart';
+
 import '../library/domain/book.dart';
 import '../library/domain/book_format.dart';
-import '../reading/application/reader_controller.dart';
+import '../notebook/application/notebook_controller.dart';
+import '../notebook/presentation/book_view_selector.dart';
 import '../reading/application/narration_controller.dart';
+import '../reading/application/reader_controller.dart';
+import '../workspace/workspace_controller.dart';
+import '../workspace/workspace_model.dart';
+import 'app_router.dart';
 import 'app_settings.dart';
 import 'busybooks_design.dart';
 import 'busybooks_dialogs.dart';
+import 'busybooks_glyphs.dart';
 import 'busybooks_toast.dart';
 import 'localization.dart';
+import 'settings_page.dart';
 
 Future<void> showError(BuildContext context, Object error) =>
     showBusyBooksModalDialog<void>(
@@ -609,7 +612,12 @@ Future<void> returnToWorkspace(BuildContext context, WidgetRef ref) async {
   );
 }
 
-Future<void> openSettings(BuildContext context, WidgetRef ref) async {
+Future<void> openSettings(
+  BuildContext context,
+  WidgetRef ref, {
+  SettingsPage page = SettingsPage.general,
+  bool bookPreferences = false,
+}) async {
   final container = ProviderScope.containerOf(context, listen: false);
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
@@ -627,6 +635,8 @@ Future<void> openSettings(BuildContext context, WidgetRef ref) async {
               path: '/settings',
               queryParameters: {
                 'returnTo': safeSettingsReturnTarget(origin.path),
+                'page': page.name,
+                if (bookPreferences) 'scope': 'book',
               },
             ).toString(),
           );

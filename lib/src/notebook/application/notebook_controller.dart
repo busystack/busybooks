@@ -1,7 +1,11 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../annotations/domain/annotation_filter.dart';
 import '../../library/domain/book.dart';
 import '../../workspace/workspace_controller.dart';
+import 'notebook_view.dart';
 
 class NoteDraft {
   const NoteDraft(
@@ -28,21 +32,23 @@ class NoteDraft {
 
 class NotebookViewState {
   const NotebookViewState({
-    this.query = '',
-    this.filter = 'all',
+    this.filter = AnnotationTypeFilter.all,
+    this.sort = NotebookSort.recentlyAdded,
     this.withNotes = false,
     this.selected,
     this.scroll = 0,
-    this.searchVisible = false,
-    this.focusRequest = 0,
+    this.scrollCenter,
     this.revealRequest = 0,
+    this.editFocusRequest = 0,
+    this.editFocused = false,
     this.revealAnnotation,
   });
-  final String query, filter;
-  final bool withNotes, searchVisible;
-  final String? selected;
+  final AnnotationTypeFilter filter;
+  final NotebookSort sort;
+  final bool withNotes, editFocused;
+  final String? selected, scrollCenter;
   final double scroll;
-  final int focusRequest, revealRequest;
+  final int revealRequest, editFocusRequest;
   final String? revealAnnotation;
 }
 
@@ -52,21 +58,24 @@ class NotebookState {
     this.drafts = const {},
     this.sources = const {},
     this.resolving = const {},
+    this.saving = const {},
   });
   final Map<String, NotebookViewState> views;
   final Map<String, NoteDraft> drafts;
   final Map<String, ReadingAnnotation> sources;
-  final Set<String> resolving;
+  final Set<String> resolving, saving;
   NotebookState copy({
     Map<String, NotebookViewState>? views,
     Map<String, NoteDraft>? drafts,
     Map<String, ReadingAnnotation>? sources,
     Set<String>? resolving,
+    Set<String>? saving,
   }) => NotebookState(
     views: views ?? this.views,
     drafts: drafts ?? this.drafts,
     sources: sources ?? this.sources,
     resolving: resolving ?? this.resolving,
+    saving: saving ?? this.saving,
   );
   NotebookViewState view(String id) => views[id] ?? const NotebookViewState();
   String effectiveNote(ReadingAnnotation annotation) =>
@@ -105,29 +114,35 @@ class NotebookController extends Notifier<NotebookState> {
 
   void view(
     String id, {
-    String? query,
-    String? filter,
+    AnnotationTypeFilter? filter,
+    NotebookSort? sort,
     bool? withNotes,
     String? selected,
     double? scroll,
-    bool? searchVisible,
-    bool focus = false,
+    String? scrollCenter,
     String? revealAnnotation,
     bool clearReveal = false,
+    bool? focusEditor,
   }) {
     final old = state.view(id);
+    final reset =
+        filter != null && filter != old.filter ||
+        sort != null && sort != old.sort ||
+        withNotes != null && withNotes != old.withNotes;
     state = state.copy(
       views: {
         ...state.views,
         id: NotebookViewState(
-          query: query ?? old.query,
           filter: filter ?? old.filter,
+          sort: sort ?? old.sort,
           withNotes: withNotes ?? old.withNotes,
           selected: selected ?? old.selected,
-          scroll: scroll ?? old.scroll,
-          searchVisible: searchVisible ?? old.searchVisible,
-          focusRequest: old.focusRequest + (focus ? 1 : 0),
+          scroll: scroll ?? (reset ? 0 : old.scroll),
+          scrollCenter: scrollCenter ?? (reset ? null : old.scrollCenter),
           revealRequest: old.revealRequest + (revealAnnotation == null ? 0 : 1),
+          editFocusRequest:
+              old.editFocusRequest + (focusEditor == true ? 1 : 0),
+          editFocused: focusEditor ?? old.editFocused,
           revealAnnotation: clearReveal
               ? null
               : revealAnnotation ?? old.revealAnnotation,
@@ -142,14 +157,29 @@ class NotebookController extends Notifier<NotebookState> {
     }
   }
 
-  void revealAnnotation(String bookId, String annotationId) {
+  void revealAnnotation(
+    String bookId,
+    String annotationId, {
+    bool focusEditor = true,
+  }) {
+    final a = state
+        .annotationsFor(
+          bookId,
+          ref.read(workspaceControllerProvider).annotations,
+        )
+        .where((a) => a.id == annotationId)
+        .firstOrNull;
     view(
       bookId,
       selected: annotationId,
-      query: '',
-      filter: 'all',
+      filter: a?.kind == 'bookmark'
+          ? AnnotationTypeFilter.bookmarks
+          : AnnotationTypeFilter.all,
       withNotes: false,
       revealAnnotation: annotationId,
+      scrollCenter: annotationId,
+      scroll: 0,
+      focusEditor: focusEditor,
     );
   }
 
@@ -338,10 +368,14 @@ class NotebookController extends Notifier<NotebookState> {
       }
     }();
     _saving[id] = operation;
+    state = state.copy(saving: {...state.saving, id});
     try {
       await operation;
     } finally {
-      if (identical(_saving[id], operation)) _saving.remove(id);
+      if (identical(_saving[id], operation)) {
+        _saving.remove(id);
+        state = state.copy(saving: {...state.saving}..remove(id));
+      }
     }
   }
 

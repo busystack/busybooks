@@ -1,16 +1,20 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:archive/archive_io.dart';
 import 'package:busybooks/l10n/generated/app_localizations.dart';
+import 'package:busybooks/src/app/app_router.dart';
 import 'package:busybooks/src/app/app_settings.dart';
 import 'package:busybooks/src/app/app_theme.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
 import 'package:busybooks/src/app/system_accent.dart';
+import 'package:busybooks/src/book_workspace/presentation/book_workspace_screen.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/domain/book.dart';
 import 'package:busybooks/src/notebook/application/notebook_controller.dart';
-import 'package:busybooks/src/notebook/presentation/notebook_screen.dart';
+import 'package:busybooks/src/notebook/presentation/book_view_selector.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
+import 'package:busybooks/src/search/book_search_widgets.dart';
 import 'package:busybooks/src/workspace/workspace_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,6 +107,7 @@ void main() {
         return null;
       });
       try {
+        container.read(appRouterProvider).go('/notebook/$id');
         await tester.pumpWidget(
           UncontrolledProviderScope(
             container: container,
@@ -113,7 +118,7 @@ void main() {
               ),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
-              home: NotebookScreen(id: id),
+              home: BookWorkspaceScreen(view: BookView.notebook, id: id),
             ),
           ),
         );
@@ -123,13 +128,20 @@ void main() {
           find.textContaining('original book is unavailable'),
           findsOneWidget,
         );
-        await tester.tap(find.text('Initial private note'));
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(
+              const ValueKey('notebook-item-annotation-ui-highlight'),
+            ),
+            matching: find.text('Edit Note'),
+          ),
+        );
         await tester.pumpAndSettle();
         await tester.enterText(
           find.byType(TextField),
           'Edited\nmultiline personal note',
         );
-        await tester.tap(find.text('Save'));
+        await tester.pump(const Duration(milliseconds: 750));
         final deadline = Stopwatch()..start();
         while (container.read(notebookControllerProvider).drafts.isNotEmpty ||
             container.read(notebookControllerProvider).resolving.isNotEmpty) {
@@ -150,22 +162,41 @@ void main() {
               .note,
           'Edited\nmultiline personal note',
         );
+        await tester.tap(find.byTooltip('Type'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Bookmarks'));
         await tester.pumpAndSettle();
         expect(find.text('Saved quotation'), findsNothing);
         expect(find.text('Bookmark detail'), findsOneWidget);
-        await tester.tap(find.text('All'));
+        await tester.tap(find.byTooltip('Type'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Search in Notebook'));
+        await tester.tap(find.text('All types'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byWidgetPredicate(
+            (w) => w is BusyBooksHeaderIconButton && w.tooltip == 'Search',
+          ),
+        );
         await tester.pumpAndSettle();
         final search = find.byWidgetPredicate(
-          (w) =>
-              w is TextField && w.decoration?.hintText == 'Search in Notebook',
+          (w) => w is TextField && w.decoration?.hintText == 'Notebook',
         );
         await tester.enterText(search, 'personal');
         await tester.pumpAndSettle();
-        expect(find.text('Saved quotation'), findsOneWidget);
-        expect(find.text('Bookmark detail'), findsNothing);
+        expect(
+          find.descendant(
+            of: find.byType(BookSearchSidebar),
+            matching: find.text('Saved quotation'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(BookSearchSidebar),
+            matching: find.text('Bookmark detail'),
+          ),
+          findsNothing,
+        );
         expect(nativeOpens, 0);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
@@ -239,12 +270,12 @@ Future<void> _discardRegression(
           ),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: NotebookScreen(id: id),
+          home: BookWorkspaceScreen(view: BookView.notebook, id: id),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Saved baseline'));
+    await tester.tap(find.text('Edit Note'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Discarded edit');
     await tester.pump();
