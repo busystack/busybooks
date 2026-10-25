@@ -1555,8 +1555,12 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> cancelSearch() async {
-    ++_searchRevision;
-    if (state.ready) await send('cancelSearch', {'queryId': _searchRevision});
+    if (!ref.mounted) return;
+    final session = _session, revision = ++_searchRevision;
+    if (state.ready) await send('cancelSearch', {'queryId': revision});
+    if (!ref.mounted || session != _session || revision != _searchRevision) {
+      return;
+    }
     state = state.copy(
       searching: false,
       searchStatus: state.query.isEmpty ? 'idle' : 'cancelled',

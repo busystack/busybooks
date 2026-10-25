@@ -30,6 +30,7 @@ Future<void> openNotebook(
   WidgetRef ref,
   String id, {
   String? annotationId,
+  bool Function()? canActivate,
 }) async {
   final narrow =
       MediaQuery.sizeOf(context).width <
@@ -38,7 +39,18 @@ Future<void> openNotebook(
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
   if (origin.path == '/notebook/$id' && annotationId == null) return;
-  bool current() => router.routeInformationProvider.value.uri == origin;
+  bool sameRoute() => router.routeInformationProvider.value.uri == origin;
+  bool current() => sameRoute() && (canActivate?.call() ?? true);
+  bool annotationAvailable() =>
+      annotationId == null ||
+      container
+              .read(notebookControllerProvider)
+              .findAnnotation(
+                id,
+                annotationId,
+                container.read(workspaceControllerProvider).annotations,
+              ) !=
+          null;
   await container.read(workspaceControllerProvider.notifier).navigate(() async {
     if (!current()) return;
     if (container.read(workspaceControllerProvider).openedBook?.id != id) {
@@ -46,7 +58,7 @@ Future<void> openNotebook(
           .read(workspaceControllerProvider.notifier)
           .loadBook(id, activate: true, isCurrent: current);
     }
-    if (!current()) return;
+    if (!current() || !annotationAvailable()) return;
     if (origin.path != '/read/$id' && origin.path != '/notebook/$id') {
       await container
           .read(workspaceControllerProvider.notifier)
@@ -54,10 +66,16 @@ Future<void> openNotebook(
       if (!current()) return;
     }
     await container.read(readerControllerProvider.notifier).suspend();
-    if (!current()) return;
+    if (!current() || !annotationAvailable()) return;
     if (annotationId != null) {
       await _dismissBookOverlay(container, id, narrow);
-      if (!current()) return;
+      // A narrow handoff deliberately closes its search session. Validate the
+      // route and actual record again without rejecting that owned dismissal.
+      if (!sameRoute() ||
+          (!narrow && !(canActivate?.call() ?? true)) ||
+          !annotationAvailable()) {
+        return;
+      }
       container
           .read(notebookControllerProvider.notifier)
           .revealAnnotation(id, annotationId);
@@ -71,6 +89,8 @@ Future<void> openReading(
   WidgetRef ref,
   String id, {
   Map<String, dynamic>? anchor,
+  String? annotationId,
+  bool Function()? canActivate,
 }) async {
   final narrow =
       MediaQuery.sizeOf(context).width <
@@ -79,7 +99,18 @@ Future<void> openReading(
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
   if (origin.path == '/read/$id' && anchor == null) return;
-  bool current() => router.routeInformationProvider.value.uri == origin;
+  bool sameRoute() => router.routeInformationProvider.value.uri == origin;
+  bool current() => sameRoute() && (canActivate?.call() ?? true);
+  bool annotationAvailable() =>
+      annotationId == null ||
+      container
+              .read(notebookControllerProvider)
+              .findAnnotation(
+                id,
+                annotationId,
+                container.read(workspaceControllerProvider).annotations,
+              ) !=
+          null;
   await container.read(workspaceControllerProvider.notifier).navigate(() async {
     if (!current()) return;
     if (container.read(workspaceControllerProvider).openedBook?.id != id) {
@@ -87,16 +118,24 @@ Future<void> openReading(
           .read(workspaceControllerProvider.notifier)
           .loadBook(id, activate: true, isCurrent: current);
     }
-    if (!current()) return;
+    if (!current() || !annotationAvailable()) return;
     final reader = container.read(readerControllerProvider.notifier);
     if (anchor != null) {
       await _dismissBookOverlay(container, id, narrow);
-      if (!current()) return;
+      if (!sameRoute() ||
+          (!narrow && !(canActivate?.call() ?? true)) ||
+          !annotationAvailable()) {
+        return;
+      }
       if (origin.path == '/read/$id' &&
           reader.stateBookId == id &&
           !reader.suspended) {
         await reader.setWorkspaceVisible(true);
-        if (!current()) return;
+        if (!sameRoute() ||
+            (!narrow && !(canActivate?.call() ?? true)) ||
+            !annotationAvailable()) {
+          return;
+        }
         if (reader.interactive) {
           await reader.navigateFromSidebar(anchor, bookId: id);
           return;

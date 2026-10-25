@@ -6,6 +6,7 @@ import '../../app/app_settings.dart';
 import '../../reading/application/reader_controller.dart';
 import '../../reading/domain/publication_outline.dart';
 import '../../workspace/workspace_controller.dart';
+import 'book_session_lifetime.dart';
 
 enum BookSidebarPanel {
   outline('outline'),
@@ -89,6 +90,7 @@ class BookSidebarController extends Notifier<BookSidebarState> {
   final String bookId;
   @override
   BookSidebarState build() {
+    retainActiveBookSession(ref, bookId);
     final settings = ref.read(appSettingsControllerProvider).data;
     final panel = BookSidebarPanel.values
         .where((p) => p.preference == settings['readerPanel'])
@@ -232,7 +234,7 @@ class BookSidebarController extends Notifier<BookSidebarState> {
       state = state.copy(selectedAnnotation: id);
 }
 
-final bookSidebarProvider =
-    NotifierProvider.family<BookSidebarController, BookSidebarState, String>(
+final bookSidebarProvider = NotifierProvider.autoDispose
+    .family<BookSidebarController, BookSidebarState, String>(
       BookSidebarController.new,
     );

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
 import 'package:busybooks/l10n/generated/app_localizations.dart';
@@ -44,6 +46,7 @@ import 'package:busybooks/src/reading/application/dictionary_service.dart';
 import 'package:busybooks/src/reading/application/narration_controller.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
 import 'package:busybooks/src/reading/domain/reader_action.dart';
+import 'package:busybooks/src/reading/domain/publication_outline.dart';
 import 'package:busybooks/src/reading/presentation/reader_popover.dart';
 import 'package:busybooks/src/reading/presentation/reader_screen.dart';
 import 'package:busybooks/src/reading/presentation/reader_sidebar.dart';
@@ -307,6 +310,17 @@ class _Settings implements LocalSettingsStore {
   Future<void> save(Map<String, dynamic> json) async {}
 }
 
+// The opt-in allocation probe talks only to this test's authenticated loopback
+// VM service, rather than the widget binding's deliberately mocked HTTP client.
+class _VmDiagnosticsHttpOverrides extends HttpOverrides {}
+
+class _CachedSearchSnapshot extends BookSearchController {
+  _CachedSearchSnapshot(super.bookId);
+  // Model a cached/asynchronously delivered snapshot independently of its
+  // record's lifetime. The presentation must still consult the data owners.
+  void deliver(BookSearchState snapshot) => state = snapshot;
+}
+
 class _Speech extends SpeechService {
   final calls = <({String action, Map<String, dynamic> args})>[];
   @override
@@ -359,6 +373,7 @@ class _ReaderFixture {
     GtkHeaderIconService? headerIcons,
     WindowControlService? windowControls,
     DictionaryService? dictionary,
+    BookSearchController Function(String)? searchController,
   }) async {
     final directory =
         profileDirectory ??
@@ -368,6 +383,8 @@ class _ReaderFixture {
     );
     final container = ProviderContainer(
       overrides: [
+        if (searchController != null)
+          bookSearchProvider.overrideWith2(searchController),
         if (dictionary != null)
           dictionaryServiceProvider.overrideWithValue(dictionary),
         if (windowControls != null)
@@ -8481,6 +8498,448 @@ void _professionalWorkspaceTests() {
         expect(tester.takeException(), isNull);
       } finally {
         await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  testWidgets(
+    'cached annotation search membership cannot revive a deleted record',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          searchController: _CachedSearchSnapshot.new,
+        );
+        await f.select();
+        await f.reader.annotation('highlight', note: 'Deleted search needle');
+      });
+      try {
+        final id = f.state.bookId!;
+        await _mountHeaderApplication(tester, f, '/read/$id');
+        await _readerAction(
+          tester,
+          () => f.searchController.open(
+            category: BookSearchCategory.notebook,
+            query: 'needle',
+          ),
+        );
+        final snapshot = f.search;
+        final annotation =
+            (snapshot.results.single as AnnotationSearchResult).annotation;
+        await _readerAction(
+          tester,
+          () => f.container
+              .read(workspaceControllerProvider.notifier)
+              .deleteAnnotation(annotation.id),
+          settle: false,
+        );
+        (f.searchController as _CachedSearchSnapshot).deliver(snapshot);
+        expect(f.search.results, contains(snapshot.results.single));
+        final header = tester.element(find.byType(BookHeader));
+        await _readerAction(
+          tester,
+          () => activateBookSearchResult(
+            header,
+            header as WidgetRef,
+            id,
+            snapshot.results.single,
+            snapshot.generation,
+          ),
+          settle: false,
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/read/$id',
+        );
+        expect(f.drafts.view(id).selected, isNot(annotation.id));
+        expect(f.search.generation, greaterThan(snapshot.generation));
+        await _pumpUntil(tester, () => !f.search.loading);
+        expect(f.search.results, isEmpty);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  for (final category in [
+    BookSearchCategory.notebook,
+    BookSearchCategory.bookmarks,
+  ]) {
+    for (final change in ['deleted', 'query', 'category', 'book']) {
+      testWidgets(
+        'annotation search ${category.name} activation rejects a queued $change change',
+        (tester) async {
+          late _ReaderFixture f;
+          final entered = Completer<void>(), proceed = Completer<void>();
+          await _readerAction(tester, () async {
+            f = await _ReaderFixture.create(
+              'text.pdf',
+              windowControls: WindowControlService(
+                nativeWindow: _HeaderWindow(),
+              ),
+            );
+            await f.select();
+            await f.event('location', {
+              'anchor': {'page': 0},
+            });
+            await f.reader.annotation(
+              category == BookSearchCategory.bookmarks
+                  ? 'bookmark'
+                  : 'highlight',
+              note: 'Search target needle',
+            );
+          });
+          try {
+            final id = f.state.bookId!,
+                annotation = f.reader.annotations.single;
+            await _mountHeaderApplication(tester, f, '/read/$id');
+            await _readerAction(
+              tester,
+              () =>
+                  f.searchController.open(category: category, query: 'needle'),
+            );
+            final snapshot = f.search;
+            final header = tester.element(find.byType(BookHeader));
+            final workspace = f.container.read(
+              workspaceControllerProvider.notifier,
+            );
+            var destination = '/read/$id';
+            await _readerAction(tester, () async {
+              final holding = workspace.navigate(() async {
+                entered.complete();
+                await proceed.future;
+              });
+              await entered.future;
+              final activation = activateBookSearchResult(
+                header,
+                header as WidgetRef,
+                id,
+                snapshot.results.single,
+                snapshot.generation,
+              );
+              switch (change) {
+                case 'deleted':
+                  await workspace.deleteAnnotation(annotation.id);
+                case 'query':
+                  f.searchController.query('different query');
+                case 'category':
+                  await f.searchController.open(
+                    category: category == BookSearchCategory.bookmarks
+                        ? BookSearchCategory.notebook
+                        : BookSearchCategory.bookmarks,
+                  );
+                case 'book':
+                  final other = await workspace.openPath(
+                    p.absolute('test/fixtures/reflowable.epub'),
+                  );
+                  destination = '/notebook/${other.books.single.id}';
+                  f.container.read(appRouterProvider).go(destination);
+              }
+              proceed.complete();
+              await Future.wait([holding, activation]);
+            }, settle: false);
+            expect(
+              f.container
+                  .read(appRouterProvider)
+                  .routeInformationProvider
+                  .value
+                  .uri
+                  .path,
+              destination,
+            );
+            expect(f.drafts.view(id).selected, isNot(annotation.id));
+            expect(tester.takeException(), isNull);
+          } finally {
+            if (!proceed.isCompleted) proceed.complete();
+            await _disposeHeaderApplication(tester, f);
+          }
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'annotation search opens a protected failed creation from its Notebook owner',
+    (tester) async {
+      late _ReaderFixture f;
+      late AnnotationStoreGate gate;
+      late ReadingAnnotation pending;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          wrapStore: (store) => gate = AnnotationStoreGate(store),
+        );
+        await f.select();
+        await f.reader.annotation('highlight', note: 'Saved note');
+        pending = f.reader.annotations.single.copy({
+          'id': 'annotation-unsaved-search',
+        });
+        f.notes.create(pending, 'Protected unsaved needle\nSecond line');
+        gate.failPut = true;
+        await expectLater(
+          f.notes.save(pending.id),
+          throwsA(isA<FileSystemException>()),
+        );
+      });
+      try {
+        final id = pending.bookId;
+        await _mountHeaderApplication(tester, f, '/read/$id');
+        await _readerAction(
+          tester,
+          () => f.searchController.open(
+            category: BookSearchCategory.notebook,
+            query: 'unsaved needle',
+          ),
+        );
+        final snapshot = f.search;
+        expect(
+          (snapshot.results.single as AnnotationSearchResult).annotation.id,
+          pending.id,
+        );
+        expect(
+          f.container
+              .read(workspaceControllerProvider)
+              .annotations
+              .any((a) => a.id == pending.id),
+          false,
+        );
+        final header = tester.element(find.byType(BookHeader));
+        await _readerAction(
+          tester,
+          () => activateBookSearchResult(
+            header,
+            header as WidgetRef,
+            id,
+            snapshot.results.single,
+            snapshot.generation,
+          ),
+          settle: false,
+        );
+        await _pumpUntil(
+          tester,
+          () => find
+              .byKey(ValueKey('notebook-note-${pending.id}'))
+              .evaluate()
+              .isNotEmpty,
+          settle: false,
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/notebook/$id',
+        );
+        expect(f.drafts.view(id).selected, pending.id);
+        expect(
+          f.drafts.drafts[pending.id]!.text,
+          'Protected unsaved needle\nSecond line',
+        );
+        expect(
+          find.byKey(ValueKey('notebook-note-${pending.id}')),
+          findsOneWidget,
+        );
+      } finally {
+        gate.failPut = false;
+        try {
+          await _readerAction(tester, f.notes.flush, settle: false);
+        } finally {
+          await _disposeHeaderApplication(tester, f);
+        }
+      }
+    },
+  );
+
+  test(
+    'book session resources stabilize across sixty distinct publications',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      try {
+        await f.reader.close();
+        final workspace = f.container.read(
+          workspaceControllerProvider.notifier,
+        );
+        final router = f.container.read(appRouterProvider);
+        final bytes = await File('test/fixtures/text.pdf').readAsBytes();
+        final measurements = <Map<String, int>>[];
+        // Optional VM diagnostics are enabled by --enable-vmservice. The
+        // ordinary suite requires no service and still checks exact lifetimes.
+        final service = (await developer.Service.getInfo()).serverUri;
+        Future<Map<String, int>> heap() async {
+          if (service == null) return {};
+          expect(service.host, isIn(['127.0.0.1', 'localhost', '::1']));
+          final client = _VmDiagnosticsHttpOverrides().createHttpClient(null);
+          try {
+            final request = await client.getUrl(
+              service
+                  .resolve('getAllocationProfile')
+                  .replace(
+                    queryParameters: {
+                      'isolateId': developer.Service.getIsolateId(
+                        Isolate.current,
+                      )!,
+                      'gc': 'true',
+                    },
+                  ),
+            );
+            final response = await request.close();
+            final envelope =
+                jsonDecode(await utf8.decoder.bind(response).join()) as Map;
+            expect(envelope['error'], isNull);
+            final result = envelope['result'] as Map;
+            final members = (result['members'] as List).cast<Map>();
+            return {
+              'heapUsedBytes':
+                  (result['memoryUsage'] as Map)['heapUsage'] as int,
+              for (final name in [
+                'BookSearchController',
+                'BookSidebarController',
+              ])
+                '${name}Instances': members
+                    .where((m) => (m['class'] as Map)['name'] == name)
+                    .fold<int>(0, (n, m) => n + (m['instancesCurrent'] as int)),
+            };
+          } finally {
+            client.close(force: true);
+          }
+        }
+
+        Map<String, int> counts() {
+          return {
+            'searchControllers': f.container
+                .allProviders(family: bookSearchProvider)
+                .length,
+            'sidebarControllers': f.container
+                .allProviders(family: bookSidebarProvider)
+                .length,
+            'rssBytes': ProcessInfo.currentRss,
+          };
+        }
+
+        String? firstId;
+        BookSearchController? firstSearch;
+        BookSearchResult? firstResult;
+        int? firstGeneration;
+        BookSearchController? lastSearch;
+        for (var index = 0; index < 60; index++) {
+          final file = File(p.join(f.directory.path, 'session-$index.pdf'));
+          await file.writeAsBytes([
+            ...bytes,
+            ...utf8.encode('\n% session $index\n'),
+          ]);
+          final id = (await workspace.openPath(file.path)).books.single.id;
+          firstId ??= id;
+          router.go('/notebook/$id');
+          final sidebar = f.container.read(bookSidebarProvider(id).notifier);
+          sidebar.publication(
+            outline: PublicationOutline.fromRecords([
+              for (var chapter = 0; chapter < 300; chapter++)
+                {
+                  'id': 'chapter:$index:$chapter',
+                  'label': 'Book $index chapter $chapter',
+                  'href': 'chapter-$chapter.xhtml',
+                  'depth': 0,
+                },
+            ], pdf: false),
+            status: 'ready',
+            pages: 300,
+            labels: List.generate(300, (page) => '$page'),
+          );
+          final search = f.container.read(bookSearchProvider(id).notifier);
+          firstSearch ??= search;
+          lastSearch = search;
+          await search.open(
+            category: BookSearchCategory.chapters,
+            query: 'chapter',
+          );
+          await _until(() => !f.container.read(bookSearchProvider(id)).loading);
+          expect(
+            f.container.read(bookSearchProvider(id)).results,
+            hasLength(300),
+          );
+          firstResult ??= f.container
+              .read(bookSearchProvider(id))
+              .results
+              .first;
+          firstGeneration ??= f.container
+              .read(bookSearchProvider(id))
+              .generation;
+          await f.container.pump();
+          if ((index + 1) % 20 == 0) {
+            measurements.add({
+              'books': index + 1,
+              ...counts(),
+              ...await heap(),
+            });
+          }
+        }
+        // RSS includes the VM, SQLite and the intentional domain book cache.
+        // Exact provider counts establish whether session-owned resources grow.
+        // ignore: avoid_print
+        print('BOOK_SESSION_RESOURCES ${jsonEncode(measurements)}');
+        expect(counts()['searchControllers'], 1);
+        expect(counts()['sidebarControllers'], 1);
+        expect(firstSearch!.accepts(firstResult!, firstGeneration!), false);
+        lastSearch!.query('pending debounce at close');
+        await workspace.closeWorkspace();
+        router.go('/');
+        await f.container.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(counts()['searchControllers'], 0);
+        expect(counts()['sidebarControllers'], 0);
+        expect(f.reader.events.hasListener, false);
+        await workspace.loadBook(firstId!, activate: true);
+        router.go('/notebook/$firstId');
+        expect(
+          identical(
+            f.container.read(bookSearchProvider(firstId).notifier),
+            firstSearch,
+          ),
+          false,
+        );
+      } finally {
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'a delayed native search cancellation cannot cancel a newer query',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      final entered = Completer<void>(), proceed = Completer<void>();
+      try {
+        f.reader.search('old query');
+        final cancellation = f.reader.searchRevision + 1;
+        f.onDispatch = (command) async {
+          if (command['action'] == 'cancelSearch' &&
+              command['queryId'] == cancellation) {
+            entered.complete();
+            await proceed.future;
+          }
+        };
+        final cancelling = f.reader.cancelSearch();
+        await entered.future;
+        f.reader.search('new query');
+        proceed.complete();
+        await cancelling;
+        expect(f.state.query, 'new query');
+        expect(f.state.searchStatus, 'searching');
+        expect(f.state.searching, true);
+      } finally {
+        if (!proceed.isCompleted) proceed.complete();
+        f.onDispatch = null;
+        await f.dispose();
       }
     },
   );

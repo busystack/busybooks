@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/app_router.dart';
 import '../app/command_registry.dart';
 import '../book_workspace/application/book_sidebar_controller.dart';
+import '../book_workspace/application/book_session_lifetime.dart';
 import '../library/domain/book.dart';
 import '../notebook/application/notebook_controller.dart';
 import '../reading/application/reader_controller.dart';
@@ -128,12 +129,14 @@ class BookSearchController extends Notifier<BookSearchState> {
   ({String session, int revision, int generation})? _nativeRequest;
   @override
   BookSearchState build() {
+    if (bookId.isNotEmpty) retainActiveBookSession(ref, bookId);
     final intents = ref
         .read(readerControllerProvider.notifier)
         .events
         .stream
         .listen((event) {
-          if (event['type'] != 'searchSelection' ||
+          if (!ref.mounted ||
+              event['type'] != 'searchSelection' ||
               event['bookId'] != bookId ||
               !ownsRoute) {
             return;
@@ -397,8 +400,17 @@ class BookSearchController extends Notifier<BookSearchState> {
 
   void moveSelection(int delta) => select(state.selected + delta);
   bool accepts(BookSearchResult result, int generation) =>
+      ref.mounted &&
       state.active &&
       ownsRoute &&
+      (bookId.isEmpty ||
+          ref.read(workspaceControllerProvider).openedBook?.id == bookId) &&
+      switch (result) {
+        AnnotationSearchResult() => result.annotation.bookId == bookId,
+        BookTextSearchResult() => result.bookId == bookId,
+        ChapterSearchResult() => result.bookId == bookId,
+        BookActionSearchResult() => true,
+      } &&
       generation == state.generation &&
       state.results.any((r) => identical(r, result));
   int _selection(List<BookSearchResult> results, String? identity) {
@@ -409,7 +421,10 @@ class BookSearchController extends Notifier<BookSearchState> {
     return index < 0 ? 0 : index;
   }
 
-  void retry() => _schedule();
+  void retry() {
+    if (ref.mounted && state.active && ownsRoute) _schedule();
+  }
+
   void _schedule({bool immediate = false}) {
     final selected =
         selectedResult?.identity ?? _selectedIdentities[state.category];
@@ -516,7 +531,7 @@ class BookSearchController extends Notifier<BookSearchState> {
   }
 }
 
-final bookSearchProvider =
-    NotifierProvider.family<BookSearchController, BookSearchState, String>(
+final bookSearchProvider = NotifierProvider.autoDispose
+    .family<BookSearchController, BookSearchState, String>(
       BookSearchController.new,
     );

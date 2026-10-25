@@ -13,6 +13,7 @@ import '../app/command_registry.dart';
 import '../app/localization.dart';
 import '../app/product_actions.dart';
 import '../notebook/presentation/book_view_selector.dart';
+import '../notebook/application/notebook_controller.dart';
 import '../reading/application/reader_controller.dart';
 import '../workspace/workspace_controller.dart';
 import 'book_search_session.dart';
@@ -44,10 +45,18 @@ Future<void> activateBookSearchResult(
 ) async {
   final search = ref.read(bookSearchProvider(bookId).notifier);
   if (!search.accepts(result, generation)) return;
+  bool canActivate() => context.mounted && search.accepts(result, generation);
   await runAppAction(context, () async {
     final reader = ref.read(readerControllerProvider.notifier);
-    Future<void> jump(Map<String, dynamic> anchor) =>
-        openReading(context, ref, bookId, anchor: anchor);
+    Future<void> jump(Map<String, dynamic> anchor, {String? annotationId}) =>
+        openReading(
+          context,
+          ref,
+          bookId,
+          anchor: anchor,
+          annotationId: annotationId,
+          canActivate: canActivate,
+        );
     switch (result) {
       case BookTextSearchResult():
         if (reader.stateBookId != bookId ||
@@ -57,22 +66,28 @@ Future<void> activateBookSearchResult(
         }
         await jump(result.anchor);
       case AnnotationSearchResult():
-        if (ref
-                .read(workspaceControllerProvider)
-                .annotations
-                .any((a) => a.id == result.annotation.id) ||
-            ref.read(bookSearchProvider(bookId)).results.contains(result)) {
-          if (ref.read(bookSearchProvider(bookId)).category ==
-              BookSearchCategory.bookmarks) {
-            await jump(result.annotation.anchor);
-          } else {
-            await openNotebook(
-              context,
-              ref,
+        final annotation = ref
+            .read(notebookControllerProvider)
+            .findAnnotation(
               bookId,
-              annotationId: result.annotation.id,
+              result.annotation.id,
+              ref.read(workspaceControllerProvider).annotations,
             );
-          }
+        if (annotation == null) {
+          search.retry();
+          return;
+        }
+        if (ref.read(bookSearchProvider(bookId)).category ==
+            BookSearchCategory.bookmarks) {
+          await jump(annotation.anchor, annotationId: annotation.id);
+        } else {
+          await openNotebook(
+            context,
+            ref,
+            bookId,
+            annotationId: annotation.id,
+            canActivate: canActivate,
+          );
         }
       case ChapterSearchResult():
         if (result.chapter.destination != null) {

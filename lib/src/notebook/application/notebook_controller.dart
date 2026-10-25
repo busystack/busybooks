@@ -80,6 +80,21 @@ class NotebookState {
   NotebookViewState view(String id) => views[id] ?? const NotebookViewState();
   String effectiveNote(ReadingAnnotation annotation) =>
       drafts[annotation.id]?.text ?? annotation.note;
+  ReadingAnnotation? findAnnotation(
+    String bookId,
+    String annotationId,
+    Iterable<ReadingAnnotation> saved,
+  ) {
+    final stored = saved
+        .where((a) => a.bookId == bookId && a.id == annotationId)
+        .firstOrNull;
+    if (stored != null) return stored;
+    final source = sources[annotationId];
+    return source?.bookId == bookId && drafts.containsKey(annotationId)
+        ? source
+        : null;
+  }
+
   List<ReadingAnnotation> annotationsFor(
     String bookId,
     Iterable<ReadingAnnotation> saved,
@@ -162,13 +177,11 @@ class NotebookController extends Notifier<NotebookState> {
     String annotationId, {
     bool focusEditor = true,
   }) {
-    final a = state
-        .annotationsFor(
-          bookId,
-          ref.read(workspaceControllerProvider).annotations,
-        )
-        .where((a) => a.id == annotationId)
-        .firstOrNull;
+    final a = state.findAnnotation(
+      bookId,
+      annotationId,
+      ref.read(workspaceControllerProvider).annotations,
+    );
     view(
       bookId,
       selected: annotationId,
