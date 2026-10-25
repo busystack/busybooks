@@ -12,6 +12,7 @@ import 'package:busybooks/src/app/busybooks_app.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
 import 'package:busybooks/src/app/busybooks_glyphs.dart';
 import 'package:busybooks/src/app/busybooks_main_menu.dart';
+import 'package:busybooks/src/app/busybooks_search_field.dart';
 import 'package:busybooks/src/app/command_focus.dart';
 import 'package:busybooks/src/app/command_registry.dart';
 import 'package:busybooks/src/app/keymap_controller.dart';
@@ -8126,6 +8127,7 @@ void _professionalWorkspaceTests() {
           ),
         );
         final focus = FocusManager.instance.primaryFocus;
+        expect(focus, isA<BusyBooksSearchFocusNode>());
         await _readerAction(
           tester,
           () => _appCommands(tester).execute(BusyBooksCommandIds.viewReading),
@@ -8143,6 +8145,9 @@ void _professionalWorkspaceTests() {
         await _pumpUntil(tester, () => !f.search.loading);
         expect(FocusManager.instance.primaryFocus, same(focus));
         expect(f.search.query, 'Private');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(f.search.active, false);
         expect(tester.takeException(), isNull);
       } finally {
         await _disposeHeaderApplication(tester, f);

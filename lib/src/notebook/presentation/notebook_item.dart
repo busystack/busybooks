@@ -7,6 +7,7 @@ import '../../annotations/presentation/annotation_actions.dart' as actions;
 import '../../annotations/presentation/annotation_presentation.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
+import '../../app/busybooks_search_field.dart';
 import '../../app/localization.dart';
 import '../../app/product_actions.dart';
 import '../../library/data/record_validation.dart';
@@ -48,13 +49,16 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
     _requestFocus();
   }
 
-  void _requestFocus() {
+  void _requestFocus({bool restoring = false}) {
     if (widget.selected && widget.active && widget.focusRequest > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
             widget.selected &&
             widget.active &&
-            widget.focusRequest > 0) {
+            widget.focusRequest > 0 &&
+            !(restoring &&
+                FocusManager.instance.primaryFocus
+                    is BusyBooksSearchFocusNode)) {
           _focus.requestFocus();
         }
       });
@@ -76,7 +80,9 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
     if (!old.selected && widget.selected ||
         widget.focusRequest != old.focusRequest ||
         !old.active && widget.active) {
-      _requestFocus();
+      _requestFocus(
+        restoring: old.selected && widget.focusRequest == old.focusRequest,
+      );
     }
   }
 

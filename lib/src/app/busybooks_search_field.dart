@@ -95,6 +95,7 @@ class _BusyBooksSearchFieldState extends State<BusyBooksSearchField> {
   void initState() {
     super.initState();
     _attachController();
+    if (widget.autofocus || widget.focusRequest > 0) _requestTextFocus();
   }
 
   @override

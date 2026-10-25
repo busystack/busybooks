@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/busybooks_design.dart';
@@ -181,32 +182,43 @@ class _BookWorkspaceScreenState extends ConsumerState<BookWorkspaceScreen> {
       );
     }
     return Scaffold(
-      body: LinuxPageFrame(
-        sidebarOverlay: narrow,
-        sidebarAvailable: true,
-        sidebarExpanded: open,
-        sidebarTransitionGeneration: open ? 1 : 0,
-        onSidebarDismiss: () => search.active
-            ? ref.read(bookSearchProvider(widget.id).notifier).close()
-            : unawaited(
-                ref
-                    .read(bookSidebarProvider(widget.id).notifier)
-                    .setOpen(false),
-              ),
-        sidebarHeader: const BusyBooksLinuxBrandHeader(),
-        sidebarBody: BookSearchSidebarHost(
-          bookId: widget.id,
-          child: Column(
-            children: [
-              ReadingSidebarHeader(bookId: widget.id),
-              Expanded(child: ReadingSidebarBody(bookId: widget.id)),
-            ],
+      body: Focus(
+        onKeyEvent: (_, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape &&
+              ref.read(bookSearchProvider(widget.id)).active) {
+            ref.read(bookSearchProvider(widget.id).notifier).close();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: LinuxPageFrame(
+          sidebarOverlay: narrow,
+          sidebarAvailable: true,
+          sidebarExpanded: open,
+          sidebarTransitionGeneration: open ? 1 : 0,
+          onSidebarDismiss: () => search.active
+              ? ref.read(bookSearchProvider(widget.id).notifier).close()
+              : unawaited(
+                  ref
+                      .read(bookSidebarProvider(widget.id).notifier)
+                      .setOpen(false),
+                ),
+          sidebarHeader: const BusyBooksLinuxBrandHeader(),
+          sidebarBody: BookSearchSidebarHost(
+            bookId: widget.id,
+            child: Column(
+              children: [
+                ReadingSidebarHeader(bookId: widget.id),
+                Expanded(child: ReadingSidebarBody(bookId: widget.id)),
+              ],
+            ),
           ),
-        ),
-        header: BookHeader(bookId: widget.id, view: widget.view),
-        body: ColoredBox(
-          color: BusyBooksSurfaceColors.of(context).view,
-          child: content,
+          header: BookHeader(bookId: widget.id, view: widget.view),
+          body: ColoredBox(
+            color: BusyBooksSurfaceColors.of(context).view,
+            child: content,
+          ),
         ),
       ),
     );
