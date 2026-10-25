@@ -9,7 +9,7 @@ import { comicAnchor } from '../assets/reader/comic_book.mjs'
 const {search}=await import(process.env.BUSYBOOKS_SEARCH_SOURCE??new URL('../assets/reader/vendor/foliate/search.js',import.meta.url))
 
 const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('../assets/reader/reader.js',import.meta.url),'utf8'))
-    .replace(/^import .*\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
+    .replace(/^import .*\r?\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
 function response(bytes){return {ok:true,body:new ReadableStream({start(controller){controller.enqueue(bytes);controller.close()}})}}
 function indexResponse(resource){return response(new TextEncoder().encode(JSON.stringify({version:4,resources:{'chapter.xhtml':{maximumBytes:4194304,...resource}}})))}
 const failures=[]

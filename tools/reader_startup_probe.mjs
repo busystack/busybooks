@@ -62,7 +62,7 @@ const sandbox = {
 }
 const context = vm.createContext(sandbox)
 const source = (await fs.readFile(new URL('../assets/reader/reader.js', import.meta.url), 'utf8'))
-  .replace(/^import .*\n/gm, '').replaceAll('import.meta.url', "'https://busybooks.local/reader.js'")
+  .replace(/^import .*\r?\n/gm, '').replaceAll('import.meta.url', "'https://busybooks.local/reader.js'")
 vm.runInContext(source, context)
 await vm.runInContext("relayoutPdf = async anchor => {testFirstPage(anchor);return true}; openPdf({anchor: {page: 12, y: .25}, generateCover: false})", context)
 assert.equal(firstPages.length, 1)

@@ -6,7 +6,7 @@ import vm from 'node:vm'
 import * as typographyUtilities from '../assets/reader/typography.mjs'
 import { validPage } from '../assets/reader/reading_geometry.mjs'
 const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('../assets/reader/reader.js',import.meta.url),'utf8'))
-  .replace(/^import .*\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
+  .replace(/^import .*\r?\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
 function adapter(){
   const events=[]
   const content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
