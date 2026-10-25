@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import random
 import subprocess
+import struct
+import zlib
 import tempfile
 import zipfile
 from PIL import Image
@@ -29,9 +31,12 @@ if args.cancellable:
     with tempfile.TemporaryDirectory(prefix='busybooks-cancellable-author-') as directory:
         source = Path(directory)
         Image.new('RGB', (10, 10), 'red').save(source / 'page.png')
-        payload = bytes(range(256)) * 32768
+        original=(source/'page.png').read_bytes()
+        payload=b'Fixture padding\0'+bytes(range(256))*32768
+        chunk=b'tEXt'+payload
+        padded=original[:-12]+struct.pack('>I',len(payload))+chunk+struct.pack('>I',zlib.crc32(chunk))+original[-12:]
         for index in range(64):
-            (source / f'resource-{index:03}.bin').write_bytes(payload)
+            (source / f'page-{index:03}.png').write_bytes(padded)
         archive = source.parent / f'{source.name}.rar'
         try:
             subprocess.run([rar, 'a', '-idq', '-r', '-ma5', '-m1', '-s', str(archive), '.'], cwd=source, check=True)

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'file_identity.dart';
@@ -29,7 +28,7 @@ Future<String> preparePublicationCache(
   String id,
   String format, {
   required String sourcePath,
-  Uint8List? verifiedBytes,
+  PreparedFb2? verifiedFb2,
   Map<String, dynamic>? verifiedComic,
   bool force = false,
   required bool Function() cancelled,
@@ -78,7 +77,7 @@ Future<String> preparePublicationCache(
       'Missing original or book resource limit exceeded',
     );
   }
-  if (verifiedBytes == null &&
+  if (verifiedFb2 == null &&
       verifiedComic == null &&
       (await sha256.bind(original.openRead()).first).toString() != id) {
     throw const FileSystemException('Original book changed during preparation');
@@ -102,15 +101,18 @@ Future<String> preparePublicationCache(
   if (!force && await index.exists() && await target.exists()) {
     try {
       final data = await readSealedCacheIndex(index);
-      if (data?['version'] == 2 &&
+      if (data?['version'] == 3 &&
           data?['id'] == id &&
-          data?['format'] == format &&
-          await completeCachedResources(
-            target,
-            data?['resources'],
-            cancelled: cancelled,
-          )) {
-        await validatePreparedClosure(data!, target);
+          data?['format'] == format) {
+        validatePreparedResourceBudget(data!);
+        if (!await completeCachedResources(
+          target,
+          data['resources'],
+          cancelled: cancelled,
+        )) {
+          throw const FormatException('Incomplete publication cache');
+        }
+        await validatePreparedClosure(data, target);
         await checkOriginal();
         if (verifiedComic?['directory'] case final String path) {
           final old = Directory(path);
@@ -128,10 +130,13 @@ Future<String> preparePublicationCache(
   try {
     Map<String, dynamic> descriptor;
     if (format == 'fb2') {
-      final bytes = verifiedBytes ?? await original.readAsBytes();
-      final book = prepareFb2(
-        unwrapFb2(bytes, originalBookSuffix(sourcePath)!),
-      );
+      final book =
+          verifiedFb2 ??
+          await prepareFb2File(
+            sourcePath,
+            originalBookSuffix(sourcePath)!,
+            cancelled,
+          );
       final resources = <String, Map<String, dynamic>>{};
       for (final entry in book.resources.entries) {
         if (cancelled()) {
@@ -159,7 +164,7 @@ Future<String> preparePublicationCache(
     }
     await checkOriginal();
     if (cancelled()) throw const FormatException('Book preparation cancelled');
-    descriptor = {...descriptor, 'version': 2, 'id': id, 'format': format};
+    descriptor = {...descriptor, 'version': 3, 'id': id, 'format': format};
     await validatePreparedClosure(descriptor, staging);
     if (await target.exists()) await target.delete(recursive: true);
     await staging.rename(target.path);

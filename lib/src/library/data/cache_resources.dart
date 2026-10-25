@@ -7,6 +7,8 @@ import 'package:xml/xml.dart';
 import '../../core/atomic_file_writer.dart';
 import '../../import_export/data/archive_guard.dart';
 import 'book_xml.dart';
+import 'publication_resource_limits.dart';
+import 'comic_resources.dart';
 
 const maximumCacheIndexBytes = 16 * 1024 * 1024;
 final _digestPattern = RegExp(r'^[a-f0-9]{64}$');
@@ -62,7 +64,7 @@ Future<bool> completeCachedResources(
             sha256.convert(utf8.encode(entry.key as String)).toString() ||
         value['size'] is! int ||
         value['size'] < 0 ||
-        value['size'] > 256 * 1024 * 1024 ||
+        value['size'] > 64 * 1024 * 1024 ||
         value['sha256'] is! String ||
         !_digestPattern.hasMatch(value['sha256'] as String) ||
         !files.add(value['file'] as String)) {
@@ -91,12 +93,16 @@ String? epubResourcePath(String base, String href) {
   return resolved.startsWith('/') ? resolved.substring(1) : resolved;
 }
 
-Future<void> validateEpubClosure(
-  Map resources,
+Future<Map<String, int>> validateEpubClosure(
+  Map<String, int> resources,
   Future<Uint8List?> Function(String, int) read,
 ) async {
   Never invalid() =>
       throw const FormatException('Incomplete EPUB resource descriptor');
+  final limits = {
+    for (final name in resources.keys) name: epubResourceLimit(name),
+  };
+  final assigned = <String>{};
   final mime = await read('mimetype', 128);
   if (mime == null || utf8.decode(mime).trim() != 'application/epub+zip') {
     invalid();
@@ -123,7 +129,21 @@ Future<void> validateEpubClosure(
       final href = item.getAttribute('href'), id = item.getAttribute('id');
       if (href == null || id == null || !ids.add(id)) invalid();
       final resource = epubResourcePath(path, href);
-      if (resource != null && !resources.containsKey(resource)) invalid();
+      if (resource != null) {
+        if (!resources.containsKey(resource)) invalid();
+        final limit = epubResourceLimit(
+          resource,
+          mediaType: item.getAttribute('media-type') ?? '',
+          navigation: (item.getAttribute('properties') ?? '')
+              .split(RegExp(r'\s+'))
+              .contains('nav'),
+        );
+        // The manifest's declared image/font type may raise a generic extension
+        // allowance; known filename limits remain authoritative.
+        if (assigned.add(resource) || limit < limits[resource]!) {
+          limits[resource] = limit;
+        }
+      }
     }
     for (final item in package.descendants.whereType<XmlElement>().where(
       (e) => e.name.local == 'itemref',
@@ -131,9 +151,49 @@ Future<void> validateEpubClosure(
       if (!ids.contains(item.getAttribute('idref'))) invalid();
     }
   }
+  for (final entry in resources.entries) {
+    if (entry.value < 0 || entry.value > limits[entry.key]!) {
+      throw FormatException(
+        'EPUB resource exceeds its media limit: ${entry.key}',
+      );
+    }
+  }
+  return limits;
+}
+
+void validatePreparedResourceBudget(Map data) {
+  final resources = data['resources'];
+  if (resources is! Map || resources.isEmpty || resources.length > 20000) {
+    throw const FormatException('Incomplete publication resource descriptor');
+  }
+  final comic = ComicResourceBudget();
+  var fb2Total = 0;
+  for (final entry in resources.entries) {
+    if (entry.key is! String ||
+        entry.value is! Map ||
+        entry.value['size'] is! int ||
+        entry.value['size'] < 0) {
+      throw const FormatException('Invalid publication resource size');
+    }
+    final name = entry.key as String, size = entry.value['size'] as int;
+    if (data['format'] == 'fb2') {
+      final limit = name.startsWith('sections/')
+          ? epubTextBytes
+          : 16 * 1024 * 1024;
+      fb2Total += size;
+      if (size > limit || fb2Total > 64 * 1024 * 1024) {
+        throw const FormatException('FB2 prepared resource limit exceeded');
+      }
+    } else if (comic.add(name, size) == ComicResource.discard) {
+      throw const FormatException(
+        'Irrelevant comic resources must not be cached',
+      );
+    }
+  }
 }
 
 Future<void> validatePreparedClosure(Map data, Directory directory) async {
+  validatePreparedResourceBudget(data);
   Never invalid() =>
       throw const FormatException('Incomplete publication resource descriptor');
   final resources = data['resources'];
@@ -160,12 +220,12 @@ Future<void> validatePreparedClosure(Map data, Directory directory) async {
       }
       paths.add(section['path'] as String);
       final resource = resources[section['path']] as Map;
-      if (resource['size'] > 32 * 1024 * 1024) invalid();
+      if (resource['size'] > epubTextBytes) invalid();
       final doc = boundedBookXml(
         await File(
           p.join(directory.path, resource['file'] as String),
         ).readAsBytes(),
-        maximumBytes: 32 * 1024 * 1024,
+        maximumBytes: epubTextBytes,
       );
       for (final node in doc.descendants.whereType<XmlElement>()) {
         final src = node.getAttribute('src'), href = node.getAttribute('href');
@@ -202,6 +262,22 @@ Future<void> validatePreparedClosure(Map data, Directory directory) async {
         pages.length > 10000 ||
         data['metadata'] is! Map) {
       invalid();
+    }
+    for (final entry in resources.entries) {
+      final name = entry.key as String;
+      final suffix = p.posix.extension(name).toLowerCase();
+      if (![
+            '.jpg',
+            '.jpeg',
+            '.jpe',
+            '.jfif',
+            '.png',
+            '.webp',
+          ].contains(suffix) &&
+          !(p.posix.basename(name).toLowerCase() == 'comicinfo.xml' &&
+              entry.value['size'] <= 1024 * 1024)) {
+        invalid();
+      }
     }
     final names = <String>{};
     for (final page in pages) {

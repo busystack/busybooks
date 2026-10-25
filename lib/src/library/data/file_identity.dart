@@ -54,35 +54,47 @@ String fileInstance(String path) {
             Pointer<Void>,
           )
         >('CreateFileW');
-    final info = kernel
+    final idInfo = kernel
         .lookupFunction<
-          Int32 Function(Pointer<Void>, Pointer<Uint8>),
-          int Function(Pointer<Void>, Pointer<Uint8>)
-        >('GetFileInformationByHandle');
+          Int32 Function(Pointer<Void>, Int32, Pointer<Uint8>, Uint32),
+          int Function(Pointer<Void>, int, Pointer<Uint8>, int)
+        >('GetFileInformationByHandleEx');
     final close = kernel
         .lookupFunction<
           Int32 Function(Pointer<Void>),
           int Function(Pointer<Void>)
         >('CloseHandle');
-    final name = path.toNativeUtf16(), buffer = calloc<Uint8>(52);
+    final name = path.toNativeUtf16(),
+        buffer = calloc<Uint8>(8),
+        identity = calloc<Uint8>(24);
     final handle = open(name, 0x80, 7, nullptr, 3, 0x00200000, nullptr);
     try {
       if (handle.address == Pointer<Void>.fromAddress(-1).address ||
-          info(handle, buffer) == 0) {
+          idInfo(handle, 9, buffer, 8) == 0) {
         throw FileSystemException('Cannot identify book file', path);
       }
-      final data = buffer.asTypedList(52).buffer.asByteData();
+      final data = buffer.asTypedList(8).buffer.asByteData();
       if (data.getUint32(0, Endian.host) & 0x410 != 0) {
         throw FileSystemException(
           'Book access requires a regular physical file',
           path,
         );
       }
-      return '${data.getUint32(28, Endian.host)}:${data.getUint32(44, Endian.host)}:${data.getUint32(48, Endian.host)}';
+      // FILE_ID_INFO: 64-bit volume serial followed by all 128 file-ID bits.
+      // A legacy 64-bit identifier is not conclusive on ReFS. Fail closed if
+      // this filesystem cannot supply a full identity (including for moves).
+      if (idInfo(handle, 18, identity, 24) == 0) {
+        throw FileSystemException(
+          'Filesystem cannot provide a full physical file identity',
+          path,
+        );
+      }
+      return windowsFileInstance(identity.asTypedList(24));
     } finally {
       if (handle.address != Pointer<Void>.fromAddress(-1).address) {
         close(handle);
       }
+      calloc.free(identity);
       calloc.free(buffer);
       malloc.free(name);
     }
@@ -117,4 +129,10 @@ void syncDirectory(String directory) {
     if (fd >= 0) close(fd);
     malloc.free(name);
   }
+}
+
+// Encode the entire FILE_ID_INFO without integer truncation or signedness loss.
+String windowsFileInstance(Uint8List info) {
+  if (info.length != 24) throw const FormatException('Invalid FILE_ID_INFO');
+  return 'win128:${info.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join()}';
 }

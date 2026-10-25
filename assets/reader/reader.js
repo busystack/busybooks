@@ -233,16 +233,37 @@ function restoreEpubSelections(work){
         reportEpubSelection(saved.doc,saved.index,false)
     }
 }
+async function boundedResourceBuffer(response,maximum,expected=null){
+    if(!response.ok)throw Error('Publication resource is unavailable')
+    if(!Number.isSafeInteger(maximum)||maximum<0||expected!=null&&(!Number.isSafeInteger(expected)||expected<0||expected>maximum))throw Error('Publication resource exceeds its media limit')
+    const reader=response.body?.getReader()
+    if(!reader)throw Error('Bounded publication resource streaming is unavailable')
+    const chunks=[];let size=0
+    try{
+        for(;;){
+            const {done,value}=await reader.read();if(done)break
+            size+=value.byteLength
+            if(size>maximum||expected!=null&&size>expected){await reader.cancel();throw Error('Publication resource exceeds its media limit or declared size')}
+            chunks.push(value)
+        }
+    }finally{reader.releaseLock()}
+    if(expected!=null&&size!==expected)throw Error('Publication resource size does not match its index')
+    const buffer=new Uint8Array(size);let offset=0
+    for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength}
+    return buffer.buffer
+}
 async function openFoliate(config) {
-    const index=await (await fetch('book-index')).json(),sizes=index.resources
+    const index=JSON.parse(new TextDecoder().decode(await boundedResourceBuffer(await fetch('book-index'),16*1024*1024))),sizes=index.resources
+    if(config.format==='epub'&&index.version!==4)throw Error('Unsupported EPUB cache version')
     const resource=name=>'book/'+sizes[name].file
-    const load=async(name,options)=>{
+    const load=async(name,options,text=false)=>{
         if(!Object.hasOwn(sizes,name))return null
         try{
-            const response=await fetch(resource(name),options)
-            if(!response.ok)throw Error('Publication resource is unavailable')
-            const buffer=await response.arrayBuffer()
-            if(buffer.byteLength!==sizes[name].size)throw Error('Publication resource size does not match its index')
+            const resourceMaximum=config.format==='epub'?sizes[name].maximumBytes:config.format==='fb2'?(name.startsWith('sections/')?4*1024*1024:16*1024*1024):64*1024*1024
+            if(!Number.isSafeInteger(resourceMaximum)||resourceMaximum<0||resourceMaximum>64*1024*1024)throw Error('Invalid publication resource budget')
+            const maximum=text?Math.min(4*1024*1024,resourceMaximum):resourceMaximum
+            if(!Number.isSafeInteger(sizes[name].size)||sizes[name].size<0||sizes[name].size>maximum)throw Error('Publication resource exceeds its media limit')
+            const buffer=await boundedResourceBuffer(await fetch(resource(name),options),maximum,sizes[name].size)
             const expected=sizes[name].sha256
             if(typeof expected!=='string'||!/^([a-f0-9]{64})$/.test(expected))throw Error('Publication resource digest is missing')
             const digest=await crypto.subtle.digest('SHA-256',buffer)
@@ -252,7 +273,7 @@ async function openFoliate(config) {
         }catch(error){cacheResourceFailure(error)}
     }
     const loadText=async(name,options)=>{
-        const buffer=await load(name,options);if(buffer==null)return null
+        const buffer=await load(name,options,true);if(buffer==null)return null
         const data=new Uint8Array(buffer)
         try{return adaptDTBook(new TextDecoder(data[0]===255&&data[1]===254||data[0]===60&&data[1]===0?'utf-16le':data[0]===254&&data[1]===255||data[0]===0&&data[1]===60?'utf-16be':'utf-8',{fatal:true}).decode(data))}
         catch(error){cacheResourceFailure(error)}

@@ -30,7 +30,7 @@ Future<void> main(List<String> args) async {
     final book = await inspectBook(
       args.single,
       () => false,
-      retainBytes: (_) => retained = true,
+      retainFb2: (_) => retained = true,
     );
     final cache = await preparePublicationCache(
       root.path,

@@ -19,5 +19,8 @@ String? bookFormatForPath(String path) => switch (originalBookSuffix(path)) {
 bool isComicFormat(String? format) => format == 'cbz' || format == 'cbr';
 bool isPageFormat(String? format) => format == 'pdf' || isComicFormat(format);
 
-int maximumBookBytes(String format) =>
-    isComicFormat(format) ? 1024 * 1024 * 1024 : 256 * 1024 * 1024;
+int maximumBookBytes(String format) => isComicFormat(format)
+    ? 1024 * 1024 * 1024
+    : format == 'fb2'
+    ? 64 * 1024 * 1024
+    : 256 * 1024 * 1024;

@@ -125,32 +125,36 @@ remains Apache-2.0. See [NOTICE](../../NOTICE) and
 
 | Resource | Limit / behavior |
 | --- | --- |
-| Original source | Comics 1 GiB; EPUB/PDF/FB2 retain 256 MiB |
-| Comic archive | 20,000 entries; 64 MiB actual bytes per entry; 4 GiB aggregate output |
+| Original source | Comics 1 GiB; EPUB/PDF 256 MiB; FB2/wrappers 64 MiB, with earlier encoding-dependent text limits |
+| Comic archive | 20,000 entries; 64 MiB per entry; 4 GiB retained pages/ComicInfo; at most 128 MiB verified discarded data, never cached; preflight free space plus 64 MiB reserve |
 | Comic images | 1–10,000 pages; 16,000 pixels per side; 32 × 1024 × 1024 decoded pixels per image |
 | Comic metadata | ComicInfo 1 MiB; bounded individual strings; prepared logical names 4M UTF-16 units aggregate |
 | Comic ZIP indexing | Central/local metadata 16 MiB each; encoded names 4 MiB aggregate and 32 KiB each; actual counts checked before allocation; ZIP64 resolved |
 | RAR process | 768 MiB memory; dictionary 256 MiB; three-minute deadline; cancel polling 25 ms |
-| FB2 XML | 64 MiB; depth 128; 500,000 XML events/attributes; 256 attributes per element; 262,144 UTF-16 units per tag; 10,000 sections |
-| FB2 binaries | 2,048 resources; 24 MiB encoded base64 per resource; 64 MiB encoded aggregate; bounded decoded dimensions/pixels |
-| Prepared section / index | FB2 section 32 MiB; complete FB2/comic descriptor 16 MiB |
+| FB2 XML | Streamed character/events into one DOM; 16 Mi UTF-16 units; 100,000 nodes/attributes; depth 128; 256 attributes per element; 64 Ki-unit tags; 1 Mi-unit text tokens (8 Mi for binary/CDATA); 10,000 sections |
+| FB2 binaries | 2,048 resources; 8 MiB encoded base64 per resource; 16 MiB encoded aggregate; bounded decoded dimensions/pixels |
+| Prepared section / index | FB2 section 4 MiB; FB2 prepared resources 64 MiB aggregate; complete FB2/comic descriptor 16 MiB |
 | Retained full comic pages | Two after navigation; old/new spreads coexist during a transition; obsolete image/document Blob URLs revoked; pending reads aborted on close |
 | Thumbnails | Two tasks; window twelve; 240×320 preview; 32 previews / 8 MiB native cache |
-| Existing EPUB ZIP | Original 256 MiB; entry 256 MiB; aggregate 1 GiB; 20,000 entries; not raised |
+| EPUB resources | Original 256 MiB; 1 GiB aggregate; 20,000 entries; text/SVG/OPF 4 MiB, navigation/NCX/CSS 1 MiB, raster images 64 MiB, fonts 32 MiB, other resources 8 MiB; path, media type and payload classification apply |
 | Existing backup | 100,000 combined records; 128 MiB encoded manifest; unchanged |
 
 ZIP comics use a file-backed index and stream stored/deflated chunks with actual
 size/CRC checks. A preflight bounds central and local ZIP metadata before the
 archive library allocates its index, resolves ZIP64, checks actual entry counts
-and rejects ambiguous EOCD signatures. RAR callbacks stream to numeric owned staging filenames; archive
+and rejects ambiguous EOCD signatures. RAR first validates headers and the entire retained budget without extracting, checks available space, then verifies data/CRC in a second pass. Callbacks stream only retained resources to numeric owned staging filenames; archive
 names never become output paths. Logical names map to hashed physical filenames,
 preserving case distinctions on Windows. No full comic archive decompression
 buffer is retained. Links, unsafe paths, duplicates, encryption and multipart
 archives are rejected.
 
 Opening validates/hashes the complete original before trusting a warm cache.
-The stat-bound single-use inspection token avoids duplicate work only within
-that owned sequence. Expected identity is checked before preparation. Versioned
+The source-instance/stat-bound single-use inspection token avoids duplicate work
+only within that owned sequence. FB2 carries its validated prepared representation
+from inspection to publication; neither plain nor ZIP-wrapped XML is buffered
+whole or parsed twice. Encoding preflight limits plain UTF-8 to at most 48 MiB
+plus BOM allowance, UTF-16 to 32 MiB plus BOM, and Windows-1251 to 16 MiB,
+consistent with the decoded text budget. Expected identity is checked before preparation. Versioned
 `fb2-v2`/`comic-v2` caches publish complete staging before the index; interrupted
 owned staging is cleaned on startup. Worker cancellation, native session IDs and
 controller revisions reject replaced/late results. RAR cancellation kills an

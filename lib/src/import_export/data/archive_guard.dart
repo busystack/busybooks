@@ -372,15 +372,18 @@ Future<String> fileSha256(File file, bool Function() cancelled) async {
 
 /// Write one resource with backpressure and bounded compressed input chunks.
 /// A small compressed chunk also bounds transient output for high-ratio DEFLATE.
-Future<String> streamZipEntry(
+Stream<List<int>> zipEntryStream(
   ZipFileHeader header,
-  File target,
   bool Function() cancelled, {
   int maximumBytes = 256 * 1024 * 1024,
-}) async {
+}) async* {
   final source = header.file;
-  if (source == null || source.filename != header.filename) {
-    throw const FormatException('Inconsistent archive directory');
+  if (source == null ||
+      source.filename != header.filename ||
+      header.uncompressedSize > maximumBytes) {
+    throw const FormatException(
+      'Inconsistent archive directory or resource limit exceeded',
+    );
   }
   final input = source.getStream(decompress: false)..setPosition(0);
   Stream<List<int>> chunks() async* {
@@ -393,33 +396,46 @@ Future<String> streamZipEntry(
     }
   }
 
-  final output = await target.open(mode: FileMode.write);
-  final result = _DigestResult();
-  final hasher = sha256.startChunkedConversion(result);
   var size = 0, crc = 0;
+  final stream = header.compressionMethod == 8
+      ? chunks().transform(ZLibCodec(raw: true).decoder)
+      : chunks();
+  await for (final bytes in stream) {
+    if (cancelled()) throw const FormatException('Book preparation cancelled');
+    size += bytes.length;
+    if (size > header.uncompressedSize || size > maximumBytes) {
+      throw const FormatException('Decompressed resource limit exceeded');
+    }
+    crc = getCrc32(bytes, crc);
+    yield bytes;
+  }
+  if (size != header.uncompressedSize || crc != header.crc32) {
+    throw const FormatException('Damaged archive resource (CRC or size)');
+  }
+}
+
+Future<String> streamZipEntry(
+  ZipFileHeader header,
+  File? target,
+  bool Function() cancelled, {
+  int maximumBytes = 256 * 1024 * 1024,
+}) async {
+  final output = await target?.open(mode: FileMode.write);
+  final result = _DigestResult();
+  final digest = sha256.startChunkedConversion(result);
   try {
-    final stream = header.compressionMethod == 8
-        ? chunks().transform(ZLibCodec(raw: true).decoder)
-        : chunks();
-    await for (final bytes in stream) {
-      if (cancelled()) {
-        throw const FormatException('Book preparation cancelled');
-      }
-      size += bytes.length;
-      if (size > header.uncompressedSize || size > maximumBytes) {
-        throw const FormatException('Decompressed resource limit exceeded');
-      }
-      crc = getCrc32(bytes, crc);
-      hasher.add(bytes);
-      await output.writeFrom(bytes);
+    await for (final bytes in zipEntryStream(
+      header,
+      cancelled,
+      maximumBytes: maximumBytes,
+    )) {
+      digest.add(bytes);
+      await output?.writeFrom(bytes);
     }
-    hasher.close();
-    if (size != header.uncompressedSize || crc != header.crc32) {
-      throw const FormatException('Damaged archive resource (CRC or size)');
-    }
+    digest.close();
     return result.value!.toString();
   } finally {
-    await output.close();
+    await output?.close();
   }
 }
 

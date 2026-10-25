@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
@@ -19,6 +18,7 @@ import 'book_paths.dart';
 import 'record_validation.dart';
 import 'book_move.dart';
 import 'file_identity.dart';
+import 'fb2_book.dart';
 import '../../workspace/workspace_model.dart';
 import 'cover_image.dart';
 import 'reading_backup.dart';
@@ -580,7 +580,7 @@ class _ReadingWorker {
     }
     final canonical = p.normalize(await File(absolute).resolveSymbolicLinks());
     _validated.clear();
-    _inspectedBytes = null;
+    _inspectedFb2 = null;
     await _clearInspectedComic();
     late Map<String, dynamic> metadata;
     FileStat? inspectedStat;
@@ -607,9 +607,7 @@ class _ReadingWorker {
         validatedStat: (stat) => inspectedStat = stat,
         validatedInstance: (instance) => inspectedInstance = instance,
         retainComic: (prepared) => _inspectedComic = prepared,
-        retainBytes: (bytes) {
-          _inspectedBytes = bytes;
-        },
+        retainFb2: (prepared) => _inspectedFb2 = prepared,
       );
     } catch (error) {
       if (error is WorkspaceException) rethrow;
@@ -686,7 +684,7 @@ class _ReadingWorker {
       'path': canonical,
       'stat': inspectedStat!,
       'instance': inspectedInstance!,
-      'bytes': _inspectedBytes,
+      'fb2': _inspectedFb2,
       'comic': _inspectedComic,
     };
     return {...value, 'validationToken': token};
@@ -701,7 +699,7 @@ class _ReadingWorker {
     }
   }
 
-  Uint8List? _inspectedBytes;
+  PreparedFb2? _inspectedFb2;
   int _validationSerial = 0;
   final _validated = <String, Map<String, dynamic>>{};
   Future<Map<String, dynamic>> openPath(
@@ -1001,7 +999,7 @@ class _ReadingWorker {
         final id = args['id'] as String;
         final validation = _validated.remove(args['validationToken']);
         Map<String, dynamic>? value;
-        Uint8List? trustedBytes;
+        PreparedFb2? trustedFb2;
         Map<String, dynamic>? trustedComic;
         FileStat? trustedStat;
         String? trustedInstance;
@@ -1017,7 +1015,7 @@ class _ReadingWorker {
             value = {...book(id)!, 'path': validation['path']};
             trustedStat = before;
             trustedInstance = validation['instance'] as String;
-            trustedBytes = validation['bytes'] as Uint8List?;
+            trustedFb2 = validation['fb2'] as PreparedFb2?;
             trustedComic = validation['comic'] as Map<String, dynamic>?;
           }
         }
@@ -1032,12 +1030,12 @@ class _ReadingWorker {
           id,
           value['format'] as String,
           sourcePath: value['path'] as String,
-          verifiedBytes: trustedBytes ?? _inspectedBytes,
+          verifiedFb2: trustedFb2 ?? _inspectedFb2,
           verifiedComic: trustedComic ?? _inspectedComic,
           force: args['force'] == true,
           cancelled: () => cancelled,
         );
-        _inspectedBytes = null;
+        _inspectedFb2 = null;
         await _clearInspectedComic();
         final path = value['path'] as String;
         final after = await File(path).stat();

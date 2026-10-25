@@ -10,6 +10,8 @@ const {search}=await import(process.env.BUSYBOOKS_SEARCH_SOURCE??new URL('../ass
 
 const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('../assets/reader/reader.js',import.meta.url),'utf8'))
     .replace(/^import .*\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
+function response(bytes){return {ok:true,body:new ReadableStream({start(controller){controller.enqueue(bytes);controller.close()}})}}
+function indexResponse(resource){return response(new TextEncoder().encode(JSON.stringify({version:4,resources:{'chapter.xhtml':{maximumBytes:4194304,...resource}}})))}
 const failures=[]
 async function check(name,run){
     let timer
@@ -20,7 +22,7 @@ async function check(name,run){
 function adapter(){
     const events=[],content={scrollLeft:0,scrollTop:0,clientWidth:800,clientHeight:600,style:{},addEventListener(){},setAttribute(){},removeAttribute(){},replaceChildren(){}}
     const document={querySelectorAll:()=>[],querySelector:()=>content,addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}}
-    const context=vm.createContext({...typography,AbortController,URL,console,Uint8Array,TextDecoder,TextEncoder,crypto,setTimeout,clearTimeout,structuredClone,validPage,comicAnchor,performance,
+    const context=vm.createContext({...typography,AbortController,URL,console,Uint8Array,TextDecoder,TextEncoder,ReadableStream,crypto,setTimeout,clearTimeout,structuredClone,validPage,comicAnchor,performance,
         requestAnimationFrame:()=>{},pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},document,
         window:{location:{href:'https://busybooks.local/?session=review'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}}})
     vm.runInContext(source,context)
@@ -164,7 +166,7 @@ await check('F20: a legacy oversized PDF goto reassembles before rendering and k
 })
 await check('F21: unavailable cached resources request recovery even when the loader catches errors',async()=>{
     const {run,context,events}=adapter()
-    context.fetch=async path=>path==='book-index'?{json:async()=>({resources:{'chapter.xhtml':{file:'abc',size:10}}})}:{ok:false}
+    context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:10}):{ok:false}
     context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){try{await context.publicationLoader.loadText('chapter.xhtml')}catch{};return {}}}
     run('mountFoliate=async()=>{};theme=()=>{}')
     await run(`openFoliate({format:'epub'})`)
@@ -175,11 +177,30 @@ await check('F21: same-length cache corruption after preparation is rejected bef
     const original=new TextEncoder().encode('Readable original'),damaged=new TextEncoder().encode('Readable modified')
     assert.equal(original.byteLength,damaged.byteLength)
     const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',original))].map(x=>x.toString(16).padStart(2,'0')).join('')
-    context.fetch=async path=>path==='book-index'?{json:async()=>({resources:{'chapter.xhtml':{file:'abc',size:original.byteLength,sha256:digest}}})}:{ok:true,arrayBuffer:async()=>damaged.buffer}
+    context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:original.byteLength,sha256:digest}):response(damaged)
     context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){await context.publicationLoader.loadText('chapter.xhtml');return {}}}
     run('mountFoliate=async()=>{};theme=()=>{}')
     await run(`dispatch({action:'open',format:'epub'})`)
     assert(events.some(e=>e.type==='error'&&e.cacheFailure===true&&e.message.includes('digest')),JSON.stringify(events))
     assert.equal(events.some(e=>e.type==='opened'),false)
+})
+await check('F23: oversized text is rejected before fetching or materializing the resource',async()=>{
+    const {run,context,events}=adapter();let requests=0
+    context.fetch=async path=>{if(path==='book-index')return indexResponse({file:'abc',size:268435456});requests++;throw Error('Oversized resource must not be fetched')}
+    context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){await context.publicationLoader.loadText('chapter.xhtml');return {}}}
+    run('theme=()=>{};mountFoliate=async()=>{}')
+    await run(`dispatch({action:'open',format:'epub'})`)
+    assert.equal(requests,0)
+    assert(events.some(e=>e.type==='error'&&e.message.includes('media limit')))
+    assert.equal(events.some(e=>e.type==='opened'),false)
+})
+await check('F23: actual response bytes are bounded even when the descriptor understates size',async()=>{
+    const {run,context,events}=adapter();let cancelled=false
+    context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:10}):{ok:true,body:new ReadableStream({start(controller){controller.enqueue(new Uint8Array(65536))},cancel(){cancelled=true}})}
+    context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){await context.publicationLoader.loadText('chapter.xhtml');return {}}}
+    run('theme=()=>{};mountFoliate=async()=>{}')
+    await run(`dispatch({action:'open',format:'epub'})`)
+    assert(cancelled)
+    assert(events.some(e=>e.type==='error'&&e.message.includes('declared size')))
 })
 if(failures.length){console.error(JSON.stringify({status:'failed',checks:failures}));process.exitCode=1}

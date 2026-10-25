@@ -38,7 +38,7 @@ void main() {
     () async {
       var retained = false;
       final path = p.absolute('test/fixtures/reflowable.epub');
-      await inspectBook(path, () => false, retainBytes: (_) => retained = true);
+      await inspectBook(path, () => false, retainFb2: (_) => retained = true);
       expect(retained, isFalse);
       final zip = await FileBackedZip.open(path);
       final owned = await Directory.systemTemp.createTemp('busybooks-stream-');

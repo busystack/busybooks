@@ -16,7 +16,7 @@ import 'file_identity.dart';
 Future<Map<String, dynamic>> inspectBook(
   String source,
   bool Function() cancelled, {
-  void Function(Uint8List)? retainBytes,
+  void Function(PreparedFb2)? retainFb2,
   void Function(Map<String, dynamic>)? retainComic,
   String? comicStagingRoot,
   void Function(FileStat)? validatedStat,
@@ -36,10 +36,14 @@ Future<Map<String, dynamic>> inspectBook(
       before.size < 5 ||
       before.size > maximumBookBytes(format)) {
     throw FormatException(
-      'Book must be a regular file between 5 bytes and ${isComicFormat(format) ? '1 GiB' : '256 MiB'}',
+      'Book must be a regular file between 5 bytes and ${isComicFormat(format)
+          ? '1 GiB'
+          : format == 'fb2'
+          ? '64 MiB'
+          : '256 MiB'}',
     );
   }
-  final builder = format == 'fb2' ? BytesBuilder(copy: false) : null;
+  if (format == 'fb2') await validateFb2SourceFile(source, suffix!);
   final digest = _DigestSink();
   // Stream SHA-256 and retain only the PDF header/trailer, not a whole PDF buffer.
   final hasher = sha256.startChunkedConversion(digest);
@@ -53,7 +57,6 @@ Future<Map<String, dynamic>> inspectBook(
       throw const FormatException('Book exceeds resource limit');
     }
     hasher.add(chunk);
-    builder?.add(chunk);
     if (format == 'pdf') {
       if (header.length < 5) header.addAll(chunk.take(5 - header.length));
       final combined = Uint8List(trailer.length + chunk.length)
@@ -65,7 +68,6 @@ Future<Map<String, dynamic>> inspectBook(
     }
   }
   hasher.close();
-  final bytes = builder?.takeBytes();
   final after = await input.stat();
   if (before.size != after.size ||
       before.modified != after.modified ||
@@ -282,10 +284,12 @@ Future<Map<String, dynamic>> inspectBook(
       await archive.close();
     }
   } else if (format == 'fb2') {
+    final prepared = await prepareFb2File(source, suffix, cancelled);
     book.addAll(
-      prepareFb2(unwrapFb2(bytes!, suffix)).metadata
+      Map<String, dynamic>.of(prepared.metadata)
         ..removeWhere((key, value) => value == null || value == ''),
     );
+    retainFb2?.call(prepared);
   } else if (isComicFormat(format)) {
     final parent = comicStagingRoot == null
         ? Directory.systemTemp
@@ -334,7 +338,6 @@ Future<Map<String, dynamic>> inspectBook(
     // PDF.js performs structural/password validation before the UI publishes
     // the first readable page. No PDF layout/parser is duplicated here.
   }
-  if (bytes != null) retainBytes?.call(bytes);
   final finalStat = await input.stat();
   if (fileInstance(source) != instance ||
       after.size != finalStat.size ||

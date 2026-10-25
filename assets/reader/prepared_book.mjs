@@ -1,7 +1,7 @@
 // Foliate book interface over the worker's deterministic FB2 documents.
 // No generic/demo loaders, network resources or replacement publication.
 export async function makePreparedFB2(index,loader,sanitize) {
-    if(![1,2].includes(index.version)||index.format!=='fb2')throw Error('Unsupported FB2 cache version')
+    if(![1,2,3].includes(index.version)||index.format!=='fb2')throw Error('Unsupported FB2 cache version')
     const live=new Map(),pending=new Map(),controller=new AbortController(),book={metadata:index.metadata,toc:index.toc??[],dir:'ltr'}
     let closed=false
     const resolve=href=>href.startsWith('sections/')||href.startsWith('binary/')?href:href

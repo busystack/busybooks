@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'publication_resource_limits.dart';
 import 'dart:typed_data';
 import 'package:xml/xml.dart';
 import '../../import_export/data/archive_guard.dart';
@@ -43,8 +45,12 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
   final doc = boundedBookXml(
     bytes,
     fictionBook: true,
-    maximumBytes: 64 * 1024 * 1024,
+    maximumBytes: fb2XmlBytes,
   );
+  return prepareFb2Document(doc);
+}
+
+PreparedFb2 prepareFb2Document(XmlDocument doc) {
   final root = doc.rootElement;
   if (root.name.local != 'FictionBook' || root.namespaceUri != fb2Namespace) {
     throw const FormatException('Invalid FictionBook root or namespace');
@@ -102,11 +108,11 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
       throw const FormatException('Invalid or duplicate FB2 binary identity');
     }
     final encoded = binary.innerText.replaceAll(RegExp(r'\s'), '');
-    if (encoded.length > 24 * 1024 * 1024) {
+    if (encoded.length > 8 * 1024 * 1024) {
       throw const FormatException('FB2 image resource limit exceeded');
     }
     binaryTotal += encoded.length;
-    if (binaryTotal > 64 * 1024 * 1024) {
+    if (binaryTotal > 16 * 1024 * 1024) {
       throw const FormatException('FB2 aggregate image limit exceeded');
     }
     if (![
@@ -331,9 +337,9 @@ PreparedFb2 prepareFb2(Uint8List bytes) {
       ],
     ).toXmlString();
     final encoded = utf8.encode(html);
-    if (encoded.length > 32 * 1024 * 1024) {
+    if (encoded.length > epubTextBytes) {
       throw const FormatException(
-        'FB2 section resource limit exceeded (32 MiB)',
+        'FB2 section resource limit exceeded (4 MiB)',
       );
     }
     resources[section['path'] as String] = Uint8List.fromList(encoded);
@@ -368,5 +374,71 @@ String? _fragmentId(String? href) {
     return null;
   } on ArgumentError {
     return null;
+  }
+}
+
+Future<PreparedFb2> prepareFb2File(
+  String path,
+  String suffix,
+  bool Function() cancelled,
+) async {
+  await validateFb2SourceFile(path, suffix);
+  if (suffix == 'fb2') {
+    return prepareFb2Document(
+      await streamedFb2Xml(
+        File(path).openRead(),
+        cancelled,
+        declaredBytes: await File(path).length(),
+      ),
+    );
+  }
+  final zip = await FileBackedZip.open(
+    path,
+    maximumTotal: fb2XmlBytes,
+    maximumEntry: fb2XmlBytes,
+  );
+  try {
+    final documents = zip.entries.values
+        .where(
+          (entry) =>
+              !entry.filename.endsWith('/') &&
+              !isArchiveMetadata(entry.filename) &&
+              entry.filename.toLowerCase().endsWith('.fb2'),
+        )
+        .toList();
+    if (documents.length != 1) {
+      throw const FormatException(
+        'An FB2 wrapper must contain exactly one .fb2 document',
+      );
+    }
+    for (final entry in zip.entries.values) {
+      if (entry.filename != documents.single.filename &&
+          !entry.filename.endsWith('/')) {
+        await streamZipEntry(entry, null, cancelled, maximumBytes: fb2XmlBytes);
+      }
+    }
+    final document = await streamedFb2Xml(
+      zipEntryStream(documents.single, cancelled, maximumBytes: fb2XmlBytes),
+      cancelled,
+      declaredBytes: documents.single.uncompressedSize,
+    );
+    return prepareFb2Document(document);
+  } finally {
+    await zip.close();
+  }
+}
+
+Future<void> validateFb2SourceFile(String path, String suffix) async {
+  final file = File(path), length = await File(path).length();
+  if (length > fb2XmlBytes) {
+    throw const FormatException('FB2 source exceeds 64 MiB');
+  }
+  if (suffix == 'fb2' && length > 0) {
+    final prefix = await file.openRead(0, length.clamp(0, 512)).first;
+    if (length > fb2EncodedByteLimit(prefix)) {
+      throw const FormatException(
+        'FB2 document exceeds the supported text size',
+      );
+    }
   }
 }

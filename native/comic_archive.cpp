@@ -28,6 +28,7 @@
 #include <sys/resource.h>
 #endif
 #include "dll.hpp"
+#include "comic_resource_policy.h"
 
 static constexpr uint64_t MiB = 1024 * 1024;
 static std::string json(const std::string& s) {
@@ -120,7 +121,7 @@ static int CALLBACK data_callback(UINT message, LPARAM user, LPARAM p1, LPARAM p
   }
   if (p2 < 0 || static_cast<uint64_t>(p2) > 64 * MiB) return -1;
   state->size += static_cast<uint64_t>(p2); state->total += static_cast<uint64_t>(p2);
-  if (state->size > state->declared || state->size > 64 * MiB || state->total > 4096 * MiB) {
+  if (state->size > state->declared || state->size > 64 * MiB || state->total > (4096 + 128) * MiB) {
     state->error = "RAR decompressed resource limit exceeded"; return -1;
   }
   if (state->output.is_open()) {
@@ -137,64 +138,92 @@ static int run(const std::filesystem::path& source, const std::filesystem::path&
     profile(source);
     OutputState state;
     RAROpenArchiveDataEx options{};
-    options.OpenMode = RAR_OM_EXTRACT; options.Callback = data_callback;
+    options.Callback = data_callback;
     options.UserData = reinterpret_cast<LPARAM>(&state);
 #ifdef _WIN32
     std::wstring source_name = source.wstring(); options.ArcNameW = source_name.data();
 #else
     std::string source_name = source.string(); options.ArcName = source_name.data();
 #endif
-    archive = RAROpenArchiveEx(&options);
-    if (!archive || options.OpenResult) throw std::string("Cannot open RAR archive (decoder error ") + std::to_string(options.OpenResult) + ")";
-    if (options.Flags & ROADF_VOLUME) throw std::string("Multipart RAR archives are unsupported");
-    if (options.Flags & ROADF_ENCHEADERS) throw std::string("Encrypted RAR headers are unsupported");
-    std::set<std::string> names; unsigned count = 0;
-    while (true) {
-      RARHeaderDataEx header{};
-      std::vector<wchar_t> full_name(32768);
-      header.FileNameEx = full_name.data(); header.FileNameExSize = static_cast<unsigned>(full_name.size());
-      const int status = RARReadHeaderEx(archive, &header);
-      if (status == ERAR_END_ARCHIVE) break;
-      if (status != ERAR_SUCCESS) throw std::string("Damaged or unsupported RAR header (decoder error ") + std::to_string(status) + ")";
+    const auto open_archive = [&](unsigned mode) {
+      options.OpenMode = mode;
+      archive = RAROpenArchiveEx(&options);
+      if (!archive || options.OpenResult) throw std::string("Cannot open RAR archive (decoder error ") + std::to_string(options.OpenResult) + ")";
+      if (options.Flags & ROADF_VOLUME) throw std::string("Multipart RAR archives are unsupported");
+      if (options.Flags & ROADF_ENCHEADERS) throw std::string("Encrypted RAR headers are unsupported");
+    };
+    const auto process_entries = [&](bool extract) {
+      busybooks::ComicResourceBudget budget;
+      std::set<std::string> names; unsigned count = 0;
+      uint64_t name_bytes = 0;
+      while (true) {
+        RARHeaderDataEx header{};
+        std::vector<wchar_t> full_name(32768);
+        header.FileNameEx = full_name.data(); header.FileNameExSize = static_cast<unsigned>(full_name.size());
+        const int status = RARReadHeaderEx(archive, &header);
+        if (status == ERAR_END_ARCHIVE) break;
+        if (status != ERAR_SUCCESS) throw std::string("Damaged or unsupported RAR header (decoder error ") + std::to_string(status) + ")";
 #ifdef _WIN32
-      std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> encoding;
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> encoding;
 #else
-      std::wstring_convert<std::codecvt_utf8<wchar_t>> encoding;
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> encoding;
 #endif
-      std::string name = encoding.to_bytes(full_name.data());
-      // RAR uses DOS separators even on Unix; canonical logical paths use '/'.
-      for (char& c : name) if (c == '\\') c = '/';
-      if (++count > 20000 || name.empty() || name.size() > 32768 || std::wcslen(full_name.data()) >= full_name.size()-1 || name[0] == '/' ||
-          name.find(':') != name.npos || !names.insert(name).second || header.RedirType ||
-          (header.HostOS == 3 && (header.FileAttr & 0170000) != 0 &&
-           (header.FileAttr & 0170000) != 0100000 && (header.FileAttr & 0170000) != 0040000))
-        throw std::string("Unsafe, linked or duplicate RAR path");
-      std::string component;
-      for (size_t i = 0; i <= name.size(); ++i) {
-        if (i == name.size() || name[i] == '/') {
-          if (component == ".." || component == "." || (component.empty() && i != name.size())) throw std::string("Unsafe RAR path");
-          component.clear();
-        } else component += name[i];
+        std::string name = encoding.to_bytes(full_name.data());
+        // RAR uses DOS separators even on Unix; canonical logical paths use '/'.
+        for (char& c : name) if (c == '\\') c = '/';
+        name_bytes += name.size();
+        if (name_bytes > 4 * MiB) throw std::string("Comic filename resource limit exceeded");
+        if (++count > 20000 || name.empty() || name.size() > 32768 || std::wcslen(full_name.data()) >= full_name.size()-1 || name[0] == '/' ||
+            name.find(':') != name.npos || !names.insert(name).second || header.RedirType ||
+            (header.HostOS == 3 && (header.FileAttr & 0170000) != 0 &&
+             (header.FileAttr & 0170000) != 0100000 && (header.FileAttr & 0170000) != 0040000))
+          throw std::string("Unsafe, linked or duplicate RAR path");
+        std::string component;
+        for (size_t i = 0; i <= name.size(); ++i) {
+          if (i == name.size() || name[i] == '/') {
+            if (component == ".." || component == "." || (component.empty() && i != name.size())) throw std::string("Unsafe RAR path");
+            component.clear();
+          } else component += name[i];
+        }
+        if (header.Flags & (RHDF_SPLITBEFORE | RHDF_SPLITAFTER)) throw std::string("Multipart RAR entries are unsupported");
+        if (header.Flags & RHDF_ENCRYPTED) throw std::string("Encrypted RAR entries are unsupported");
+        if (header.DictSize > 256 * 1024) throw std::string("RAR dictionary resource limit exceeded (256 MiB)");
+        state.declared = uint64_t(header.UnpSize) | (uint64_t(header.UnpSizeHigh) << 32); state.size = 0;
+        if (state.declared > 64 * MiB) throw std::string("RAR entry resource limit exceeded (64 MiB)");
+        const bool directory = (header.Flags & RHDF_DIRECTORY) != 0;
+        const bool retained = !directory && budget.add(name,state.declared) != busybooks::ComicResource::discard;
+        const auto filename = std::to_string(count);
+        if (extract && retained) {
+          if (std::filesystem::space(destination).available < state.declared + 64 * MiB) throw std::string("Insufficient free disk space for comic pages and cache reserve");
+          state.output.open(destination / filename, std::ios::binary | std::ios::trunc);
+          if (!state.output) throw std::string("Cannot open comic staging resource");
+        }
+        // RAR_TEST performs CRC/hash validation and sends bytes to our bounded
+        // callback. It never creates archive-named files, links or volumes.
+        const int decoded = RARProcessFileW(archive, extract ? RAR_TEST : RAR_SKIP, nullptr, nullptr);
+        if (state.output.is_open()) {
+          state.output.close();
+          if (!state.output) throw std::string("Cannot finish writing comic cache resource");
+        }
+        if (decoded != ERAR_SUCCESS) throw state.error.empty() ? std::string("Damaged or unsupported RAR data (decoder error ") + std::to_string(decoded) + ")" : state.error;
+        if (extract && state.size != state.declared) throw std::string("Damaged RAR entry size");
+        if (extract && retained) std::cout << "{\"name\":" << json(name) << ",\"file\":" << json(filename) << ",\"size\":" << state.size << "}\n";
       }
-      if (header.Flags & (RHDF_SPLITBEFORE | RHDF_SPLITAFTER)) throw std::string("Multipart RAR entries are unsupported");
-      if (header.Flags & RHDF_ENCRYPTED) throw std::string("Encrypted RAR entries are unsupported");
-      if (header.DictSize > 256 * 1024) throw std::string("RAR dictionary resource limit exceeded (256 MiB)");
-      state.declared = uint64_t(header.UnpSize) | (uint64_t(header.UnpSizeHigh) << 32); state.size = 0;
-      if (state.declared > 64 * MiB) throw std::string("RAR entry resource limit exceeded (64 MiB)");
-      const bool directory = (header.Flags & RHDF_DIRECTORY) != 0;
-      const auto filename = std::to_string(count);
-      if (!directory) {
-        state.output.open(destination / filename, std::ios::binary | std::ios::trunc);
-        if (!state.output) throw std::string("Cannot open comic staging resource");
+      if (budget.pages == 0) {
+        throw std::string("A comic must contain 1 to 10000 supported pages");
       }
-      // RAR_TEST performs CRC/hash validation and sends bytes to our bounded
-      // callback. It never creates archive-named files, links or volumes.
-      const int decoded = RARProcessFileW(archive, RAR_TEST, nullptr, nullptr);
-      if (state.output.is_open()) state.output.close();
-      if (decoded != ERAR_SUCCESS) throw state.error.empty() ? std::string("Damaged or unsupported RAR data (decoder error ") + std::to_string(decoded) + ")" : state.error;
-      if (state.size != state.declared) throw std::string("Damaged RAR entry size");
-      if (!directory) std::cout << "{\"name\":" << json(name) << ",\"file\":" << json(filename) << ",\"size\":" << state.size << "}\n";
-    }
+      return budget.retained;
+    };
+    // Header-only first pass, including solid archives: reserve the complete
+    // retained set before creating any files. The extraction pass verifies CRCs
+    // for pages, metadata and discarded entries through RAR_TEST.
+    open_archive(RAR_OM_LIST);
+    const auto retained = process_entries(false);
+    RARCloseArchive(archive); archive = nullptr;
+    if (std::filesystem::space(destination).available < retained + 64 * MiB) throw std::string("Insufficient free disk space for comic pages and cache reserve");
+    state.total = 0;
+    open_archive(RAR_OM_EXTRACT);
+    process_entries(true);
     RARCloseArchive(archive); return 0;
   } catch (const std::string& error) {
     if (archive) RARCloseArchive(archive);

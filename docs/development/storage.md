@@ -31,7 +31,8 @@ Collection queries return stored metadata immediately. Accessibility checks run
 in batches of at most 64, without inspecting publication content. Selecting a
 book verifies its entire content identity. A single-use worker token, bound to
 the source instance and final stat, avoids inspecting the same selected file
-twice. Only the latest FB2 byte buffer is retained temporarily. EPUB inspection
+twice. Only the latest validated FB2 prepared representation is retained temporarily;
+plain and wrapped FB2 feed a bounded incremental XML decoder/parser once. EPUB inspection
 reads a bounded ZIP directory and required metadata from file-backed input; cache
 preparation streams each resource to staging with CRC, size and SHA-256 checks.
 Comics retain an owned file-backed staging descriptor. PDF inspection streams
@@ -53,8 +54,8 @@ Compressed exports reproduce the complete original ZIP bytes. New format values
 are JSON records in schema 2; no SQL migration or historical importer is needed.
 
 Disposable `cache/fb2-v2` and `cache/comic-v2` representations contain controlled
-resource indices and SHA-256 physical filenames. EPUB index version 3 and
-FB2/comic index version 2 also record resource content digests. Warm validation
+resource indices and SHA-256 physical filenames. EPUB index version 4 and
+FB2/comic index version 3 also record resource content digests. Warm validation
 checks every digest, the exact physical file set, and format-specific descriptor
 closure (EPUB package/manifest/spine, FB2 sections/links/images, comic pages).
 A separate index digest detects truncated or edited descriptors. The reader
@@ -169,3 +170,18 @@ Incomplete transfers and native bridge-limit errors cannot acknowledge a flush.
 Locations omit passage text; selections and on-demand narration own quotations.
 New PDF segment anchors store `length` instead of duplicating text. Legacy
 text-bearing PDF anchors remain readable and restorable, including from backups.
+
+Publication resource limits apply before cache publication and in the reader's
+streamed response consumer, before hashing or text decoding. Text/SVG is capped
+at 4 MiB, navigation/NCX/CSS at 1 MiB, raster images at 64 MiB and fonts at 32 MiB.
+Filename, manifest type and payload checks constrain disguised markup/fonts;
+structural checks also bound XML and tolerant HTML before a WebView DOM exists.
+Comic caches contain supported pages and at most one bounded ComicInfo file.
+Unused entries are integrity-checked into a discard sink, with a separate
+128 MiB work budget. Disk preflight accounts for retained bytes and a 64 MiB
+reserve; RAR performs a header-only first pass before staging any data.
+
+Windows source and move identity uses GetFileInformationByHandleEx(FileIdInfo):
+the full 64-bit volume serial and 128-bit file ID. The attribute/reparse guard
+uses FileAttributeTagInfo. Unsupported identity queries fail closed; legacy
+64-bit move-journal identities are not accepted as physical-instance proof.

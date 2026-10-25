@@ -11,9 +11,10 @@ import 'book_xml.dart';
 import 'cover_image.dart';
 import 'comic_image.dart';
 import 'image_header.dart';
+import 'comic_resources.dart';
+import 'disk_space.dart';
+export 'comic_resources.dart' show comicEntryBytes, comicTotalBytes;
 
-const comicEntryBytes = 64 * 1024 * 1024;
-const comicTotalBytes = 4 * 1024 * 1024 * 1024;
 const comicPixels = 32 * 1024 * 1024;
 
 // ASCII numeric runs, then Unicode scalar values; no OS or locale collation.
@@ -149,21 +150,37 @@ Future<Map<String, dynamic>> extractComic(
       final directory = ZipDirectory()..read(input);
       validateZipDirectory(
         directory,
-        maximumTotal: comicTotalBytes,
+        maximumTotal: comicTotalBytes + comicDiscardBytes,
         maximumEntry: comicEntryBytes,
       );
+      final budget = ComicResourceBudget();
+      for (final header in directory.fileHeaders) {
+        if (!header.filename.endsWith('/')) {
+          budget.add(header.filename, header.uncompressedSize);
+        }
+      }
+      if (budget.pages == 0) {
+        throw const FormatException(
+          'A comic must contain 1 to 10000 supported pages',
+        );
+      }
+      requireComicDiskSpace(stage.path, budget.retainedBytes);
       for (final header in directory.fileHeaders) {
         if (header.filename.endsWith('/')) continue;
+        final retained =
+            comicResource(header.filename) != ComicResource.discard;
         final filename = sha256
             .convert(utf8.encode(header.filename))
             .toString();
-        await streamZipEntry(
+        final digest = await streamZipEntry(
           header,
-          File(p.join(stage.path, filename)),
+          retained ? File(p.join(stage.path, filename)) : null,
           cancelled,
           maximumBytes: comicEntryBytes,
         );
+        if (!retained) continue;
         entries.add({
+          'sha256': digest,
           'name': header.filename,
           'file': filename,
           'size': header.uncompressedSize,
@@ -185,53 +202,6 @@ Future<Map<String, dynamic>> extractComic(
     }
   } else {
     throw const FormatException('Unsupported comic format');
-  }
-  // Validate/decode archive entries first, including metadata CRCs and paths.
-  // Filesystem sidecars never participate in page or ComicInfo enumeration.
-  bool filesystemMetadata(Map<String, dynamic> entry) {
-    return isArchiveMetadata(entry['name'] as String);
-  }
-
-  for (final entry in entries.where(filesystemMetadata)) {
-    await File(p.join(stage.path, entry['file'] as String)).delete();
-  }
-  entries.removeWhere(filesystemMetadata);
-  const unsupportedImages = [
-    '.gif',
-    '.bmp',
-    '.tif',
-    '.tiff',
-    '.avif',
-    '.heic',
-    '.heif',
-    '.jxl',
-    '.jp2',
-    '.j2k',
-    '.jpf',
-    '.svg',
-    '.ico',
-    '.ppm',
-    '.pnm',
-    '.pgm',
-    '.pbm',
-    '.dib',
-    '.jng',
-    '.apng',
-    '.jxr',
-    '.wdp',
-    '.hdp',
-    '.dds',
-    '.tga',
-    '.psd',
-  ];
-  for (final entry in entries) {
-    if (unsupportedImages.contains(
-      p.posix.extension(entry['name'] as String).toLowerCase(),
-    )) {
-      throw FormatException(
-        'Unsupported comic page image: ${entry['name']}. Pages cannot be omitted or renumbered.',
-      );
-    }
   }
   final pages =
       entries
@@ -385,10 +355,12 @@ Future<Map<String, dynamic>> extractComic(
         entry['name'] as String: {
           'file': entry['file'],
           'size': entry['size'],
-          'sha256': await fileSha256(
-            File(p.join(stage.path, entry['file'] as String)),
-            cancelled,
-          ),
+          'sha256':
+              entry['sha256'] ??
+              await fileSha256(
+                File(p.join(stage.path, entry['file'] as String)),
+                cancelled,
+              ),
         },
     },
   };

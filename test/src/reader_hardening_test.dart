@@ -155,6 +155,22 @@ Future<void> until(bool Function() condition) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'F23: oversized first spine is rejected before native opening',
+    () async {
+      final reader = await _Reader.create(
+        'test/fixtures/resource-budgets/epub-spine-256m.epub',
+      );
+      try {
+        await reader.open();
+        expect(reader.opened, isEmpty);
+        expect(reader.state.ready, isFalse);
+        expect(reader.state.error, contains('media limit'));
+      } finally {
+        await reader.dispose();
+      }
+    },
+  );
+  test(
     'F19: source watch starts before native opening and rendering stays pinned',
     () async {
       final reader = await _Reader.create('test/fixtures/text.pdf');
