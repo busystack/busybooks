@@ -4320,7 +4320,7 @@ void main() {
     },
   );
   test(
-    'sidebar capability and book-specific state survive close/reopen without leaking PDF previews to EPUB',
+    'sidebar preferences survive close/reopen while session filters and PDF capabilities do not leak to another book',
     () async {
       final f = await _ReaderFixture.create('text.pdf');
       try {
@@ -4342,6 +4342,19 @@ void main() {
         f.container
             .read(bookSidebarProvider(id).notifier)
             .filter(type: AnnotationTypeFilter.bookmarks, withNotes: true);
+        final session = f.container.read(bookSidebarProvider(id).notifier);
+        final router = f.container.read(appRouterProvider);
+        for (final route in ['/notebook/$id', '/read/$id']) {
+          router.go(route);
+          await f.container.pump();
+          expect(
+            f.container.read(bookSidebarProvider(id).notifier),
+            same(session),
+          );
+          expect(f.sidebar.filter, AnnotationTypeFilter.bookmarks);
+          expect(f.sidebar.withNotes, isTrue);
+          expect(f.sidebar.expanded, isEmpty);
+        }
         final workspace = f.container.read(
           workspaceControllerProvider.notifier,
         );
@@ -4367,11 +4380,15 @@ void main() {
         await f.checkedEvent('ready');
         await f.checkedEvent('opened');
         expect(f.sidebar.panel.preference, 'annotations');
+        // The old session was replaced and closed. Only saved application
+        // preferences survive. Transient presentation state and subscriptions
+        // belong to the active book session, rather than every visited book.
         expect(
           f.container.read(bookSidebarProvider(id)).filter,
-          AnnotationTypeFilter.bookmarks,
+          AnnotationTypeFilter.all,
         );
-        expect(f.container.read(bookSidebarProvider(id)).expanded, isEmpty);
+        expect(f.container.read(bookSidebarProvider(id)).withNotes, isFalse);
+        expect(f.container.read(bookSidebarProvider(id)).expanded, {'g'});
         await workspace.createCollection('Collection context');
         await workspace.addBooks([p.absolute('test/fixtures/text.pdf')]);
         expect(f.sidebarController.available(BookSidebarPanel.books), isTrue);
@@ -8441,6 +8458,10 @@ void _professionalWorkspaceTests() {
           note: 'Shared private note\nSecond line',
         );
         await f.sidebarController.selectPanel(BookSidebarPanel.marks);
+        f.sidebarController.filter(
+          type: AnnotationTypeFilter.highlights,
+          withNotes: true,
+        );
       });
       try {
         final id = f.state.bookId!;
@@ -8472,6 +8493,8 @@ void _professionalWorkspaceTests() {
         expect(f.search.query, 'Shared');
         expect(f.sidebar.panel, BookSidebarPanel.marks);
         expect(f.sidebar.open, true);
+        expect(f.sidebar.filter, AnnotationTypeFilter.highlights);
+        expect(f.sidebar.withNotes, true);
         expect(f.reader.suspended, true);
         expect(f.state.surfaceVisible, false);
         final commands = f.dispatches.length;
@@ -8494,6 +8517,8 @@ void _professionalWorkspaceTests() {
         expect(find.byType(BookSearchSidebar), findsNothing);
         expect(f.sidebar.panel, BookSidebarPanel.marks);
         expect(f.sidebar.open, true);
+        expect(f.sidebar.filter, AnnotationTypeFilter.highlights);
+        expect(f.sidebar.withNotes, true);
         expect(find.textContaining('Shared private note'), findsOneWidget);
         expect(tester.takeException(), isNull);
       } finally {

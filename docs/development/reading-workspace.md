@@ -22,6 +22,17 @@ these same routes; there is no second route adapter.
 | `NotebookController` | Sort/type/notes filters, identity-relative scroll/reveal, selected editor and protected revisioned drafts |
 | `ReaderController` | Native engine/session, positions/history, capabilities, visibility acknowledgements and transient input handoff |
 
+The search and sidebar families auto-dispose. `retainActiveBookSession` holds a
+Riverpod lease only for `WorkspaceState.openedBook`: Reading/Notebook switching
+and a Settings round trip retain the same controllers. Replacing or closing the
+book releases that lease; ordinary widget subscriptions finish disposal. Timers,
+renderer-intent subscriptions and provider listeners then end with the session.
+Publication metadata and search results do not accumulate for previously opened
+books. Reopening reconstructs stored metadata and saved application preferences;
+transient Marks filters, outline expansion and search start a new session.
+Protected Notebook drafts remain owned by `NotebookController`, independently
+of these presentation lifetimes.
+
 Collection overview state is keyed by collection ID. Notebook filter/selection/
 scroll and unsaved note drafts are application-owned state keyed by book/annotation identity. Routes and
 filters may dispose widgets without discarding drafts. Debounced saves preserve
