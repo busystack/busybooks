@@ -134,7 +134,7 @@ bool ReaderPopover::Matches(const EncodableValue& value) const {
   if (!current || !incoming) return false;
   for (const char* key : {"session", "presentation"}) {
     auto a = current->find(EncodableValue(key)), b = incoming->find(EncodableValue(key));
-    if (a == current->end() || b == incoming->end() || a->second != b->second) return false;
+    if (a == current->end() || b == incoming->end() || !(a->second == b->second)) return false;
   }
   return true;
 }
