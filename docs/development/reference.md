@@ -20,6 +20,8 @@ restricted environment; shared installations remain read-only.
 | app_theme, busymark_design, glyphs | Mechanically renamed theme, semantic surfaces, geometry, controls and icons |
 | linux_window_host, linux_page_frame, linux_header_style | Flutter-owned Linux window controls, full-height sidebar, titlebar gestures and header styling |
 | workspace sidebar header/view menu, Outline tree row/surface | Adapted compact selector, disclosure/indentation, focus/selection, initial expansion and trailing location slot; publication navigation replaces Markdown authoring actions |
+| search/search_session.dart, search/search_sidebar.dart | Book-scoped categorized session, temporary results sidebar, retained navigation state and shared header input; native book/session guards remain BusyBooks-specific |
+| workspace/presentation/workspace_screen.dart, settings_screen.dart | Retained Book Workspace chrome and adaptive Settings navigation using BusyBooks' semantic surfaces, content engines and protected draft owners |
 | dialogs, search_field, toast, motion_widgets | Renamed shared modal, local input, feedback and reduced-motion primitives |
 | window_control_service | Injectable lifecycle and serialized close handling |
 | GTK preferences, icons, accent; native_menu_service | Renamed channels, native symbolic icons, menu/session semantics, live GTK preferences |
@@ -71,13 +73,17 @@ startup, speech and runtime dependency resolution remain unverified.
 | Resource identity/routes | workspace model/service/controller; Home; app router; product actions; command catalog; native file delivery |
 | Persistence | owned ReadingDataStore worker; typed validators; collections/memberships/locations/Recent; existing book/annotation records |
 | Inspection/resources | book inspection; stat-bound validation token; EPUB cache; isolated native descriptors |
-| Views | reader lifecycle/controller; Notebook controller/drafts; shared annotation actions; collection overview keyed by ID |
+| Views | retained Book Workspace/header/sidebar; book-scoped search; reader lifecycle/controller; Notebook content/controller/drafts; shared annotation actions; collection overview keyed by ID |
 | Native content | bootstrap/reader adapter; Linux/Windows reader and popover hosts; visibility separate from geometry |
 | User data operations | explicit journaled BookMoveService; global identity-checked Locate; transactional logical reading-data backup |
 | Presentation/distribution | shared Yaru controls/settings/menu/search; generated English/German localization; Linux/Windows package inputs |
 
 No BusyMark checkout is needed at build or runtime. The existing vendored reader
 revisions/licenses, official Flutter 3.47.5 and dependency lockfile are retained.
+The [current workspace architecture](reading-workspace.md) and
+[professional workspace verification](professional-workspace-verification.md)
+supersede the initial presentation decisions and record remaining native release
+gates, including the pre-existing pinned Flutter compositor shutdown failure.
 
 BusyMax's read-only schedule-toolbar reference for adjacent Previous/Next is
 `9d860f483bba039d9863834ab455c36e34c70824` (`fix/account-settings`). Its local

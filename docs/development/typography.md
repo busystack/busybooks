@@ -102,7 +102,8 @@ it does not promise fonts outside a Snap's environment.
 
 ## Appearance, persistence and reflow
 
-One searchable chooser is embedded in the existing shared Appearance controls.
+One searchable chooser is embedded in Settings → Reading's advanced Appearance
+controls; the compact native reading popover links to it.
 Search keeps ordinary editing and IME composition. Search/candidate traversal
 updates only the sample; activation applies through the primary controller (or
 existing Settings writer). A committed, empty composition range is not treated
@@ -125,11 +126,12 @@ This also covers cold opening with saved customization. Later font changes reuse
 those originals; publisher restoration disables their protection stylesheet.
 
 An unavailable saved name is retained. Its effective local serif fallback is
-resolved separately and Appearance explains that fallback when custom typography
-is active. Availability refresh never overwrites a preference. Selecting a font
-changes the current book only; Save as Reading Defaults is explicit. Reset Book
-Appearance clears that book's override. Resetting Settings' defaults restores the
-existing application defaults. Other explicit book settings remain independent.
+resolved separately and advanced Appearance explains that fallback when custom
+typography is active. Availability refresh never overwrites a preference. Settings
+explicitly selects the current-book or application-default scope. Selecting a
+font writes only that scope. Reset Book Appearance clears the book's override;
+resetting application defaults restores the existing defaults. Other explicit
+book settings remain independent.
 Settings save failure rolls back its own optimistic reading-default revision.
 
 The controller serializes appearance writes, captures revisions/default targets
@@ -161,11 +163,11 @@ read-aloud underlines repaint against their existing anchors. Completion policy,
 annotation storage, search, dictionary, note drafts and original-file ownership
 remain with their existing owners.
 
-GTK's default Escape handling otherwise closes the native popover first. While
-the chooser is active, a session/presentation-checked handoff lets Flutter return
-to Appearance and focus Font Family. Other popovers retain their existing Escape
-path. Native hide disposes only Appearance's chooser/preview; protected note
-capture is preserved.
+The advanced local-family chooser is in Settings → Reading. Escape returns from
+the chooser to Font Family and disposes its bounded preview. The compact reading
+popover links to these settings and no longer contains a separate native font
+chooser or its former GTK/Windows Escape channel. This changes presentation only;
+font identity, preference ownership and renderer apply/cancellation stay unchanged.
 
 ## Reproduce and platform evidence
 

@@ -196,13 +196,13 @@ listed separately in [format-verification.md](format-verification.md).
 
 Search in This Book captures the complete trimmed selection and its book/session
 before the protected popover handoff. It explicitly reveals the existing header
-search and Search Results sidebar, synchronizes the editable field, and starts an
-immediate search revision. It does not submit or navigate an existing result.
+search and temporary Book Text sidebar session, synchronizes the editable field,
+and starts an immediate search revision. It does not submit or navigate an existing result.
 Selection in reflowable EPUB, text PDF and an EPUB footnote uses the same captured
 passage. Results, cancellation, navigation history, Return, positions and
 completion remain owned by the existing engines/controller.
 
-Look Up from the selection and Dictionary from Main Menu use the same consent
+Look Up from the selection and Dictionary from Book Actions use the same consent
 and lookup path. Selection alone makes no request. The primary application makes
 a bounded HTTPS request to English Wiktionary's
 `GET /api/rest_v1/page/definition/{term}?redirect=false`; the whole word or phrase

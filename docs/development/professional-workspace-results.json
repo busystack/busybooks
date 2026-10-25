@@ -1,0 +1,724 @@
+{
+  "recordedDate": "2026-10-25",
+  "implementationRevision": "01ad861d86ec4e72766a9503cd69aaa14c718c88",
+  "baselineRevision": "cb7ded3aaed330a0e2e605a4b1ba33d1b209e248",
+  "busyMarkReferenceRevision": "7008772ce26b0d133bed9c0d01754b43d93c672b",
+  "status": {
+    "implementation": "committed",
+    "automated": "passed",
+    "linuxNative": "partial: UI/format/durability checks performed; compositor shutdown fails intermittently",
+    "windowsNative": "not verified",
+    "releaseAcceptance": "blocked"
+  },
+  "toolchain": {
+    "flutter": "3.47.5",
+    "frameworkRevision": "6a19cca56475dbfba1478ee68d7bd0c2ef891da1",
+    "engineRevision": "af7e796e161ae0bb1ff0758c71a7105418bd9ded",
+    "dart": "3.13.4",
+    "pinChanged": false,
+    "dependenciesChanged": false,
+    "schemaChanged": false,
+    "backupFormatChanged": false
+  },
+  "automated": {
+    "baseline": {
+      "passed": 401,
+      "skipped": 3
+    },
+    "final": {
+      "passed": 425,
+      "skipped": 3
+    },
+    "skipReasons": [
+      "opt-in live Wiktionary request",
+      "two Windows-only checks"
+    ],
+    "analysis": "no issues",
+    "format": {
+      "files": 169,
+      "changed": 0
+    },
+    "linuxReleaseBuild": "passed",
+    "nativeInputAndPortableMenuContract": "passed",
+    "readerJavascript": "passed: controlled logic probes"
+  },
+  "nativeEnvironment": {
+    "gtk": "3.24.41",
+    "webKitGtk": "2.52.6",
+    "display": "private Xvfb :108, 2800x1800x24",
+    "windowManager": "Openbox",
+    "session": "private D-Bus",
+    "profiles": "disposable /tmp copies, seeded through production ReadingDataStore",
+    "surfaces": "actual bundled GTK/WebKit application and native popovers/menus",
+    "gtkScales": [
+      1,
+      2
+    ],
+    "portalTextScales": [
+      1,
+      1.5
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "fractionalMonitorScaling": "not verified"
+  },
+  "nativeFormats": {
+    "passedProofEvents": 34,
+    "initialFixtures": 22,
+    "restarts": 12,
+    "expectedInvalidRejections": 2,
+    "details": "evidence/professional-workspace-20261025/format-proofs.json",
+    "scope": "Existing actual WebKit format probe; PDF/reflowable/fixed layout desktop UI also inspected separately"
+  },
+  "nativeNoteDurability": {
+    "profile": "/tmp/busybooks-native-workspace-c98zqgsm",
+    "annotationId": "annotation-probe-add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1-5",
+    "verification": "Read-only production SQLite record after native save, restart, backup, edit and restore",
+    "characters": 1000000,
+    "utf16Units": 1000000,
+    "lines": 30304,
+    "sha256Utf8": "37d00ff3489d0eaecaa7e54c373b8e2cc4b6c7893e5d1cc583049e18cd72eaf0",
+    "backupBytes": 1068734,
+    "backupSha256": "931a66d1fff0054fe7417c6781abd9e0ba2b021d36122ee66b4164756dec5b09",
+    "backupZipIntegrity": "passed",
+    "screenshots": [
+      "notebook-maximum-note-light-100.png",
+      "backup-complete-native-light-100.png",
+      "restore-complete-native-light-100.png"
+    ]
+  },
+  "nativeShutdown": {
+    "status": "failed: SIGABRT, g_mutex_clear in pinned Flutter FlCompositorOpenGL teardown",
+    "reproducedOnPristineBaseline": true,
+    "pristineDebugCycles": {
+      "normal": 0,
+      "abort": 1
+    },
+    "remediatedDebugCycles": {
+      "normalBeforeAbort": 8,
+      "abort": 1
+    },
+    "separateNativeOwnershipOrderDefect": "repaired; does not resolve engine abort",
+    "sdkUpgradeOrPrivateShimAdded": false,
+    "observedDesktopExitCodeCounts": {
+      "0": 18,
+      "-6": 4
+    }
+  },
+  "unverified": [
+    "native Windows compilation, Win32 menu and WebView2 acceptance",
+    "Wayland and true fractional monitor scaling",
+    "real hardware GPU variations",
+    "complete screen-reader, high-contrast and IME acceptance",
+    "audible narration acceptance"
+  ],
+  "captureProvenance": "UI acceptance was performed incrementally. Final feature-specific captures use the implementation revision above. Exploratory captures whose filenames overstated evidence are excluded; Actions activation deliberately closes its search before execution, whereas the separately verified Main Menu Settings round trip retains active search.",
+  "logsAndData": [
+    {
+      "path": "evidence/professional-workspace-20261025/baseline-analyze.log",
+      "bytes": 96,
+      "sha256": "1bc3b6421933edf603114e6611be2b2b6ccf7e4983697a9ecfa46e35bce81ee3"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/baseline-format.log",
+      "bytes": 49,
+      "sha256": "a012bde8b5f1e828b3d821688ae4da0acee4563e0c0bf3c3e0b9f405fe25f8e5"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/baseline-tests.log",
+      "bytes": 78109,
+      "sha256": "9f99d4a28f37c680936a9246b958ad7f43148219786637352ec53ea0d082483d"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/baseline-linux-release-build.log",
+      "bytes": 116,
+      "sha256": "58073bc7250d4e137a074b1534eee1834e59a4661c2c9979fced0f5a0c97a556"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/baseline-native-input.log",
+      "bytes": 90,
+      "sha256": "7bd573b5242b17ad2336e14c018a6d70dcd9eeb83dbd6a6511f48f3aafd0f3d6"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/final-analyze.log",
+      "bytes": 1310,
+      "sha256": "5a6e63a2792e71d2259f4486cc07d8a1d302c023d51b6275202458a2168e980d"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/final-format.log",
+      "bytes": 49,
+      "sha256": "b1f8c9ab6873d22c0cb7f709af328fed36612e857ffe228209e2f295cefd8cc6"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/final-tests.log",
+      "bytes": 82958,
+      "sha256": "7055898425cc2dd1957eef208c86dfbf123a09fa116903b496c11fef1a7fd52f"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/final-linux-release-build.log",
+      "bytes": 1330,
+      "sha256": "6a39383ce96784f596b71d8dc7c3b6f5e88d7d92ea0229598022eac27f1575e4"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/final-native-input-and-menu-contract.log",
+      "bytes": 67,
+      "sha256": "62973303084ef554b2126a3d9d1be318a61aafab0929dd70acd2af71ed247adc"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/reader-javascript-controlled-probes.log",
+      "bytes": 3265,
+      "sha256": "c9c2afa6590d8414e34a1be504270bcaf45b6ab712c7ac5258d218926427ae32"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/reader-formats-native-probe.log",
+      "bytes": 1168842,
+      "sha256": "e2b07447ad270bedc29c12992523e31f1ad063d5fff2a0eff64e8a7181fd1d8e"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-pristine-baseline-build.log",
+      "bytes": 10669,
+      "sha256": "d8e58fe44894c36e248b55deccf664ae6b603750b283e8aca3409ecea85582e1"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-pristine-baseline-driver.log",
+      "bytes": 3684,
+      "sha256": "c65f15a0835b344908046642403aaac841cd69ff1a45f4e22d83078408300b34"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-pristine-baseline-gdb.log",
+      "bytes": 297191,
+      "sha256": "e2fe75f20347fc7ff15e840bbc0d182895015867619a02041f88ecb025378685"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-driver.log",
+      "bytes": 4508,
+      "sha256": "318fa704fe50b45cf960ef5f8268f6cfbe1b4f7ef3b60ff205bd357cc3d3d204"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-abort-gdb.log",
+      "bytes": 295165,
+      "sha256": "af14ccaab5eca2a86766172d3f8177788e33a42cd98343a31f8f1d3a79d7e4c2"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-native-owner-order-before-gdb.log",
+      "bytes": 115402,
+      "sha256": "86c11f81f8aebae6422f016e4599bd97f2b88f4a2a9b281b6eed4f01b7bf6a0a"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-native-owner-order-after-gdb.log",
+      "bytes": 978,
+      "sha256": "80603424d731990c2194e7d1795dfef26313a26b670bfdbd8170509d9f231e96"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-0-gdb.log",
+      "bytes": 17134,
+      "sha256": "79cb94a17968483bfeb2516b42581173a352888f2f297e0dc253d9722cc9bbc4"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-1-gdb.log",
+      "bytes": 17134,
+      "sha256": "d67e82209c6c3be2b9a3c6b1b92736d64e5f11bcb3823ec1d4de4ed444dffa4f"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-2-gdb.log",
+      "bytes": 17134,
+      "sha256": "422230cfaa2e96ddc18457372f85f1c6afce2aa03972a5d29d869317d1bc3dc9"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-3-gdb.log",
+      "bytes": 17134,
+      "sha256": "13f9ecb982d432805c7473fee3f0ae7585693fff137fcf4c14ad438d93d8a7b8"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-4-gdb.log",
+      "bytes": 17134,
+      "sha256": "66ca30a6e3275f8c7de14a5285b9a3733640a251aebd6c786dfc12d47e1618e2"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-5-gdb.log",
+      "bytes": 17134,
+      "sha256": "e20bc7f173381957d249430185f8fbe49d967e897164ed18a9302f1bc8aaee38"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-6-gdb.log",
+      "bytes": 17134,
+      "sha256": "6ab4230c4d0cfe012be028cabb87a5e0a1602262ddf4a3f0888e54d7370742b2"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-7-gdb.log",
+      "bytes": 17134,
+      "sha256": "c2bc0beec5dfeda1e6851910a0c70ce22090e519412b0327f9ca9d78657de6d3"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/maximum-note-proof.json",
+      "bytes": 727,
+      "sha256": "4a8dc817b0aef7435d47af75018aa47d4a53e412772ce2bfaf8e9559b05e5b51"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/maximum-note-native-backup.busybooks",
+      "bytes": 1068734,
+      "sha256": "931a66d1fff0054fe7417c6781abd9e0ba2b021d36122ee66b4164756dec5b09"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/format-proofs.json",
+      "bytes": 15083,
+      "sha256": "143db9fb8982992ee7d2d3011493e4733af1ae83418894580e28e8b5e0932d58"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/native-run-outcomes.json",
+      "bytes": 5913,
+      "sha256": "e5b4f1217958dac44c742d989c38510c030dbcc1f2a8fa6988169524d2ba8f9a"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/native-actions.jsonl",
+      "bytes": 144698,
+      "sha256": "8348986e8cf0401d925964a7b9b05d91631f99587708fbcf473d4bfe0778b243"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/native-icons.json",
+      "bytes": 1091,
+      "sha256": "51f08707517473ed57f13a159a3874a1d7b0a54a91e0c370f33a212ba19dbb8e"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/linux-final-light-150.log",
+      "bytes": 410,
+      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/linux-final-dark-150.log",
+      "bytes": 410,
+      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/linux-final-light-200.log",
+      "bytes": 683,
+      "sha256": "a521c73e9a06ffd0f2c06b23cc27e658bc6e4e95ea2f828cc5db8f89a8095e92"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/linux-final-dark-200.log",
+      "bytes": 410,
+      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/linux-final-header-tooltip-200.log",
+      "bytes": 410,
+      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/linux-final-search-category-200.log",
+      "bytes": 769,
+      "sha256": "88008c3101342ac9034511872603af11170984509b268f20a03be5126b14fb70"
+    }
+  ],
+  "selectedScreenshots": [
+    {
+      "path": "evidence/professional-workspace-20261025/home-final-light-100.png",
+      "bytes": 70379,
+      "sha256": "e2b2cd4aa81a0f702e963378fc17bd774a04eaa0c3060239239c79b381328e53",
+      "purpose": "Home with final chrome"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/home-dark-100.png",
+      "bytes": 70286,
+      "sha256": "afdab65147133cc841dd9eaaba1caa8f385f485ebbd611ab7a1d153841b37040",
+      "purpose": "Home dark shell"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/collection-final-light-100.png",
+      "bytes": 67295,
+      "sha256": "48fcabdc882654aacab9da09b0a29b50c3f4a4d7663173c6d713aa77e8766597",
+      "purpose": "Collection wide"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/collection-narrow-final-light-100.png",
+      "bytes": 51986,
+      "sha256": "2145aaf0a1563659e934f49100e3de19fc18e4e7a63fbb1d093f22aedfe4d0ec",
+      "purpose": "Collection narrow without reserved sidebar width"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/collection-overlay-final-light-100.png",
+      "bytes": 48778,
+      "sha256": "aa320cd8a80c516cdddfbf5441501c374b8119dabd04741a663a22aae64300a4",
+      "purpose": "Collection dismissible narrow overlay"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/reading-final-light-100.png",
+      "bytes": 61744,
+      "sha256": "6bdedf0166545470698bcc995a8f68c5ed6184b88425f7e1ba0f11a0b653d672",
+      "purpose": "Actual WebKit reflowable reader"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-sidebar-final-light-100.png",
+      "bytes": 45275,
+      "sha256": "4397bf8d958a9fe7c584d060333665b52f41986df85b72949bc827279d0b3faf",
+      "purpose": "Notebook in retained book shell with sidebar"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/marks-notebook-light-100.png",
+      "bytes": 137523,
+      "sha256": "f9f33f83d1f7b910b7dd9e5f83f8cd045ec4141c47be262cb0d005689503c7bd",
+      "purpose": "Marks navigation beside Notebook"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/sidebar-panel-selector-notebook-light-100.png",
+      "bytes": 106214,
+      "sha256": "20a71724d03005f843e8c807ce9dcd3f42d3dfa04e41f7ff81a8ea6ce9f0d07c",
+      "purpose": "Permanent sidebar panels"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/sidebar-tooltip-over-native-reader-light-100.png",
+      "bytes": 86731,
+      "sha256": "7b3f2275a4845888f46d32b11036794ef752abaa2e5a3e85cbedd7e726a53300",
+      "purpose": "Selector tooltip above unobstructed sidebar with native reader active"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/sidebar-tooltip-native-dark-200.png",
+      "bytes": 159473,
+      "sha256": "21efe32c763abb52e96a17f38203f0c62f13ca7a8427c155d579bc85c7893141",
+      "purpose": "Scaled dark selector tooltip with native reader active"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/header-home-tooltip-native-final-dark-200.png",
+      "bytes": 156924,
+      "sha256": "95f90ed208656a7672584c83b5738b4a1d457e63374c7b1691bb8e0dcf605c12",
+      "purpose": "Home hint within shared header bounds"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/header-clear-tooltip-native-final-dark-200.png",
+      "bytes": 281238,
+      "sha256": "0049aaf39c409aa55bd60fb3f63bf36f89e44154c200753ae6e6d6c48fe31517",
+      "purpose": "Clear Text hint within header bounds"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-close-tooltip-native-dark-200.png",
+      "bytes": 282558,
+      "sha256": "74586cc0c849bd9f2f0951ae64a9336fd59ea0fb3055c141e1f9cb98f828f908",
+      "purpose": "Bounded close-search tooltip with obsolete hints retired"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-final-keyboard-light-100.png",
+      "bytes": 114606,
+      "sha256": "3d0ed5a953f1277f775d502c9fd9c6a78332184297d4ffdf138fc008be9159e5",
+      "purpose": "Typed native Book Text search with results"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-notebook-keyboard-final-light-100.png",
+      "bytes": 74498,
+      "sha256": "a3e5570a8eaa30c1f7c4d9a26f2fc4ab8fd0b7fa94321a51f03e451bffda65f4",
+      "purpose": "Typed Notebook Ctrl+F query and result"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-bookmarks-verified-native-dark-200.png",
+      "bytes": 146392,
+      "sha256": "8c34f75c484c9f37e58ddfb5be9bde16b8338c9c676f31c59b9db51858a88c0d",
+      "purpose": "Verified Bookmarks query/result"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-chapters-verified-native-dark-200.png",
+      "bytes": 147636,
+      "sha256": "43cec51816df4e93009efff07cf083c71cfda5ec3bbfa10eefe96da84430ce3c",
+      "purpose": "Verified Chapters query/result"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-actions-query-native-final-dark-200.png",
+      "bytes": 152483,
+      "sha256": "db0eaaf8c42760cb3cb0edd9836f29ec20418ece4af5c9dfbc6e6fe951e90a1d",
+      "purpose": "Actions query reusing command identities"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-category-menu-verified-native-dark-200.png",
+      "bytes": 167188,
+      "sha256": "97cd41f8f88b74b7269f8d3460fdda577c145df3ab2375b5812755871f186439",
+      "purpose": "Actual native category menu with no All category"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-with-retained-search-verified-native-dark-200.png",
+      "bytes": 59545,
+      "sha256": "87ecb18d133f3b7021ae65665841a8c4c66200264ff5629a0f1affa1fcce346d",
+      "purpose": "Settings opened while Chapters search remained active"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-return-search-verified-native-dark-200.png",
+      "bytes": 151188,
+      "sha256": "0741aca6e002df25ff1edc275450978869167d064a2af94c5a467aa02e644940",
+      "purpose": "Settings return preserves category, query and selected result"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/chapter-activation-verified-native-dark-200.png",
+      "bytes": 149373,
+      "sha256": "05359719c96241987c2b9f95dbb795c43c28f459c4bfd5167385faf543f096af",
+      "purpose": "Enter activates Chapter 2 in actual publication"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-restored-outline-verified-native-dark-200.png",
+      "bytes": 156233,
+      "sha256": "d5e9a029b4e3a2e8997cd8525a6afe6ee7afdcd81c43be5b09976d5dc7518f38",
+      "purpose": "Escape restores Outline with active Chapter 2 selection"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/image-only-search-categories-light-100.png",
+      "bytes": 58409,
+      "sha256": "413f286d4830f0c7c54ce81fa62e50255fe852ff3424bbd3b26590b189039d64",
+      "purpose": "Image-only PDF excludes unsupported Book Text search"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-editor-light-100.png",
+      "bytes": 130664,
+      "sha256": "fb5576bf0464e6187ebf9dd676e3174e490d8ad2fdda79b2301e9bbb23a67759",
+      "purpose": "Notebook private editor and autosave presentation"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-region-final-light-100.png",
+      "bytes": 91665,
+      "sha256": "bd45eb442ea3ab98daf551b88aeab9e071afd062d2c7f0e6eb14bf199fb2de14",
+      "purpose": "Validated cached comic region artwork"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-missing-original-final-light-100.png",
+      "bytes": 75922,
+      "sha256": "110a14bba828320ab21114eeda7d3f938878cef7ece83200923b1b89f4ea03c1",
+      "purpose": "Stored notes accessible without original EPUB"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/marks-missing-original-final-light-100.png",
+      "bytes": 119115,
+      "sha256": "d13cd09d49c813b00a4905e2259a797c3eacb6ec8fb7f908c8f44e06d7a39547",
+      "purpose": "Stored Marks accessible without original EPUB"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/sidebar-missing-original-selector.png",
+      "bytes": 88252,
+      "sha256": "0cf90b25bfc226d21d00fa3d79c835175cb79dd5b755d91dd7de3b4610e1e789",
+      "purpose": "Offline outline and permanent sidebar presentation"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/search-offline-notebook-final-light-100.png",
+      "bytes": 88113,
+      "sha256": "35bac407f40ca7964b8ca50768adcc733c7b2476dde3aa1de166b44b0174cc30",
+      "purpose": "Notebook local search without original EPUB"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-save-failure-final-light-100.png",
+      "bytes": 107584,
+      "sha256": "630ce9cfd3a9046cf719e2a70c44fd23cc08f2e4a5daeca2f4727d03c1e175e9",
+      "purpose": "Real SQLite busy failure retains complete draft with Retry"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-save-retry-final-light-100.png",
+      "bytes": 103874,
+      "sha256": "79508269ea05cda036476d2982d6149c3d7285d2d3268126297c860bb73a3e3d",
+      "purpose": "Retry persists after external lock release"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-maximum-note-light-100.png",
+      "bytes": 113723,
+      "sha256": "a2a60ea7f0e05e2cb44bacc34555886caabcb1398fa032471d2543c5b9df6fea",
+      "purpose": "Actual million-character multiline note after autosave"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/backup-complete-native-light-100.png",
+      "bytes": 37552,
+      "sha256": "7b768eb3ee2cf2ae20ae44fa69f09adbfd987519d2ada50908aadbaa74d0e5cc",
+      "purpose": "Native backup completion"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/restore-complete-native-light-100.png",
+      "bytes": 73651,
+      "sha256": "4b8b1e6787614128bc2e08030c7c1072f0d947f1f04b7a2a873ef80773ade415",
+      "purpose": "Native restore completion"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/loading-menu-native-2.png",
+      "bytes": 28566,
+      "sha256": "becb3391fab39c1da06075b0a25873b3b847cef2c19bddf55cacb461ca08129c",
+      "purpose": "Actual GTK Main Menu while book reports Opening book"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/main-menu-missing-file-native-full.png",
+      "bytes": 91299,
+      "sha256": "6455aff357d334ec554b397b588a7e7e9ab67da41050a54da76e2b561845840e",
+      "purpose": "Actual GTK Main Menu after file opening failure"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/appearance-reflowable-light-100.png",
+      "bytes": 97804,
+      "sha256": "b859f5597e3c772b3b4ca0535d2aad29f939cb79e82fd79efbe8034e4819995f",
+      "purpose": "Compact native reflowable appearance"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/appearance-fixed-epub-light-100.png",
+      "bytes": 126487,
+      "sha256": "a550224539495585d708264df1aa5fe0a996ccc8b31b0b9b313f3da16cf610d1",
+      "purpose": "Applicable fixed EPUB appearance"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/appearance-pdf-light-200.png",
+      "bytes": 95874,
+      "sha256": "f21bb22e08e9f6ea7417936e35bf306ca9c3344e660727c9d04f8407cf0b01f6",
+      "purpose": "Scaled native PDF fit/zoom/rotation appearance"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/appearance-comic-light-100.png",
+      "bytes": 127187,
+      "sha256": "3927b3390f75744b71c3ddbc2e6c50d29dc17a6edfc13ffd8c21f4d979c39f17",
+      "purpose": "Applicable comic appearance"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/goto-reflowable-light-100.png",
+      "bytes": 92581,
+      "sha256": "5c82c4809f2a8379058083ea29fdde4360272ae634101e6124eeea1d5370268d",
+      "purpose": "Native reflowable Go To"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/goto-pdf-light-200.png",
+      "bytes": 88893,
+      "sha256": "82788129e6010fa8968cb3bfebe5be4b46ece0cb6e93b5ed5c7d47c7059a8245",
+      "purpose": "Scaled native PDF physical and printed page Go To"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-general-light-100.png",
+      "bytes": 26239,
+      "sha256": "01272eb8c4bbbc6147530487fa1361e6bc5b0b2c898004778a93bc9d70d2524c",
+      "purpose": "General Settings semantic surface"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-reading-light-100.png",
+      "bytes": 24756,
+      "sha256": "8af35b47d81040652d3e8a694b847f2ca1870c54ae4cb46bb0cc8edfe333125f",
+      "purpose": "Advanced Reading Settings"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-accessibility-light-100.png",
+      "bytes": 25491,
+      "sha256": "a537840b66c26478711ee26d4a206f38bbc85ccd71b5682cfe98daf035f026ff",
+      "purpose": "Informational system Reduced Motion status"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-shortcuts-light-100.png",
+      "bytes": 43215,
+      "sha256": "76a6d136ee586e62364000861d93bf114e838bc4f2694c93271dc6be3cacdfaa",
+      "purpose": "Configurable shortcut management"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-data-light-100.png",
+      "bytes": 34121,
+      "sha256": "2c6d0c74457ee3a1b9f96c1550ce6975dc79489824152a221c241a48054d4fe5",
+      "purpose": "Backup and Restore in Data Settings"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-light-150.png",
+      "bytes": 134034,
+      "sha256": "f1c56ce469547f8db8e7c3b37058210ae709d1fc1fc1aa30bc1f2eb97cfd76d6",
+      "purpose": "notebook light: GTK 1x with verified portal text scale 1.5"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-narrow-light-150.png",
+      "bytes": 115105,
+      "sha256": "6a25e5db75dfc401d00a7630ec6cdb28b45e4319d0f8006a75e56e12dac0c7a0",
+      "purpose": "notebook-narrow light: GTK 1x with verified portal text scale 1.5"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-narrow-light-150.png",
+      "bytes": 19416,
+      "sha256": "03d29a7cc4421ad430eb73cacb6533b73e9443724dad40f95da99bb88fe32ae1",
+      "purpose": "settings-narrow light: GTK 1x with verified portal text scale 1.5"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-light-200.png",
+      "bytes": 230086,
+      "sha256": "6f5d7d9caa7621ef5d4efd5093548f652f7d6efba804156faa2760e1aab252f8",
+      "purpose": "notebook light: GTK 2x with portal text scale 1"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-narrow-light-200.png",
+      "bytes": 211487,
+      "sha256": "95fb3a48f628a6600b4b63dd799d421c96c16d51dc153fce3ff9d9a95b5cb821",
+      "purpose": "notebook-narrow light: GTK 2x with portal text scale 1"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-narrow-light-200.png",
+      "bytes": 34314,
+      "sha256": "cac2d2ceb65f5239e44fe8d7828ace13bf9c034989cd64c98fc21348f0a5fe34",
+      "purpose": "settings-narrow light: GTK 2x with portal text scale 1"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-dark-150.png",
+      "bytes": 131342,
+      "sha256": "42fa20f7b0de00b687c21a5dbc39dd14c130c13c8ee04096219864334f50c815",
+      "purpose": "notebook dark: GTK 1x with verified portal text scale 1.5"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-narrow-dark-150.png",
+      "bytes": 113951,
+      "sha256": "0f21fb07704482ee27ed891fb717865a962c62c2c8847bdd2f7ea4a6ba41f881",
+      "purpose": "notebook-narrow dark: GTK 1x with verified portal text scale 1.5"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-narrow-dark-150.png",
+      "bytes": 18879,
+      "sha256": "5fa295fb7cec9b17cfb6e2566126a2a7c38474b32fd9affe49210396afc6cbf2",
+      "purpose": "settings-narrow dark: GTK 1x with verified portal text scale 1.5"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-dark-200.png",
+      "bytes": 223948,
+      "sha256": "1d1b58c2f780213389bc70d76999e6a4f8d0d2c6bb8aab1afd3d472d6043d401",
+      "purpose": "notebook dark: GTK 2x with portal text scale 1"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/notebook-narrow-dark-200.png",
+      "bytes": 200334,
+      "sha256": "2e8e745e4240356197a8dd9a08898fff40fcb448cde09a8c62af698ac4aa7254",
+      "purpose": "notebook-narrow dark: GTK 2x with portal text scale 1"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/settings-narrow-dark-200.png",
+      "bytes": 32908,
+      "sha256": "aad1749831a66e63672127ecfd61b7a82be6d68eef7c9983410ad34b66d1e95a",
+      "purpose": "settings-narrow dark: GTK 2x with portal text scale 1"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/annotation-icon-yaru-1x.png",
+      "bytes": 419,
+      "sha256": "4b871be67005ac09c4d28d73e54a2c8571b4fb17de42f83b4c3c717cdd9073e1",
+      "purpose": "Installed yaru document-edit-symbolic rendered at 1x"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/annotation-icon-yaru-2x.png",
+      "bytes": 794,
+      "sha256": "3860312249e957f23cc6ff55de7bedfc268511e95ab9fae0361aa83e38d86b92",
+      "purpose": "Installed yaru document-edit-symbolic rendered at 2x"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/annotation-icon-adwaita-1x.png",
+      "bytes": 342,
+      "sha256": "5a94ed84f30208d6a3057f862f7ba0e6dc06074e8852f6c44e1f693da48162e3",
+      "purpose": "Installed adwaita document-edit-symbolic rendered at 1x"
+    },
+    {
+      "path": "evidence/professional-workspace-20261025/annotation-icon-adwaita-2x.png",
+      "bytes": 526,
+      "sha256": "69218705c86907e6aa0fdfe4f8d69d859f5e6f68e2f9da8041d2dad35354e1d9",
+      "purpose": "Installed adwaita document-edit-symbolic rendered at 2x"
+    }
+  ],
+  "releaseBundle": [
+    {
+      "path": "build/linux/x64/release/bundle/busybooks",
+      "bytes": 222464,
+      "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad"
+    },
+    {
+      "path": "build/linux/x64/release/bundle/lib/libapp.so",
+      "bytes": 11600776,
+      "sha256": "99a74edbe9a6928ca51fb2acb6ef7da3d598f91ca25a67a391bc59368381701f"
+    },
+    {
+      "path": "build/linux/x64/release/bundle/lib/libflutter_linux_gtk.so",
+      "bytes": 17218152,
+      "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1"
+    }
+  ]
+}

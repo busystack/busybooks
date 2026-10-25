@@ -1,3 +1,8 @@
+> Historical typography verification. The later professional workspace remediation
+> moves advanced font selection to Settings and removes the popover font chooser.
+> See [current architecture](reading-workspace.md) and
+> [current verification](professional-workspace-verification.md).
+
 # Local font selection verification
 
 This document retains the typography work's historical results. The later
