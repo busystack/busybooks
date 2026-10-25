@@ -72,6 +72,17 @@ await check('F05: comic companion-page pan survives a saved-position round trip'
     assert(Math.abs(left-2200)<.001)
     assert.equal(content.scrollLeft,0)
 })
+await check('Comic fit spreads retain their selected page during capture',async()=>{
+    const {run,context,events}=adapter()
+    for(const height of [400,1200]){
+        context.parts=[0,1].map(index=>({index,doc:{querySelector:()=>({}),defaultView:{frameElement:{getBoundingClientRect:()=>({left:100+index*300,top:-100,width:300,height})}}}}))
+        run(`activeFormat='cbz';pdf=null;view={book:{format:'cbz',sections:[{pageId:'a'},{pageId:'b'}]},renderer:{getContents:()=>parts,getBoundingClientRect:()=>({left:0,top:0,width:800,height:600})}};location={anchor:comicAnchor(view.book,1)}`)
+        await run(`dispatch({action:'flush'})`)
+        const anchor=events.findLast(event=>event.type==='location').anchor
+        assert.equal(anchor.page,1)
+        assert(Math.abs(anchor.position[1]-100/height)<.00001)
+    }
+})
 await check('F07: PDF anchors retain both viewport axes',async()=>{
     const {run,content}=adapter()
     content.scrollLeft=450;content.scrollTop=250

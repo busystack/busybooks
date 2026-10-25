@@ -302,12 +302,14 @@ function captureComicLocation(){
         if(!bounds?.width||!bounds.height||!part.doc.querySelector('img'))return []
         const x=Math.max(0,Math.min(bounds.width,viewport.left-bounds.left)),y=Math.max(0,Math.min(bounds.height,viewport.top-bounds.top))
         const distance=(bounds.left+x-viewport.left)**2+(bounds.top+y-viewport.top)**2
-        return [{index:part.index,position:[x/bounds.width,y/bounds.height],distance}]
+        return [{index:part.index,position:[x/bounds.width,y/bounds.height],distance,left:bounds.left,right:bounds.left+bounds.width}]
     })
-    // The viewport origin may have moved onto the companion page. Keep that
-    // page's identity with its coordinates instead of clipping the old page.
+    // When the spread fits horizontally, retain its explicitly selected page.
+    // The viewport's left edge belongs to the companion even without panning.
+    // An overflowing spread can instead save the page actually reached by pan.
+    const overflow=parts.length&&Math.max(...parts.map(part=>part.right))-Math.min(...parts.map(part=>part.left))>viewport.width+1
     parts.sort((a,b)=>a.distance-b.distance||Number(b.index===location.anchor.page)-Number(a.index===location.anchor.page)||a.index-b.index)
-    const part=parts[0];if(!part)return
+    const part=(!overflow&&parts.find(part=>part.index===location.anchor.page))||parts[0];if(!part)return
     location={...location,anchor:comicAnchor(view.book,part.index,{position:part.position}),progress:(part.index+1)/view.book.sections.length,reference:`${strings.page} ${part.index+1}`}
 }
 function restoreComicPosition(anchor){
