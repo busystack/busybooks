@@ -212,7 +212,7 @@ def run(command):
     elif action == 'quit':
         if process is not None and process.poll() is None:
             raise RuntimeError('Close the application before retiring the probe')
-        return {'quit': True}
+        return {'quit': True, 'exitCode': process.returncode if process else None}
     else:
         raise ValueError(action)
     pause(command.get('settle', .5))
@@ -237,4 +237,7 @@ while True:
         if result.get('quit'):
             break
     except Exception as error:
+        transcript.write(json.dumps({'time': time.time(), 'command': command,
+                                     'error': str(error)}) + '\n')
+        transcript.flush()
         print(json.dumps({'error': str(error)}), flush=True)
