@@ -90,6 +90,24 @@ void main() {
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(readerPopoverChannel, null),
   );
+  testWidgets('appearance accepts Escape before any control gains focus', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: ReaderPopoverApp()));
+    await _update(tester, {
+      'kind': 'appearance',
+      'typography': {'fontFamily': true, 'textMetrics': true},
+      'pdf': false,
+      'appearance': defaultReadingAppearance,
+    });
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(actions, contains(containsPair('action', 'dismiss')));
+    final dismissed = actions.singleWhere((a) => a['action'] == 'dismiss');
+    expect(dismissed['session'], '1');
+    expect(dismissed['presentation'], 1);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'compact appearance ignores stale hide and disposes the owned presentation',
     (tester) async {

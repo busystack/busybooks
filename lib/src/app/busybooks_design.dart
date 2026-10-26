@@ -1069,11 +1069,16 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
       style: style.merge(yaruDefaults),
       onPressed: onPressed,
     );
-    final labeledButton = Tooltip(
-      message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
-      excludeFromSemantics: true,
-      positionDelegate: tooltipPosition,
-      child: button,
+    // A stable boundary keeps transient tooltip semantics from being
+    // reparented when workspace controls are replaced during search.
+    final labeledButton = Semantics(
+      container: true,
+      child: Tooltip(
+        message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
+        excludeFromSemantics: true,
+        positionDelegate: tooltipPosition,
+        child: button,
+      ),
     );
     return YaruTheme.maybeOf(context)?.focusBorders == true
         ? YaruFocusBorder.primary(
@@ -1133,10 +1138,13 @@ class BusyBooksCompactIconButton extends StatelessWidget {
       focusNode: focusNode,
       onPressed: onPressed,
     );
-    final labeledButton = Tooltip(
-      message: tooltip,
-      excludeFromSemantics: true,
-      child: button,
+    final labeledButton = Semantics(
+      container: true,
+      child: Tooltip(
+        message: tooltip,
+        excludeFromSemantics: true,
+        child: button,
+      ),
     );
     return YaruTheme.maybeOf(context)?.focusBorders == true
         ? YaruFocusBorder.primary(

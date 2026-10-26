@@ -598,21 +598,26 @@ class _PopoverContentsState extends State<_PopoverContents> {
     if (kind == 'lookup') return _lookup(context);
     if (kind == 'appearance') {
       if (d['appearanceVisible'] == false) return const SizedBox.expand();
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(BusyBooksSpacing.lg),
-        child: CompactReadingAppearance(
-          key: _naturalContents,
-          preferences: preferences,
-          capabilities: TypographyCapabilities.fromJson(d['typography']),
-          pdf: d['pdf'] == true,
-          comic: d['comic'] == true,
-          onChanged: (value) async {
-            await widget.action('appearance', {'value': value});
-            if (mounted) {
-              setState(() => preferences = {...preferences, ...value});
-            }
-          },
-          onMore: () => act('readingSettings'),
+      // This surface has no autofocus editor or default button. Keep keyboard
+      // dismissal inside the popover's Shortcuts even before a row is focused.
+      return Focus(
+        autofocus: true,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(BusyBooksSpacing.lg),
+          child: CompactReadingAppearance(
+            key: _naturalContents,
+            preferences: preferences,
+            capabilities: TypographyCapabilities.fromJson(d['typography']),
+            pdf: d['pdf'] == true,
+            comic: d['comic'] == true,
+            onChanged: (value) async {
+              await widget.action('appearance', {'value': value});
+              if (mounted) {
+                setState(() => preferences = {...preferences, ...value});
+              }
+            },
+            onMore: () => act('readingSettings'),
+          ),
         ),
       );
     }
