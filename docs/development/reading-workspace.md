@@ -63,6 +63,18 @@ renderer readiness. Notebook never opens a native surface. The retained Reading 
 excluded from focus/ticking; its native surface is hidden, narration is stopped
 and the renderer is suspended. Stored annotations/outline metadata remain usable
 without the original file or renderer readiness.
+Suspension first drains native input and pending layout while the surface can
+still produce frames. Only then is it hidden. Renderer acknowledgement and
+durable storage remain distinct phases: a failed storage write retains its
+protected draft for Notebook recovery. A sealed, suspended reader contributes
+no new native input, so later backup/close operations flush application-owned
+records without waiting for a hidden rendering frame. Concurrent renderer
+drains share one acknowledgement; request IDs reject delayed or unowned replies.
+Closing an active reader likewise drains its work before hiding the surface.
+Expected speech-service failures remain visible diagnostic state and are logged;
+they release narration ownership and do not prevent safe data flushing. Speech
+disposal closes the connection even if Stop fails, rejects later requests and
+shares its completion across callers. Unexpected programming errors propagate.
 Both annotation surfaces mutate the same records. Markdown export includes
 quotations, personal notes and readable references, with durable anchor comments.
 

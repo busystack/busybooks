@@ -123,7 +123,10 @@ void main() {
         }
         if (call.method == 'dispatch' &&
             jsonDecode(call.arguments as String)['action'] == 'flush') {
-          scheduleMicrotask(() => event('flushed', {'session': session}));
+          final request = jsonDecode(call.arguments as String)['request'];
+          scheduleMicrotask(
+            () => event('flushed', {'session': session, 'request': request}),
+          );
         }
         return null;
       });

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_settings.dart';
 import '../../platform/speech_service.dart';
@@ -159,13 +160,21 @@ class NarrationController extends Notifier<NarrationState> {
       _passage = null;
       return;
     }
-    await ref.read(speechServiceProvider).call('stop');
-    _speaking = false;
-    state = const NarrationState();
+    SpeechServiceFailure? failure;
+    try {
+      await ref.read(speechServiceProvider).call('stop');
+    } on SpeechServiceFailure catch (error) {
+      failure = error;
+      debugPrint('Read Aloud could not stop its speech service: $error');
+    } finally {
+      _speaking = false;
+      _passage = null;
+      if (ref.mounted) state = NarrationState(error: failure?.message);
+    }
+    if (!ref.mounted) return;
     await ref.read(readerControllerProvider.notifier).send('speaking', {
       'anchor': null,
     });
-    _passage = null;
   }
 
   Future<void> configure({String? voice, num? speed}) async {

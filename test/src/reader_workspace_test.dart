@@ -323,12 +323,14 @@ class _CachedSearchSnapshot extends BookSearchController {
 
 class _Speech extends SpeechService {
   final calls = <({String action, Map<String, dynamic> args})>[];
+  Object? stopError;
   @override
   Future<dynamic> call(
     String action, [
     Map<String, dynamic> args = const {},
   ]) async {
     calls.add((action: action, args: args));
+    if (action == 'stop' && stopError != null) throw stopError!;
     return action == 'voices' ? ['Fixture Voice', 'Fixture Voice 2'] : null;
   }
 
@@ -350,6 +352,7 @@ class _ReaderFixture {
   final acceptedDispatches = <Map>[];
   final rejectedDispatches = <Map>[];
   int dispatchFailures = 0;
+  bool acknowledgeFlush = true;
   int _verification = 0;
   ReaderController get reader =>
       container.read(readerControllerProvider.notifier);
@@ -427,9 +430,13 @@ class _ReaderFixture {
           if (call.method == 'open') {
             test.session = (call.arguments as Map)['session'] as String;
           }
-          if (call.method == 'dispatch' &&
+          if (test.acknowledgeFlush &&
+              call.method == 'dispatch' &&
               jsonDecode(call.arguments as String)['action'] == 'flush') {
-            scheduleMicrotask(() => test.event('flushed'));
+            final request = jsonDecode(call.arguments as String)['request'];
+            scheduleMicrotask(
+              () => test.event('flushed', {'request': request}),
+            );
           }
           if (call.method == 'dispatch' && test.onDispatch == null) {
             final command = jsonDecode(call.arguments as String) as Map;
@@ -8523,6 +8530,247 @@ void _professionalWorkspaceTests() {
         expect(tester.takeException(), isNull);
       } finally {
         await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  for (final suspend in [true, false]) {
+    test(
+      '${suspend ? 'suspension' : 'close'} drains renderer work before hiding the native surface',
+      () async {
+        final f = await _ReaderFixture.create('text.pdf');
+        final entered = Completer<void>(), release = Completer<void>();
+        Future<void>? transition;
+        try {
+          final id = f.state.bookId!;
+          var visible = f.state.surfaceVisible;
+          f.onNativeCall = (call) async {
+            if (call.method == 'visible') visible = call.arguments as bool;
+            if (call.method == 'dispatch' &&
+                jsonDecode(call.arguments as String)['action'] == 'flush') {
+              entered.complete();
+              await release.future;
+              // A busy PDF navigation/render publishes its final position
+              // before acknowledging flush. Hiding WebKit first can stall the
+              // animation frame that completes that work indefinitely.
+              await f.event('location', {
+                'anchor': {'page': 2},
+                'progress': .75,
+              });
+            }
+            return null;
+          };
+          transition = suspend ? f.reader.suspend() : f.reader.close();
+          await entered.future;
+          expect(visible, isTrue);
+          expect(f.reader.suspended, isFalse);
+          release.complete();
+          await transition;
+          final stored = await f.store.call('book', id) as Map;
+          expect(stored['anchor']['page'], 2);
+          expect(visible, isFalse);
+          if (suspend) expect(f.reader.suspended, isTrue);
+        } finally {
+          if (!release.isCompleted) release.complete();
+          await transition;
+          f.onNativeCall = null;
+          await f.dispose();
+        }
+      },
+    );
+  }
+
+  test(
+    'disposed speech service rejects calls without restarting its worker',
+    () async {
+      final speech = SpeechService();
+      await speech.dispose();
+      expect(speech.events.isClosed, isTrue);
+      await expectLater(
+        speech.call('voices'),
+        throwsA(isA<SpeechServiceFailure>()),
+      );
+      await speech.dispose();
+    },
+  );
+
+  for (final programmingFailure in [false, true]) {
+    test(
+      'speech stop ${programmingFailure ? 'propagates programming errors' : 'reports service loss without trapping safe navigation'}',
+      () async {
+        final speech = _Speech();
+        final f = await _ReaderFixture.create('text.pdf', speech: speech);
+        try {
+          final narration = f.container.read(
+            narrationControllerProvider.notifier,
+          );
+          await narration.start(
+            passage: {
+              'text': 'A quiet library',
+              'anchor': {'page': 0},
+            },
+          );
+          speech.stopError = programmingFailure
+              ? ArgumentError('unexpected stop contract')
+              : const SpeechServiceFailure(
+                  'injected speech service unavailable',
+                );
+          if (programmingFailure) {
+            await expectLater(narration.stop(), throwsArgumentError);
+          } else {
+            await narration.stop();
+            expect(
+              f.container.read(narrationControllerProvider).error,
+              'injected speech service unavailable',
+            );
+          }
+          expect(f.container.read(narrationControllerProvider).active, isFalse);
+          await f.reader.suspend();
+          expect(f.reader.suspended, isTrue);
+          await f.reader.close();
+          expect(f.state.bookId, isNull);
+        } finally {
+          speech.stopError = null;
+          await f.dispose();
+          await speech.dispose();
+        }
+      },
+    );
+  }
+
+  test(
+    'stale or unowned flush replies cannot acknowledge a newer native drain',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      Future<void>? flushing;
+      int? request;
+      try {
+        await f.reader.flush();
+        final previous = f.dispatches.lastWhere(
+          (d) => d['action'] == 'flush',
+        )['request'];
+        f.acknowledgeFlush = false;
+        f.onDispatch = (command) async {
+          if (command['action'] == 'flush') request = command['request'] as int;
+        };
+        var completed = false;
+        flushing = f.reader.flush().then((_) => completed = true);
+        await _until(() => request != null);
+        expect(request, isNot(previous));
+        for (final reply in [previous, request! + 1, null]) {
+          await f.event('flushed', {'request': reply});
+          await Future<void>.delayed(Duration.zero);
+          expect(completed, isFalse);
+        }
+        await f.event('flushed', {'request': request});
+        await flushing;
+        expect(completed, isTrue);
+      } finally {
+        if (request != null) await f.event('flushed', {'request': request});
+        await flushing;
+        f.acknowledgeFlush = true;
+        f.onDispatch = null;
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'concurrent flush and suspension share the renderer acknowledgement',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      final entered = Completer<void>(), release = Completer<void>();
+      Future<void>? saving, suspending;
+      try {
+        var requests = 0;
+        f.onNativeCall = (call) async {
+          if (call.method == 'dispatch' &&
+              jsonDecode(call.arguments as String)['action'] == 'flush') {
+            requests++;
+            if (!entered.isCompleted) entered.complete();
+            await release.future;
+          }
+          return null;
+        };
+        saving = f.reader.flush();
+        await entered.future;
+        suspending = f.reader.suspend();
+        await Future<void>.delayed(Duration.zero);
+        expect(requests, 1);
+        release.complete();
+        await Future.wait([saving, suspending]);
+        expect(requests, 1);
+        expect(f.reader.suspended, isTrue);
+        expect(f.state.surfaceVisible, isFalse);
+      } finally {
+        if (!release.isCompleted) release.complete();
+        await saving;
+        await suspending;
+        f.onNativeCall = null;
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'suspended renderer is sealed while Notebook edits still flush before close',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      try {
+        await f.event('location', {
+          'anchor': {'page': 0},
+        });
+        await f.reader.annotation('bookmark', note: 'Saved baseline');
+        final annotation = f.reader.annotations.single;
+        await f.reader.suspend();
+        f.notes.edit(annotation, 'Notebook edit after suspension\n日本語');
+        f.onNativeCall = (call) async {
+          if (call.method == 'dispatch' &&
+              jsonDecode(call.arguments as String)['action'] == 'flush') {
+            throw StateError('Hidden renderer must not require another frame');
+          }
+          return null;
+        };
+        await f.reader.flush();
+        await f.reader.close();
+        final records =
+            await f.store.call('annotations', annotation.bookId) as List;
+        expect(
+          (records.single as Map)['note'],
+          'Notebook edit after suspension\n日本語',
+        );
+      } finally {
+        f.onNativeCall = null;
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'failed suspension flush keeps the reader available and can be retried',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      try {
+        f.onNativeCall = (call) async {
+          if (call.method == 'dispatch' &&
+              jsonDecode(call.arguments as String)['action'] == 'flush') {
+            throw PlatformException(code: 'fixture-flush');
+          }
+          return null;
+        };
+        await expectLater(
+          f.reader.suspend(),
+          throwsA(isA<PlatformException>()),
+        );
+        expect(f.reader.suspended, isFalse);
+        expect(f.state.surfaceVisible, isTrue);
+        f.onNativeCall = null;
+        await f.reader.suspend();
+        expect(f.reader.suspended, isTrue);
+        expect(f.state.surfaceVisible, isFalse);
+      } finally {
+        f.onNativeCall = null;
+        await f.dispose();
       }
     },
   );

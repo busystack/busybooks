@@ -375,6 +375,11 @@ class ReaderController extends Notifier<ReaderState> {
     await dismissPopover();
     if (session != _session) return;
     await cancelSearch();
+    // PDF navigation/layout may need a rendered frame to settle. Capture and
+    // drain native input while its surface can still produce frames;
+    // a suspended reader has no further user input to flush.
+    await _flushRenderer();
+    if (session != _session) return;
     _suspended = true;
     _routeVisible = false;
     try {
@@ -399,7 +404,7 @@ class ReaderController extends Notifier<ReaderState> {
     try {
       await flush();
     } catch (_) {
-      /* pending positions stay protected in this controller */
+      /* pending positions and Notebook drafts stay protected for editing */
     }
   }
 
@@ -460,6 +465,7 @@ class ReaderController extends Notifier<ReaderState> {
   Object? _bridgeFailure;
   bool _cacheRecoveryAttempted = false;
   Completer<void>? _flushing;
+  int _flushRequest = 0;
   Future<void>? _flushOperation;
   StreamSubscription<FileSystemEvent>? _fileWatch;
   Timer? _fileCheck, _filePoll;
@@ -1306,7 +1312,8 @@ class ReaderController extends Notifier<ReaderState> {
         if (_flushing?.isCompleted == false) _flushing!.completeError(error);
         state = state.copy(warning: error.toString());
       case 'flushed':
-        if (_flushing?.isCompleted == false) {
+        if (event['request'] == _flushRequest &&
+            _flushing?.isCompleted == false) {
           if (_bridgeFailure case final Object error) {
             _flushing!.completeError(error);
           } else {
@@ -2201,18 +2208,31 @@ class ReaderController extends Notifier<ReaderState> {
     return _flushOperation!;
   }
 
-  Future<void> _flush() async {
+  Future<void>? _rendererFlushOperation;
+  Future<void> _flushRenderer() {
+    final pending = _rendererFlushOperation;
+    if (pending != null) return pending;
+    return _rendererFlushOperation = _drainRenderer().whenComplete(
+      () => _rendererFlushOperation = null,
+    );
+  }
+
+  Future<void> _drainRenderer() async {
     await _capturePopoverDraft();
     await _appearanceTail;
-    if (state.ready) {
+    if (state.ready && !_suspended) {
       _flushing = Completer<void>();
       try {
-        await send('flush');
+        await send('flush', {'request': ++_flushRequest});
         await _flushing!.future.timeout(const Duration(seconds: 5));
       } finally {
         _flushing = null;
       }
     }
+  }
+
+  Future<void> _flush() async {
+    await _flushRenderer();
     _saveTimer?.cancel();
     do {
       await _save();
@@ -2233,13 +2253,13 @@ class ReaderController extends Notifier<ReaderState> {
       await _capturePopoverDraft(seal: true);
       _invalidateAppearanceWork();
       if (state.ready) await send('cancelAppearance');
-      await readerChannel.invokeMethod<void>('visible', false);
       await flush();
       await _eventTail;
       await ref.read(notebookControllerProvider.notifier).flush();
       do {
         await _save();
       } while (_pendingLocations.isNotEmpty);
+      await readerChannel.invokeMethod<void>('visible', false);
     } catch (error) {
       await readerChannel.invokeMethod<void>('popoverResult', {
         'session': session,

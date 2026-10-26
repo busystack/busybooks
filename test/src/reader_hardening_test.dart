@@ -116,7 +116,7 @@ class _Reader {
                 'message': 'Reader bridge frame limit exceeded',
               });
             }
-            await event('flushed');
+            await event('flushed', {'request': command['request']});
           });
         }
       }
