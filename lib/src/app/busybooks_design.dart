@@ -1057,26 +1057,24 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     ).defaultStyleOf(context);
     final button = IconButton(
       isSelected: selected,
-      tooltip: tooltipPosition == null
-          ? (shortcut == null ? tooltip : '$tooltip ($shortcut)')
-          : null,
       // Native accessibility bridges do not consistently expose tooltip
-      // metadata as a name. Label the artwork inside the button's semantics.
+      // metadata as a name. Keep one explicit name and a separate shortcut
+      // hint; MSAA otherwise announces the label and tooltip twice.
       icon: Semantics(
         label: tooltip,
+        hint: shortcut,
         child: BusyBooksGtkHeaderIcon(icon, nativeIcon: nativeIcon),
       ),
       padding: EdgeInsets.zero,
       style: style.merge(yaruDefaults),
       onPressed: onPressed,
     );
-    final labeledButton = tooltipPosition == null
-        ? button
-        : Tooltip(
-            message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
-            positionDelegate: tooltipPosition,
-            child: button,
-          );
+    final labeledButton = Tooltip(
+      message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
+      excludeFromSemantics: true,
+      positionDelegate: tooltipPosition,
+      child: button,
+    );
     return YaruTheme.maybeOf(context)?.focusBorders == true
         ? YaruFocusBorder.primary(
             borderRadius: BorderRadius.circular(BusyBooksRadius.pill),
@@ -1128,7 +1126,6 @@ class BusyBooksCompactIconButton extends StatelessWidget {
       iconSize: size,
     ).defaultStyleOf(context);
     final button = IconButton(
-      tooltip: tooltip,
       icon: Icon(icon, size: glyphSize, semanticLabel: tooltip),
       constraints: BoxConstraints.tightFor(width: size, height: size),
       padding: EdgeInsets.zero,
@@ -1136,12 +1133,17 @@ class BusyBooksCompactIconButton extends StatelessWidget {
       focusNode: focusNode,
       onPressed: onPressed,
     );
+    final labeledButton = Tooltip(
+      message: tooltip,
+      excludeFromSemantics: true,
+      child: button,
+    );
     return YaruTheme.maybeOf(context)?.focusBorders == true
         ? YaruFocusBorder.primary(
             borderRadius: BorderRadius.circular(BusyBooksRadius.pill),
-            child: button,
+            child: labeledButton,
           )
-        : button;
+        : labeledButton;
   }
 }
 

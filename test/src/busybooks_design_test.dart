@@ -48,18 +48,26 @@ void main() {
     final buttons = find.byType(IconButton);
     final home = tester.getSemantics(buttons.at(0));
     expect(home.label, 'Home');
+    expect(home.getSemanticsData().tooltip, isEmpty);
+    expect(home.hint, 'Alt+Home');
     expect(home.flagsCollection.isButton, isTrue);
     expect(home.flagsCollection.isSelected, Tristate.isTrue);
     expect(home.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
     final previous = tester.getSemantics(buttons.at(1));
     expect(previous.label, 'Previous');
+    expect(previous.getSemanticsData().tooltip, isEmpty);
     expect(previous.flagsCollection.isEnabled, Tristate.isFalse);
     expect(previous.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
     final edit = tester.getSemantics(buttons.at(2));
     expect(edit.label, 'Edit Note');
+    expect(edit.getSemanticsData().tooltip, isEmpty);
     expect(edit.flagsCollection.isButton, isTrue);
     expect(edit.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
     expect(tester.getSemantics(buttons.at(3)).label, 'Search');
+    expect(
+      tester.getSemantics(buttons.at(3)).getSemanticsData().tooltip,
+      isEmpty,
+    );
     expect(find.byTooltip('Home (Alt+Home)'), findsOneWidget);
     expect(find.byTooltip('Search'), findsOneWidget);
     semantics.dispose();
