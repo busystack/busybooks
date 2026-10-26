@@ -1,32 +1,45 @@
 # Windows build and native acceptance
 
-## Local qualification environment (2026-10-25)
+## Local qualification environment (2026-10-26)
 
-The Linux host has VirtualBox 7.1.8r168469 and an existing Windows 11 VM,
-`474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3`. It is saved, with 8 virtual CPUs,
-4 GiB RAM, an 80 GiB dynamic VDI on SATA, VBoxSVGA/128 MiB VRAM and 3D
-acceleration disabled. Cached guest
-properties identify Windows 11 x64 build 26100 and Guest Additions 7.1.8 with
-one logged-in user; these are historical properties, not a verified current
-interactive desktop or development-tool inventory.
+The existing Windows 11 VM was resumed after the host was upgraded to official
+VirtualBox **7.2.22r175245** and `vboxdrv` was restored. The earlier missing-driver
+result is historical; it no longer describes the available environment.
 
-An actual `VBoxManage startvm 'Windows 11' --type headless` attempt fails with
-`NS_ERROR_FAILURE (0x80004005)`: the host has no `vboxdrv` module/device for
-kernel `7.0.0-38-generic`. `modinfo vboxdrv` fails and noninteractive privileged
-module loading requires administrator authentication. The installed VirtualBox
-tool recommends its official `/sbin/vboxconfig` installation step. Restoring
-the official host driver is the current prerequisite for resuming qualification;
-the saved guest state, snapshots, authentication and VM settings must be kept.
+VM `474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3` runs Windows 11 Enterprise 24H2,
+**10.0.26100.2894 x64**, with Guest Additions **7.1.8r168469**, eight virtual CPUs,
+4 GiB RAM, an 80 GiB dynamic SATA VDI and VBoxSVGA/128 MiB VRAM, with 3D
+acceleration disabled. The existing unlocked console session, rather than a
+service desktop, hosts the tests. Functional acceptance in this VM does not
+qualify physical GPU/driver performance.
 
-Guest execution, source transfer, installed Windows tools, release compilation,
-Win32 menus and WebView2 acceptance remain **not verified** until the VM can
-resume. Do not substitute portable Linux C++ tests for those gates. The current
-logs and qualification disposition are indexed by
-[professional-workspace-results.json](professional-workspace-results.json).
-After access is restored, follow the existing Windows CI commands and the
-native workflow checks below; keep source/artifacts in a new task-owned guest
-directory and restore the original saved power state without discarding work.
-No passwords belong in commands, logs, scripts or Git history.
+Task-owned tools, source and a disposable application profile are under
+`C:\BusyBooksQualification`. Official unmodified Flutter **3.47.5**, Dart
+**3.13.4**, Visual Studio Build Tools 2022 **17.14.43**, MSVC **19.44.35229**,
+Windows SDK **10.0.26100.0**, CMake **3.31.6-msvc6**, Node **24.22.1**, Python
+**3.13.4** and MinGit **2.56.0.windows.3** were installed or verified. The C++
+workload includes ATL, required by the existing SAPI implementation. The existing
+WebView2 Evergreen runtime is **135.0.3179.98**; the project SDK remains pinned to
+**1.0.3537.50**. No dependency or SDK versions were changed.
+
+`flutter doctor -v` recognizes the Windows desktop toolchain and connected
+Windows device. Missing Android SDK and Chrome are unrelated platform warnings;
+Windows development passes. Detailed commands, versions, source hashes and
+results are retained in
+[`evidence/windows-qualification-20261025`](../../evidence/windows-qualification-20261025/)
+and indexed by [professional-workspace-results.json](professional-workspace-results.json).
+
+Automation uses an official VirtualBox transient shared folder and physical
+console keyboard/mouse input, plus a PowerShell request queue running in the
+existing interactive session. MSAA inspects Flutter's actual Windows accessible
+nodes; UI Automation inspects Windows Settings and native file dialogs. Native
+menus are real Win32 popups, and publications render in the actual WebView2
+child surface. No passwords, authentication bypass, insecure remote service,
+execution-policy change or framework patch is involved. Preserve the original
+saved VM state, network/display configuration and personal session on completion.
+This run returned the VM to **Saved**, restored bridged `eno2`, 1024×768 and
+100% DPI, and removed its task share and consoles. The existing user session and
+original share remain intact; official tools remain in the isolated task directory.
 
 ## Required build environment
 
@@ -53,8 +66,10 @@ entry, before profile/window bootstrap. Main menus use a Win32 host with the
 existing BusyMark menu/session contract. Both paths keep the publication visible;
 main-route dialogs still hide it. No extra engine distribution, framework or
 Fluent styling is introduced. Both native source files are explicit runner
-build inputs. Compilation, DPI placement, foreground/minimize handling and focus
-return of these Windows paths remain unverified until Windows execution.
+build inputs. Compilation, actual transient popover placement at 100%, 150% and 200% display
+scaling, and tested focus-return paths are covered by the retained Windows
+qualification. Actual minimize/restore also passes on the final release. Other
+matrix items retain their individual evidence boundaries.
 
 ## Build and run
 
@@ -66,7 +81,7 @@ checksum-pinned UnRAR source archive and installs its full license and
 acknowledgements under `share/licenses/unrar`. No external decoder installation
 or runtime download is required. The Win32 helper uses wide paths, a memory-limited
 Job Object and the same bounded streaming callbacks as Linux; execution on a real
-Windows host remains a required gate.
+Windows host is covered by the Windows qualification probes and actual CBR rendering.
 
 ```powershell
 flutter pub get --enforce-lockfile
@@ -103,39 +118,62 @@ Associations cover `.epub`, `.pdf`, `.fb2`, `.fbz`, `.cbz` and `.cbr`. Windows
 matches the final extension, so `.fb2.zip` uses Open Book, drops or command-line
 opening; BusyBooks does not claim generic `.zip` or `.rar` associations.
 
-## Evidence boundary
+## Reproducible qualification and evidence boundary
 
-The existing Windows 11 guest could not be resumed because its official host
-driver is missing, as recorded above. The corrected Windows runner has **not**
-been compiled or executed. Linux Dart tests, Windows path-helper checks and CI
-configuration do not establish Windows acceptance.
+Run the checked-in workflow in an unlocked Windows desktop with the installed
+pinned SDK and required tools on PATH:
 
-Historical [run 39312939311](https://github.com/albert-gee/busybooks/actions/runs/39312939311/job/118266965365)
-was for `fd1aa90a1aa6a3a4e6138b344f40a8f3451790ad`, before this architecture
-correction: Windows dependency resolution, localization and analysis passed;
-48 tests passed and four Linux-host tests failed. Compilation and later probes
-were skipped. `a2036e5` corrected host dispatch, but that earlier local fix also
-had no Windows CI result. Neither result validates the new workspace changes.
-No push/rerun/publication was performed.
+```powershell
+& ./tools/qualify_windows.ps1 `
+  -FlutterSdk C:\BusyBooksQualification\sdk\flutter `
+  -SourceDirectory C:\BusyBooksQualification\busybooks `
+  -EvidenceDirectory C:\BusyBooksQualification\evidence `
+  -SourceRevision (git rev-parse HEAD)
+```
 
-Run the Windows CI job on the current commit, then execute the
-interactive matrix in [format-verification.md](format-verification.md): original-file opening without copies,
-independent collections/Recent, modified/missing files and identity-checked
-relocation, shared annotations and positions, reference-only backup/restore,
-WebView2 rendering/selection/locations, UI Automation text, keyboard/focus/modals,
-SAPI audio/pause/resume/voices/rate, file association/drop, ordinary close/reopen,
-Windows collision/recovery semantics, and offline distribution installation.
-Record the tested SHA separately for build, test and interactive results.
+The script enforces the official Flutter framework revision, resolves the
+existing lockfile, generates localizations, checks formatting/analysis, runs the
+complete Flutter suite, storage/cache/order and JavaScript probes, builds the
+Windows release and exercises the shipped comic decoder, format/resource
+validation, DirectWrite font probe and actual Win32 menu probe. It records each
+command, exit status, log hash and release-file hash. Keep the interactive desktop
+available for the menu probe. A portable C++ test alone does not qualify Win32.
 
-For the reading workspace at `1ea696692ad1bd7a2d415e8665b4eb2f19d7b0e1`,
-also check selection actions without blanking WebView2, note-write errors,
-Escape/outside-click dismissal, native menus and effective bindings, Tab through
-publication links into Flutter controls, full screen, minimize/restore and
-100%/125%/150% DPI. Use mixed-pages.pdf for page-specific fit and rotated text
-geometry, and fixed-layout.epub for same-spread jumps and text anchors at zoom.
-Switch books during search/narration and confirm old callbacks cannot affect
-the new session. The controlled-DOM JavaScript probe is supplementary and does
-not establish WebView2 behavior or UI Automation access to the publication.
+The application-owned bootstrap distinguishes the trusted browser ResizeObserver
+notification from actual script/import/rejection failures. WebView2's current
+URL attribution is covered by a captured native event and regression; notifications
+remain in session-scoped diagnostic logs and do not falsely close the book on a
+DPI change. Actual exceptions and authored lookalike events remain fatal. No
+browser, vendor reader or SDK patch is involved.
+
+The menu probe uses the production `native_menu_host.cpp`, actual
+`TrackPopupMenuEx`, physical pointer/keyboard input and the official Flutter
+message codec. It checks disabled radio entries, enabled selection, rejection
+of conflicting selections, preserved menu indices/session cancellation,
+repeated dismissal, unavailable-host errors and owner-focus return. Controlled
+Flutter fallback tests remain identified separately from native execution.
+
+Native acceptance uses disposable book copies and a disposable SQLite profile.
+Selected screenshots, MSAA trees, native child visibility/focus, saved-note
+hashes, normal-exit process handles and before/after storage checks establish the
+executed scope. Maximum-length multiline notes, a real SQLite-lock failure and
+Retry, native backup/restore dialogs and a missing CBR original are included.
+The full current disposition and tested revisions are recorded in
+[professional-workspace-verification.md](professional-workspace-verification.md).
+Exploratory screenshots, failed test-driver assumptions and earlier builds are
+retained with their actual scope; filenames alone are not passing evidence.
+
+The prior GitHub run
+[39312939311](https://github.com/albert-gee/busybooks/actions/runs/39312939311/job/118266965365)
+and the earlier missing-host-driver attempt are historical results, not current
+Windows qualification. No CI push, public release or binary publication was
+performed.
+
+Packaging/installer registration, file associations, physical GPU compatibility,
+complex IME composition, audible voice quality and a full screen-reader audit
+require their own explicit results. The local release executable and native
+workflows do not imply those broader qualifications. See
+[format-verification.md](format-verification.md) for the larger format matrix.
 
 ## Local typography implementation
 
@@ -148,6 +186,7 @@ introduced. See [typography.md](typography.md) and its verification record.
 
 The Windows CI also builds/runs `tools/native_font_probe` against stock Arial and
 Times New Roman. Run its CMake commands from typography.md on a Windows desktop.
-Linux cannot establish Windows compilation, WebView2 font resolution, preview
-painting, keyboard focus, display scaling or accessibility. These remain
-explicitly unverified until executed on Windows.
+The Windows qualification executes this native probe against stock Arial and
+Times New Roman. The local font channel is not substituted by a Linux result.
+A full assistive-technology audit and physical-display font rendering remain
+separate qualification scopes.

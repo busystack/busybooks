@@ -1,17 +1,22 @@
-# Workspace remediation and release qualification — 2026-10-25
+# Workspace remediation and release qualification — 2026-10-26
 
-The current implementation qualification revision is
-`a85db3feaad7b897c0ab90ad0868af066f42df7d`. The Reading/Notebook redesign is
-preserved. Final corrections address authoritative annotation activation,
-bounded book-session ownership, renderer flush/visibility ordering and speech
-resource cleanup and explicit native accessible names. This record distinguishes
-those application corrections from
-the pinned Flutter shutdown abort and from the blocked Windows environment.
+The final implementation revision is
+`767f692fda74292149532afb44b8013f0ca53cf8`. The Reading/Notebook architecture is
+preserved. The Linux native qualification below remains scoped to
+`a85db3feaad7b897c0ab90ad0868af066f42df7d`; it was not repeated during the
+Windows continuation. Windows builds, source audits and native evidence have
+separate exact revision records. Earlier VM-driver failures are historical.
 
-**Windows native qualification remains an essential open gate.** The installed
-Windows 11 VM was discovered and resuming it was attempted. Its host driver is
-missing and administrator authentication is required to restore it. No Windows
-build, WebView2 or Win32 acceptance result is claimed.
+The Windows continuation corrected six defects exposed by regression tests or
+actual native use: duplicate header accessible names, appearance Escape before
+a child receives focus, Notebook's editor consuming shared-search Escape, and
+creation dates decoded as milliseconds despite the persisted microsecond
+contract, header tooltips overlapping the Windows caption controls, and a
+standard browser resize notification incorrectly failing the book. It also
+corrected an intermediate tooltip semantics lifecycle
+assertion introduced while removing duplicate accessible names. Storage,
+backup schema, reader engines, dependency pins and transactional draft ownership
+are unchanged.
 
 ## Final corrections
 
@@ -68,7 +73,7 @@ store in a native profile application; the separate native opening probe covers
 real publication engines. It is not a claim of a hardware-independent memory
 ceiling.
 
-## Current verification and provenance
+## Retained Linux verification and provenance
 
 The clean starting checkout was `0bf8dad`, with 425 passing tests, three skips,
 clean analysis/formatting and a successful Linux release build. The earlier
@@ -112,7 +117,7 @@ runtime or third-party source/binary was patched. The SDK checkout had an
 unrelated root `pubspec.lock` difference at baseline; it was not overwritten.
 BusyBooks' own dependency lockfile is unchanged.
 
-## Final Linux native acceptance
+## Previously qualified Linux native acceptance (`a85db3f`)
 
 The hash-qualified release bundle ran on Ubuntu 24.04.5, GTK 3.24.41 and
 WebKitGTK 2.52.6. Private Xvfb/Openbox desktops isolate test input from the user's
@@ -204,33 +209,180 @@ tools and development documentation accompany them. The manifest lists the
 exact changed files and every retained evidence hash. No runtime dependency on
 BusyMark or new annotation cache was added.
 
-## Windows 11 prerequisite and remaining acceptance
+## Windows 11 qualification continuation — 2026-10-26
 
-`VBoxManage` 7.1.8r168469 reports the existing Windows 11 x64 VM
-`474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3`, saved with 8 CPUs, 4 GiB RAM,
-an 80 GiB dynamic VDI on SATA, VBoxSVGA/128 MiB VRAM and 3D disabled.
-Historical guest properties report build
-26100, Guest Additions 7.1.8 and one logged-in user. They do not establish the
-current desktop or installed development tools.
+The existing VM resumed using official VirtualBox **7.2.22r175245** after the
+user restored `vboxdrv`. Windows 11 Enterprise 24H2 **10.0.26100.2894 x64** and
+Guest Additions **7.1.8r168469** ran in the existing unlocked interactive console
+session. Configuration remained eight CPUs, 4 GiB RAM, 80 GiB dynamic SATA VDI,
+VBoxSVGA/128 MiB VRAM and no 3D acceleration. Guest source/tools/profile are
+isolated under `C:\BusyBooksQualification`. No credentials or authentication
+changes were needed. Official VirtualBox shared-folder/console APIs, PowerShell,
+MSAA and Windows UI Automation provide a retained, reproducible automation path.
 
-An actual headless resume fails with `NS_ERROR_FAILURE (0x80004005)` because
-`vboxdrv` is absent for host kernel `7.0.0-38-generic`; `/dev/vboxdrv` and the
-module are missing. Noninteractive privileged loading requires authentication.
-The official installed tool recommends `/sbin/vboxconfig`. The minimum external
-action is administrator restoration of the official host driver so the saved VM
-can resume. Guest control cannot operate while the VM is saved. No guest
-credentials were obtained or stored, and no authentication/security controls,
-snapshots, personal files, VM settings or saved state were changed. The original
-saved power state is preserved.
+The resize classification follows the browser's
+[Resize Observer notification algorithm](https://www.w3.org/TR/resize-observer/#deliver-resize-error).
+The failed 200% frame at `64a1f18` is retained as defect evidence, not successful
+high-DPI acceptance. Native investigation showed that WebView2 attributes this trusted, exception-free
+notification to the current document URL. The handler accepts that observed
+attribution or the specification's empty filename, requires zero source position,
+and keeps unrelated filenames and actual exceptions fatal. The first strict
+attempt at `15063a2` still failed native DPI acceptance; its logs and the explicitly
+instrumented diagnostic variant are retained. Neither is a final passing run.
+The correction does not call `preventDefault`, disable crash reporting or modify
+Foliate.js, PDF.js, WebView2 or Flutter. The final native DPI
+run is recorded independently below/in the manifest.
 
-The Windows CI workflow and official
-[Flutter setup requirements](https://docs.flutter.dev/platform-integration/windows/setup)
-were reviewed. Build/tool inventory, guest execution/transfer, Windows release
-compilation and actual Win32/WebView2 acceptance remain **not verified**.
-This is an environment prerequisite, not an observed Windows compilation
-failure. If qualification resumes, use the existing VM and pinned toolchain;
-virtualized graphics can establish functional behavior, not physical-GPU parity.
-See [windows.md](windows.md) for the continuation requirements.
+The guest uses official unmodified Flutter **3.47.5 / Dart 3.13.4**, Visual Studio
+Build Tools **17.14.43**, MSVC **19.44.35229**, Windows SDK **10.0.26100.0** and
+CMake **3.31.6-msvc6**, with the required C++/ATL components. Node **24.22.1**,
+Python **3.13.4**, MinGit **2.56.0.windows.3** and existing WebView2
+**135.0.3179.98** were verified. SDK tracked sources are unchanged; framework
+revision is the same pinned `6a19cca56475dbfba1478ee68d7bd0c2ef891da1`.
+`flutter doctor` passes Windows desktop requirements; Android SDK/Chrome warnings
+are outside the requested Windows target.
+
+| Windows finding | Final correction and evidence |
+| --- | --- |
+| Actual MSAA header names repeated the tooltip and artwork label | Stable outer semantics boundary excludes duplicate tooltip semantics while retaining the explicit artwork label required by GTK. Button-node tests check names, selected/disabled state and actions; actual Windows MSAA names are single. |
+| A tooltip lifecycle assertion appeared during Search after that initial change | The semantics boundary now remains attached independently of tooltip reconstruction. The previously failing complete-suite case and focused regression pass. |
+| Appearance ignored Escape until a child took focus | Only the appearance presentation takes initial keyboard focus; existing Go To input and Close-button behavior remain. A failing-before/passing-after regression and native popover dismissal cover the correction. |
+| Notebook's focused editor consumed Escape while shared Search was active | Editor Escape defers to the active book search session. Regression and actual one-keypress acceptance preserve the note, restore the prior sidebar and keep WebView2 hidden. |
+| Native-created annotations displayed years such as 58788 | The shared formatter reads validated epoch microseconds, matching every annotation producer and persistence contract. No stored record or backup migration is involved. The real 2026 timestamp regression passes; the seed tool uses the same unit. |
+| A header hint was painted underneath the Windows caption controls | The common header tooltip placement consumes the existing left/right decoration obstructions. A geometry regression checks that the tooltip remains inside the header and avoids the overlaid caption region. The native stress captures exposed this defect; it required no workspace or window-control redesign. |
+| A 200% DPI change produced a false fatal opening error | BusyBooks' bootstrap treated the standard browser ResizeObserver notification as a failed publication. Only a trusted, exception-free notification with the exact standard message now uses the existing diagnostic channel. It remains logged with book/session/stage context; actual exceptions, rejections, resource failures and authored lookalike events remain fatal. Focused bootstrap/controller regressions cover both bridge transports, subsequent real errors and stale sessions. No vendor or SDK source changed. |
+
+`tools/qualify_windows.ps1` records the complete Windows workflow, commands,
+exit codes, log hashes and release-file hashes. `tools/native_menu_probe` compiles
+the production Win32 menu host and official Flutter codec; 26 native checks
+exercise actual disabled/enabled radio entries, invalid multiple selection,
+physical disabled activation, keyboard selection, preserved indices, session
+replacement, repeated dismissal, unavailable-host error and focus return.
+Flutter fallback is covered by controlled service/widget tests, not claimed as
+a naturally occurring native-host failure in the application.
+
+The complete final Windows workflow at `767f692` passes **all 22 commands**:
+**453 Flutter tests pass, zero fail, two skip** (Linux-only symbolic-link traversal
+and opt-in live Wiktionary). Formatting checks 171 Dart files with no changes;
+analysis reports no issues. The Windows release build succeeds in 25.4 seconds
+(incremental build; the earlier full build took 208.7 seconds).
+Storage passes 88 checks, cache 19, annotation ordering five, RAR decoding 16 and
+format validation 153. Resource cancellation, reader JavaScript, the DirectWrite
+font probe and all 26 real Win32 menu checks pass. No failed assertion was removed
+or weakened. The final guest audit reports zero mismatches for all **598** tracked
+runtime/test/tool inputs, no tracked SDK differences and an unchanged project
+lockfile.
+
+The final source audit checks those inputs against
+`767f692fda74292149532afb44b8013f0ca53cf8`. The workflow ran from
+22:30:36 to 22:45:29 UTC on 2026-10-26, including the real Win32 menu probe at
+actual 200% Windows DPI. Earlier complete runs and UI sessions retain their original revisions:
+`cd914fd` established the Windows baseline; `dfcf6a7` exposed the tooltip lifecycle
+regression; `181923d` fixed it and appearance focus; `74e0b80` qualified real
+Win32 keyboard selection; `02303f0` fixed shared-search Escape. Native functional
+workflows at `02303f0` predate only the date formatter/test/seed correction.
+They are not relabeled as final-revision runs. The `52a92fe` suite had 451 passing
+tests; `64a1f18` had 452; `15063a2` had 453 but failed its subsequent native DPI
+check. Only the corrected `767f692` suite and packaged release supply the final
+automated and DPI evidence. The final suite/build and native captures are
+indexed independently in the machine-readable manifest.
+
+Real native workflows already include EPUB 2/3, KEPUB, PDF with physical/printed
+labels, image-only PDF, fixed-layout EPUB, FB2/FBZ, CBZ and RAR5 CBR; actual
+WebView2 reading, Win32 menus, both native transient popovers, selection, text
+and region annotations, focus handoff and suspended-reader visibility. Local
+Notebook/Marks/search remain usable with a missing CBR original, and native
+Locate restores the correct original without losing its note. Reading and
+Notebook retain the sidebar and native session. Actions search opens Settings;
+text search navigates PDF results, and a Notebook search reveals a target after
+500 variable-height records.
+
+A genuine native EPUB selection produced a private note with **1,000,000**
+characters and **24,999** line breaks, SHA-256
+`161909ad35909e3dbef9e1290e6f8fc3d410f4a17576eb45e3750817b28b8153`.
+MSAA retrieves its entire value, SQLite confirms it, and restart preserves it.
+A bounded external SQLite write lock produces the real retained-draft error;
+a 2,361-character Unicode draft survives navigation, then Retry saves its exact
+hash after the lock releases. Native Settings → Data backup and restore use
+actual Windows file dialogs and confirmation. The schema-3 archive validates,
+and replacing then restoring the maximum note recovers its exact text/hash.
+A genuine CBR region note also persists and remains editable offline. These
+checks use disposable fixtures/profiles; personal data is untouched.
+
+Presentation checks cover light/dark, actual Windows **100%, 150%, 200%** display
+scaling, narrow/wide windows, responsive sidebar overlays and compact contextual
+overflow, native symbolic/menu icons and popover placement above visible WebView2.
+Windows Night sky contrast mode produced a readable native menu; this is a
+scoped contrast check, not a complete screen-reader/WCAG audit. Display scale
+and contrast mode are restored, including the original Windows Spotlight
+background mode. SAPI playback controls appear and switching to Notebook stops
+playback; audible voice quality is not verified.
+
+At `52a92fe`, the real release completed **30 openings of ten distinct format
+fixtures over three cycles**. Every sample retained one application, one native
+reader host and six WebView2 child processes. Application private memory ranged
+from **187.31 to 224.59 MiB**, ending at **203.84 MiB**. Handle counts at cycle ends
+were 1,031, 1,084 and 1,093; after releasing test-driver COM proxies and idle
+cleanup they fell to **802**, with 24 application threads. This is bounded sampled
+behavior, not a platform-independent memory ceiling. The native cycle then
+closed normally with exit code **0**, and all seven owned processes disappeared.
+Subsequent corrections change tooltip geometry and classification/logging of a
+standard resize notification. Provider ownership, native hosts, vendor reading
+engines and persistence are unchanged. The retained
+180-visit profile probe above remains the direct provider/allocation measurement.
+
+Three pre-final normal application closes returned real process-handle exit
+code **0**, with no remaining owned processes. The final build has its own
+close and resource measurements below/in the manifest. No forced application
+termination is counted as successful shutdown. A later VM host-disk I/O pause
+interrupted the queued test launcher before execution; moving only task-created
+temporary downloads/fixtures to the media volume recovered space and the VM.
+No VM relocation, reinstall, snapshot removal or security-policy change occurred.
+
+The final packaged `767f692` release independently rendered all ten format
+fixtures at 100% DPI; all ten real WebView2 captures were inspected. FB2 outline
+and keyboard activation also reveal the complete chapter, Cyrillic text, poem,
+table and embedded image. Earlier blank frames taken before navigation settled
+are retained as exploratory captures, not content verification. The same release
+opens its actual Win32 Main Menu while the header reports **Opening book**.
+At actual 200% DPI it remains ready through resizing, shows an unobscured header
+tooltip, and hosts the settled Appearance and Go To surfaces above WebView2.
+One physical Escape dismisses Appearance and returns focus to the same native
+reader HWND. Go To accepts 50% and settles at its page-aligned Chapter 2 location
+(53%, genuine publisher label 17); the request does not promise exact screen
+pagination. The initial exact-50%-header assertion was a test-driver assumption.
+
+Final-source native checks also cover Search Escape from the focused note editor,
+sidebar restoration, SAPI start/stop across Notebook switching, actual Windows
+minimize/restore, a normal close from Reading and a cold restart. The restarted
+Notebook retrieves the complete million-character note with **Saved** status,
+correct 2026 creation date and WebView2 hidden. Final normal close from Notebook
+returns exit code **0** and leaves no owned application/WebView2 processes.
+Read-only SQLite integrity is **ok**, and the maximum note, failed-save/retried
+draft and CBR region note retain their exact hashes. These native observations
+and their source revision are indexed in `native-final-smoke-summary.json`.
+
+The VM is back in its original **Saved** state, with the existing user session
+preserved, original bridged `eno2` network, 1024×768 resolution and 100% DPI.
+The original share remains; the task share, consoles and power request are
+removed. Official development tools remain in the isolated task directory.
+The private release ZIP is retained with SHA-256
+`23011a96bc62461dfb95a73e4555629ce919154f2065ebed0c078682f029ffb1`;
+it was neither published nor installed over a personal installation.
+
+Evidence is retained under
+[`evidence/windows-qualification-20261025`](../../evidence/windows-qualification-20261025/),
+including source audits, scripts, screenshots, MSAA/focus/visibility trees,
+SQLite checks, native backup, exact process-exit observations and log hashes.
+`evidence-index.json` hashes the retained Windows files. Historical Linux logs
+keep their original paths/revisions; `host-additional-task-moves.json` records
+the hash-verified current locations of task-created inputs moved off the root
+volume. Windows scratch evidence was also hash-verified onto retained media;
+disposable `/tmp` files are not the sole copy of qualification evidence.
+Exploratory captures are not automatically passing evidence. VM graphics do not
+qualify physical GPUs; complex IME, audible narration, installer/file association
+and a full assistive-technology audit retain their explicit limits. Nothing was
+pushed, published or released. See [windows.md](windows.md) for reproduction.
 
 ## Linux shutdown boundary and release decision
 
@@ -276,15 +428,16 @@ acceptance into a pass or prove durability against every possible crash.
 | Release determination | Disposition |
 | --- | --- |
 | BusyBooks implementation | **Pass** for the implemented corrections and executed regressions |
-| Linux application-owned acceptance | **Pass**, within the native environments and explicit limits above |
-| Windows native acceptance | **Fail to qualify: unverified**, blocked before guest startup by the host driver prerequisite; no Windows source/build failure was observed |
+| Linux application-owned acceptance | **Pass**, within the retained `a85db3f` native scope and explicit limits above; no new Linux run is claimed |
+| Windows native acceptance | **Pass**, within the executed Windows 11 VirtualBox Win32/WebView2 scope and explicit limits above |
 | Known upstream Flutter shutdown risk | **Present**; exact released correction not verified |
-| Overall release qualification | **Blocked by an essential unverified Windows requirement**. Once Windows passes, the engine shutdown risk still requires an explicit documented release decision. |
+| Overall release qualification | **Ready subject to an explicit documented risk decision** accepting the known Linux Flutter shutdown abort. No release publication is authorized by this qualification. |
 
 The tested implementation revision is immutable. The delivery commit changes
-documentation/results only; `final-source-inputs.json` and the post-delivery
-hash audit establish that all runtime, test and tool inputs still match that
-revision. All task-owned completed source and documentation changes are
+documentation/results only; `windows-source-inputs.json` and the post-delivery
+hash audit establish that all 598 Windows runtime, test and tool inputs still
+match `767f692`. The retained Linux `final-source-inputs.json` remains scoped to
+its original revision. All task-owned completed source and documentation changes are
 committed; no push or release publication is authorized or performed.
 
 The historical workspace review follows. Its earlier test counts and captures

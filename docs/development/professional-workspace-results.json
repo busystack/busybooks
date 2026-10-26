@@ -1,15 +1,15 @@
 {
-  "schemaVersion": 2,
-  "recordedDate": "2026-10-25",
-  "recordedUtc": "2026-10-26T02:05:09.278819+00:00",
-  "implementationRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+  "schemaVersion": 3,
+  "recordedDate": "2026-10-26",
+  "recordedUtc": "2026-10-26T23:14:46.281336+00:00",
+  "implementationRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
   "baselineRevision": "0bf8dade27080b73c8814340754eabf0b2e56518",
   "status": {
-    "busyBooksImplementation": "pass for completed corrections and executed scope",
-    "linuxApplicationOwnedAcceptance": "pass within documented native environments",
-    "windowsNativeAcceptance": "not verified: host driver prerequisite blocks existing VM startup",
+    "busyBooksImplementation": "pass",
+    "linuxApplicationOwnedAcceptance": "pass within retained a85db3f native scope; not rerun during Windows continuation",
+    "windowsNativeAcceptance": "pass within executed Windows 11 VirtualBox scope",
     "knownUpstreamFlutterShutdownRisk": "present",
-    "overallReleaseQualification": "blocked by an essential unverified Windows requirement",
+    "overallReleaseQualification": "ready subject to an explicit documented decision accepting the known Linux Flutter shutdown risk",
     "productionReleasePublished": false,
     "pushed": false
   },
@@ -76,347 +76,806 @@
       "finding": "Icon controls had empty GTK accessible names",
       "result": "Localized labels inside existing header/compact icon button semantics; visual tooltip behavior and enabled/selected/action state retained",
       "coverage": "Failing-before/passing-after focused regression plus actual GTK AT-SPI labels"
+    },
+    {
+      "finding": "Duplicate native accessible names and transient tooltip semantics attachment",
+      "verifiedDisposition": "Corrected; focused regressions and revision-scoped native evidence retained"
+    },
+    {
+      "finding": "Appearance initial Escape focus",
+      "verifiedDisposition": "Corrected; focused regressions and revision-scoped native evidence retained"
+    },
+    {
+      "finding": "Shared Search Escape from the focused Notebook editor",
+      "verifiedDisposition": "Corrected; focused regressions and revision-scoped native evidence retained"
+    },
+    {
+      "finding": "Annotation date formatter used milliseconds instead of the stored microseconds",
+      "verifiedDisposition": "Corrected; focused regressions and revision-scoped native evidence retained"
+    },
+    {
+      "finding": "Header tooltips overlapped the overlaid caption controls",
+      "verifiedDisposition": "Corrected; focused regressions and revision-scoped native evidence retained"
+    },
+    {
+      "finding": "Standard browser ResizeObserver notifications incorrectly failed the book",
+      "verifiedDisposition": "Corrected; focused regressions and revision-scoped native evidence retained"
     }
   ],
   "automated": {
-    "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-    "final": {
-      "passed": 447,
-      "skipped": 3,
-      "failed": 0
-    },
-    "skipReasons": [
-      {
-        "test": "Live Wiktionary integration",
-        "reason": "Existing opt-in BUSYBOOKS_LIVE_WIKTIONARY flag not enabled"
+    "linuxRetained": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "final": {
+        "passed": 447,
+        "skipped": 3,
+        "failed": 0
       },
-      {
-        "test": "Windows short and long paths share saved locations without string equality",
-        "reason": "Existing Platform.isWindows guard; Linux execution"
-      },
-      {
-        "test": "F26: Windows returns a full stable identity and detects replacements",
-        "reason": "Existing Platform.isWindows guard; Linux execution"
-      }
-    ],
-    "format": {
-      "files": 171,
-      "changed": 0,
-      "exitCode": 0
-    },
-    "analysis": "no issues",
-    "linuxReleaseBuild": "passed",
-    "commands": [
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "pub-get",
-        "command": [
-          "flutter",
-          "pub",
-          "get",
-          "--enforce-lockfile"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 0.88
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "l10n",
-        "command": [
-          "flutter",
-          "gen-l10n"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 0.41
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "format",
-        "command": [
-          "dart",
-          "format",
-          "--output=none",
-          "--set-exit-if-changed",
-          "lib",
-          "test",
-          "tools"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 1.45
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "analyze",
-        "command": [
-          "flutter",
-          "analyze"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 15.51
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "reader-javascript",
-        "command": [
-          "node",
-          "tools/reader_logic_probe.mjs"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 0.7
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "epubcheck",
-        "command": [
-          "python3",
-          "tools/check_epub2_fixtures.py",
-          "/tmp/busybooks-epubcheck/epubcheck-5.4.0/epubcheck.jar"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 34.96
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "tests",
-        "command": [
-          "flutter",
-          "test",
-          "--concurrency=2",
-          "--reporter=expanded"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 324.15
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "linux-release-build",
-        "command": [
-          "flutter",
-          "build",
-          "linux",
-          "--release"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 11.31
-      },
-      {
-        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-        "name": "storage-pipeline",
-        "command": [
-          "python3",
-          "-u",
-          "/tmp/busybooks-final-storage-checks.py"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 26.75
-      }
-    ],
-    "storageCommands": [
-      {
-        "name": "final-storage",
-        "command": [
-          "dart",
-          "run",
-          "tools/storage_probe.dart"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 6.5
-      },
-      {
-        "name": "final-move-volume",
-        "command": [
-          "dart",
-          "run",
-          "tools/move_volume_probe.dart",
-          "/tmp",
-          "/dev/shm"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 1.46
-      },
-      {
-        "name": "final-cache",
-        "command": [
-          "dart",
-          "run",
-          "tools/cache_probe.dart"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 2.76
-      },
-      {
-        "name": "final-annotation-order",
-        "command": [
-          "dart",
-          "run",
-          "tools/annotation_order_probe.dart"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 0.36
-      },
-      {
-        "name": "final-linux-mime",
-        "command": [
-          "python3",
-          "tools/probe_linux_mime.py",
-          "build/linux/x64/release/bundle/share/mime"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 0.14
-      },
-      {
-        "name": "final-native-rar",
-        "command": [
-          "python3",
-          "tools/qualify_rar.py",
-          "/mnt/Media/busystack/busybooks/build/linux/x64/release/bundle/busybooks_comic_archive"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 0.2
-      },
-      {
-        "name": "final-format-probe",
-        "command": [
-          "dart",
-          "run",
-          "tools/format_probe.dart"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 10.37
-      },
-      {
-        "name": "final-format-resources",
-        "command": [
-          "dart",
-          "run",
-          "tools/format_resources_probe.dart"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 4.91
-      }
-    ],
-    "nativeCommands": [
-      {
-        "name": "final-native-input-menu",
-        "command": [
-          "env",
-          "G_DEBUG=fatal-criticals",
-          "bash",
-          "tools/probe_linux_input.sh"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 6.93
-      },
-      {
-        "name": "final-native-engines",
-        "command": [
-          "bash",
-          "tools/probe_linux_engines.sh"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 30.56
-      },
-      {
-        "name": "final-native-typography",
-        "command": [
-          "bash",
-          "tools/probe_linux_typography.sh"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 45.2
-      },
-      {
-        "name": "final-native-formats",
-        "command": [
-          "bash",
-          "tools/probe_linux_formats.sh"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 472.57
-      },
-      {
-        "name": "final-native-format-review",
-        "command": [
-          "bash",
-          "tools/probe_linux_format_review.sh"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 118.78
-      },
-      {
-        "name": "final-native-opening",
-        "command": [
-          "python3",
-          "tools/probe_linux_opening.py"
-        ],
-        "exitCode": 0,
-        "elapsedSeconds": 41.94
-      }
-    ],
-    "extra": [
-      {
-        "command": [
-          "node",
-          "--experimental-websocket",
-          "tools/probe_chromium_format_review.mjs"
-        ],
-        "exitCode": 0,
-        "proofs": 4,
-        "scope": "Actual Chromium with controlled resources; not native WebView2 acceptance",
-        "log": {
-          "path": "evidence/release-qualification-20261025/final-chromium-format-review.log",
-          "bytes": 2227,
-          "sha256": "b0505650466b92cba295cd996bf11a59177228f9bc1fd518846f26d1036f1eb1"
+      "skipReasons": [
+        {
+          "test": "Live Wiktionary integration",
+          "reason": "Existing opt-in BUSYBOOKS_LIVE_WIKTIONARY flag not enabled"
+        },
+        {
+          "test": "Windows short and long paths share saved locations without string equality",
+          "reason": "Existing Platform.isWindows guard; Linux execution"
+        },
+        {
+          "test": "F26: Windows returns a full stable identity and detects replacements",
+          "reason": "Existing Platform.isWindows guard; Linux execution"
         }
+      ],
+      "format": {
+        "files": 171,
+        "changed": 0,
+        "exitCode": 0
       },
-      {
-        "command": [
-          "g++",
-          "-std=c++17",
-          "-Wall",
-          "-Wextra",
-          "-Werror",
-          "-fsanitize=address,undefined",
-          "-fno-omit-frame-pointer",
-          "-g",
-          "-Ilinux/runner",
-          "test/src/linux_reader_surface_test.cc",
-          "linux/runner/reader_surface.cc",
-          "-o",
-          "/tmp/busybooks-qualified-native-surface-asan",
-          "$(pkg-config --cflags --libs gtk+-3.0 x11)",
-          "-ldl"
-        ],
-        "buildExitCode": 0,
-        "runCommand": [
-          "bash",
-          "harness/busybooks-qualified-native-surface-asan.sh"
-        ],
-        "runExitCode": 0,
-        "asanOptions": "detect_leaks=1:abort_on_error=1",
-        "ubsanOptions": "halt_on_error=1:print_stacktrace=1",
-        "suppressionUsed": false,
-        "scope": "BusyBooks native surface/test compiled with sanitizers; official third-party libraries remain unmodified",
-        "log": {
-          "path": "evidence/release-qualification-20261025/qualified-native-surface-asan.log",
-          "bytes": 1075,
-          "sha256": "32ab7a2717b03005343933726ea172a0bd2b69b05a9682adce8d784aff330ed5"
+      "analysis": "no issues",
+      "linuxReleaseBuild": "passed",
+      "commands": [
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "pub-get",
+          "command": [
+            "flutter",
+            "pub",
+            "get",
+            "--enforce-lockfile"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.88
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "l10n",
+          "command": [
+            "flutter",
+            "gen-l10n"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.41
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "format",
+          "command": [
+            "dart",
+            "format",
+            "--output=none",
+            "--set-exit-if-changed",
+            "lib",
+            "test",
+            "tools"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 1.45
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "analyze",
+          "command": [
+            "flutter",
+            "analyze"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 15.51
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "reader-javascript",
+          "command": [
+            "node",
+            "tools/reader_logic_probe.mjs"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.7
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "epubcheck",
+          "command": [
+            "python3",
+            "tools/check_epub2_fixtures.py",
+            "/tmp/busybooks-epubcheck/epubcheck-5.4.0/epubcheck.jar"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 34.96
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "tests",
+          "command": [
+            "flutter",
+            "test",
+            "--concurrency=2",
+            "--reporter=expanded"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 324.15
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "linux-release-build",
+          "command": [
+            "flutter",
+            "build",
+            "linux",
+            "--release"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 11.31
+        },
+        {
+          "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+          "name": "storage-pipeline",
+          "command": [
+            "python3",
+            "-u",
+            "/tmp/busybooks-final-storage-checks.py"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 26.75
         }
-      }
-    ],
-    "counts": {
-      "epubFixtures": 8,
-      "expectedNormativeFixtureExceptions": 2,
-      "formatChecks": 153,
-      "nativeFormatProofs": 34,
-      "nativeFormatFixtures": 22,
-      "nativeRestarts": 12,
-      "nativeExpectedInvalidFallbackRejections": 2,
-      "nativeTypographyProofs": 7,
-      "nativeFormatReviewProofs": 8,
-      "actualMainBundleBookOpenings": 19
+      ],
+      "storageCommands": [
+        {
+          "name": "final-storage",
+          "command": [
+            "dart",
+            "run",
+            "tools/storage_probe.dart"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 6.5
+        },
+        {
+          "name": "final-move-volume",
+          "command": [
+            "dart",
+            "run",
+            "tools/move_volume_probe.dart",
+            "/tmp",
+            "/dev/shm"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 1.46
+        },
+        {
+          "name": "final-cache",
+          "command": [
+            "dart",
+            "run",
+            "tools/cache_probe.dart"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 2.76
+        },
+        {
+          "name": "final-annotation-order",
+          "command": [
+            "dart",
+            "run",
+            "tools/annotation_order_probe.dart"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.36
+        },
+        {
+          "name": "final-linux-mime",
+          "command": [
+            "python3",
+            "tools/probe_linux_mime.py",
+            "build/linux/x64/release/bundle/share/mime"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.14
+        },
+        {
+          "name": "final-native-rar",
+          "command": [
+            "python3",
+            "tools/qualify_rar.py",
+            "/mnt/Media/busystack/busybooks/build/linux/x64/release/bundle/busybooks_comic_archive"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 0.2
+        },
+        {
+          "name": "final-format-probe",
+          "command": [
+            "dart",
+            "run",
+            "tools/format_probe.dart"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 10.37
+        },
+        {
+          "name": "final-format-resources",
+          "command": [
+            "dart",
+            "run",
+            "tools/format_resources_probe.dart"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 4.91
+        }
+      ],
+      "nativeCommands": [
+        {
+          "name": "final-native-input-menu",
+          "command": [
+            "env",
+            "G_DEBUG=fatal-criticals",
+            "bash",
+            "tools/probe_linux_input.sh"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 6.93
+        },
+        {
+          "name": "final-native-engines",
+          "command": [
+            "bash",
+            "tools/probe_linux_engines.sh"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 30.56
+        },
+        {
+          "name": "final-native-typography",
+          "command": [
+            "bash",
+            "tools/probe_linux_typography.sh"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 45.2
+        },
+        {
+          "name": "final-native-formats",
+          "command": [
+            "bash",
+            "tools/probe_linux_formats.sh"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 472.57
+        },
+        {
+          "name": "final-native-format-review",
+          "command": [
+            "bash",
+            "tools/probe_linux_format_review.sh"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 118.78
+        },
+        {
+          "name": "final-native-opening",
+          "command": [
+            "python3",
+            "tools/probe_linux_opening.py"
+          ],
+          "exitCode": 0,
+          "elapsedSeconds": 41.94
+        }
+      ],
+      "extra": [
+        {
+          "command": [
+            "node",
+            "--experimental-websocket",
+            "tools/probe_chromium_format_review.mjs"
+          ],
+          "exitCode": 0,
+          "proofs": 4,
+          "scope": "Actual Chromium with controlled resources; not native WebView2 acceptance",
+          "log": {
+            "path": "evidence/release-qualification-20261025/final-chromium-format-review.log",
+            "bytes": 2227,
+            "sha256": "b0505650466b92cba295cd996bf11a59177228f9bc1fd518846f26d1036f1eb1"
+          }
+        },
+        {
+          "command": [
+            "g++",
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-g",
+            "-Ilinux/runner",
+            "test/src/linux_reader_surface_test.cc",
+            "linux/runner/reader_surface.cc",
+            "-o",
+            "/tmp/busybooks-qualified-native-surface-asan",
+            "$(pkg-config --cflags --libs gtk+-3.0 x11)",
+            "-ldl"
+          ],
+          "buildExitCode": 0,
+          "runCommand": [
+            "bash",
+            "harness/busybooks-qualified-native-surface-asan.sh"
+          ],
+          "runExitCode": 0,
+          "asanOptions": "detect_leaks=1:abort_on_error=1",
+          "ubsanOptions": "halt_on_error=1:print_stacktrace=1",
+          "suppressionUsed": false,
+          "scope": "BusyBooks native surface/test compiled with sanitizers; official third-party libraries remain unmodified",
+          "log": {
+            "path": "evidence/release-qualification-20261025/qualified-native-surface-asan.log",
+            "bytes": 1075,
+            "sha256": "32ab7a2717b03005343933726ea172a0bd2b69b05a9682adce8d784aff330ed5"
+          }
+        }
+      ],
+      "counts": {
+        "epubFixtures": 8,
+        "expectedNormativeFixtureExceptions": 2,
+        "formatChecks": 153,
+        "nativeFormatProofs": 34,
+        "nativeFormatFixtures": 22,
+        "nativeRestarts": 12,
+        "nativeExpectedInvalidFallbackRejections": 2,
+        "nativeTypographyProofs": 7,
+        "nativeFormatReviewProofs": 8,
+        "actualMainBundleBookOpenings": 19
+      },
+      "nativeOpeningShutdownScope": "Opening probe terminates its owned process for cleanup. It does not establish normal shutdown; guarded native closes and debugger diagnostics are recorded separately."
     },
-    "nativeOpeningShutdownScope": "Opening probe terminates its owned process for cleanup. It does not establish normal shutdown; guarded native closes and debugger diagnostics are recorded separately."
+    "windowsFinal": {
+      "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+      "result": {
+        "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+        "success": true,
+        "passed": 453,
+        "failed": 0,
+        "skipped": [
+          {
+            "name": "Linux resolves a symbolic link before parent traversal",
+            "reason": "Linux-only symbolic-link semantics"
+          },
+          {
+            "name": "live Wiktionary contract: word, Unicode, phrase and missing entry",
+            "reason": "Existing opt-in live Wiktionary disabled"
+          }
+        ],
+        "elapsedMs": 681809,
+        "errors": []
+      },
+      "checks": [
+        {
+          "name": "doctor",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\flutter.bat",
+            "doctor",
+            "-v"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:30:41.9264896Z",
+          "finishedUtc": "2026-10-26T22:30:55.3565900Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\doctor.log",
+          "sha256": "22f33c6fc2d779a820ba884a0a672bdb0c634dee785b68bfda4a9f3888fbf794",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/doctor.log",
+            "bytes": 2162,
+            "sha256": "22f33c6fc2d779a820ba884a0a672bdb0c634dee785b68bfda4a9f3888fbf794"
+          }
+        },
+        {
+          "name": "devices",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\flutter.bat",
+            "devices"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:30:55.4060780Z",
+          "finishedUtc": "2026-10-26T22:30:59.0435782Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\devices.log",
+          "sha256": "201f1012f0161ce3ec31ca2a2696132bf384d566e98188f448bc2cebd75f9c0d",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/devices.log",
+            "bytes": 561,
+            "sha256": "201f1012f0161ce3ec31ca2a2696132bf384d566e98188f448bc2cebd75f9c0d"
+          }
+        },
+        {
+          "name": "dependencies",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\flutter.bat",
+            "pub",
+            "get",
+            "--enforce-lockfile"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:30:59.1158897Z",
+          "finishedUtc": "2026-10-26T22:31:09.1222195Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\dependencies.log",
+          "sha256": "41b0f6415eb39dba7454790cbbb909d632454feb4504ad19e6967bdaa293ef81",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/dependencies.log",
+            "bytes": 1280,
+            "sha256": "41b0f6415eb39dba7454790cbbb909d632454feb4504ad19e6967bdaa293ef81"
+          }
+        },
+        {
+          "name": "localization",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\flutter.bat",
+            "gen-l10n"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:31:09.1319594Z",
+          "finishedUtc": "2026-10-26T22:31:13.3867209Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\localization.log",
+          "sha256": "0585f8fb78ea35ac145a55dcc3455329844b296587841fbd854401c23eccb5d2",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/localization.log",
+            "bytes": 168,
+            "sha256": "0585f8fb78ea35ac145a55dcc3455329844b296587841fbd854401c23eccb5d2"
+          }
+        },
+        {
+          "name": "format",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\dart.bat",
+            "format",
+            "--output=none",
+            "--set-exit-if-changed",
+            "lib",
+            "test",
+            "tools"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:31:14.1964035Z",
+          "finishedUtc": "2026-10-26T22:31:20.1612825Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\format.log",
+          "sha256": "5ff05cc9ba82ac39f3b7a67e2e46a3649018b4583a6c1a13c5b2b71c99721ce4",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/format.log",
+            "bytes": 53,
+            "sha256": "5ff05cc9ba82ac39f3b7a67e2e46a3649018b4583a6c1a13c5b2b71c99721ce4"
+          }
+        },
+        {
+          "name": "analysis",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\flutter.bat",
+            "analyze"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:31:20.1711048Z",
+          "finishedUtc": "2026-10-26T22:31:48.6999817Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\analysis.log",
+          "sha256": "90e24652c040477ec3ec948832e134396b7ba13b66182df2e10c0f2f650b1727",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/analysis.log",
+            "bytes": 1379,
+            "sha256": "90e24652c040477ec3ec948832e134396b7ba13b66182df2e10c0f2f650b1727"
+          }
+        },
+        {
+          "name": "tests",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\flutter.bat",
+            "test",
+            "--machine"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:31:48.7236048Z",
+          "finishedUtc": "2026-10-26T22:43:22.5418292Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\tests.log",
+          "sha256": "2daae618b0991581d68f9ac526fdcfc64970a847f41474a844ad3378ebd5ed6e",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/tests.log",
+            "bytes": 251476,
+            "sha256": "2daae618b0991581d68f9ac526fdcfc64970a847f41474a844ad3378ebd5ed6e"
+          }
+        },
+        {
+          "name": "storage",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\dart.bat",
+            "run",
+            "tools/storage_probe.dart"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:43:22.5716341Z",
+          "finishedUtc": "2026-10-26T22:43:45.8197863Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\storage.log",
+          "sha256": "bbe7f02ac610b38cd77710757ac5576fa6e87b6b3fb5781beb167490784bc65d",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/storage.log",
+            "bytes": 209,
+            "sha256": "bbe7f02ac610b38cd77710757ac5576fa6e87b6b3fb5781beb167490784bc65d"
+          }
+        },
+        {
+          "name": "cache",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\dart.bat",
+            "run",
+            "tools/cache_probe.dart"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:43:45.8276353Z",
+          "finishedUtc": "2026-10-26T22:43:59.2712712Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\cache.log",
+          "sha256": "3a17ad8896351d8cced487d70f118afc9060626e598a453b8926f932c9e58017",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/cache.log",
+            "bytes": 266,
+            "sha256": "3a17ad8896351d8cced487d70f118afc9060626e598a453b8926f932c9e58017"
+          }
+        },
+        {
+          "name": "annotation_order",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\dart.bat",
+            "run",
+            "tools/annotation_order_probe.dart"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:43:59.2856532Z",
+          "finishedUtc": "2026-10-26T22:44:03.6154876Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\annotation_order.log",
+          "sha256": "d2a47a46af1b11cc6279c40b19dfae87a7c77f5285e9722d64eaefabd0660525",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/annotation_order.log",
+            "bytes": 141,
+            "sha256": "d2a47a46af1b11cc6279c40b19dfae87a7c77f5285e9722d64eaefabd0660525"
+          }
+        },
+        {
+          "name": "windows-release",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\flutter.bat",
+            "build",
+            "windows",
+            "--release"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:44:03.6408393Z",
+          "finishedUtc": "2026-10-26T22:44:35.7165767Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\windows-release.log",
+          "sha256": "c0b61644aed693fe4a5fcabf871ce1fc06744a54e084a318d0532b2d6dcba8b2",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/windows-release.log",
+            "bytes": 1412,
+            "sha256": "c0b61644aed693fe4a5fcabf871ce1fc06744a54e084a318d0532b2d6dcba8b2"
+          }
+        },
+        {
+          "name": "rar",
+          "command": [
+            "python.exe",
+            "tools/qualify_rar.py",
+            "C:\\BusyBooksQualification\\busybooks\\build\\windows\\x64\\runner\\Release\\busybooks_comic_archive.exe"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:44:35.7343872Z",
+          "finishedUtc": "2026-10-26T22:44:36.7751073Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\rar.log",
+          "sha256": "9b6afff5ce90f33918c4fcece126f0316c8a6d5a780f053d8bddbe7fdcee3775",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/rar.log",
+            "bytes": 248,
+            "sha256": "9b6afff5ce90f33918c4fcece126f0316c8a6d5a780f053d8bddbe7fdcee3775"
+          }
+        },
+        {
+          "name": "formats",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\dart.bat",
+            "run",
+            "tools/format_probe.dart"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:44:36.7858831Z",
+          "finishedUtc": "2026-10-26T22:44:59.4578229Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\formats.log",
+          "sha256": "817b6432867f787d78da9ae03a825131e078265990136bb3272d113a632155f3",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/formats.log",
+            "bytes": 1631,
+            "sha256": "817b6432867f787d78da9ae03a825131e078265990136bb3272d113a632155f3"
+          }
+        },
+        {
+          "name": "format-resources",
+          "command": [
+            "C:\\BusyBooksQualification\\sdk\\flutter\\bin\\dart.bat",
+            "run",
+            "tools/format_resources_probe.dart"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:44:59.4693083Z",
+          "finishedUtc": "2026-10-26T22:45:11.0434362Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\format-resources.log",
+          "sha256": "7a58b39713d6d8c02ed3a3c98886c5b670fc358835c80976d461752c95a5a54b",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/format-resources.log",
+            "bytes": 354,
+            "sha256": "7a58b39713d6d8c02ed3a3c98886c5b670fc358835c80976d461752c95a5a54b"
+          }
+        },
+        {
+          "name": "font-configure",
+          "command": [
+            "cmake.exe",
+            "-S",
+            "tools/native_font_probe",
+            "-B",
+            "build/native-font-probe"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:11.0534599Z",
+          "finishedUtc": "2026-10-26T22:45:11.3834064Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\font-configure.log",
+          "sha256": "c006be395116edf1fb60367b98144735892693a3ab945050d19d4ec28f0a18c3",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/font-configure.log",
+            "bytes": 156,
+            "sha256": "c006be395116edf1fb60367b98144735892693a3ab945050d19d4ec28f0a18c3"
+          }
+        },
+        {
+          "name": "font-build",
+          "command": [
+            "cmake.exe",
+            "--build",
+            "build/native-font-probe",
+            "--config",
+            "Release"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:11.3914078Z",
+          "finishedUtc": "2026-10-26T22:45:12.5750842Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\font-build.log",
+          "sha256": "5f3097d2a85dc08cc4e088c4da87a0814e843e62987cf9827e631be3bde4bc82",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/font-build.log",
+            "bytes": 202,
+            "sha256": "5f3097d2a85dc08cc4e088c4da87a0814e843e62987cf9827e631be3bde4bc82"
+          }
+        },
+        {
+          "name": "font-native",
+          "command": [
+            "C:\\BusyBooksQualification\\busybooks\\build\\native-font-probe\\Release\\busybooks_native_font_probe.exe"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:12.5850802Z",
+          "finishedUtc": "2026-10-26T22:45:12.7647378Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\font-native.log",
+          "sha256": "6dd3e7d316b248ffd41f1cc44fc43ce2f8fca2780254c7bcd62c645f3b262514",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/font-native.log",
+            "bytes": 80,
+            "sha256": "6dd3e7d316b248ffd41f1cc44fc43ce2f8fca2780254c7bcd62c645f3b262514"
+          }
+        },
+        {
+          "name": "menu-configure",
+          "command": [
+            "cmake.exe",
+            "-S",
+            "tools/native_menu_probe",
+            "-B",
+            "build/native-menu-probe"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:12.7708082Z",
+          "finishedUtc": "2026-10-26T22:45:13.0807347Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\menu-configure.log",
+          "sha256": "5caf1923c0eafbea1d0d55c47b5b2a4890d10918b152201ed4b10eee2cb4689a",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/menu-configure.log",
+            "bytes": 156,
+            "sha256": "5caf1923c0eafbea1d0d55c47b5b2a4890d10918b152201ed4b10eee2cb4689a"
+          }
+        },
+        {
+          "name": "menu-build",
+          "command": [
+            "cmake.exe",
+            "--build",
+            "build/native-menu-probe",
+            "--config",
+            "Release"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:13.0884584Z",
+          "finishedUtc": "2026-10-26T22:45:14.6410745Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\menu-build.log",
+          "sha256": "8840d5ac14b737a9f69e5cac15d3e0f060ec0b6d993c23b8c2c530768e5c4f41",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/menu-build.log",
+            "bytes": 348,
+            "sha256": "8840d5ac14b737a9f69e5cac15d3e0f060ec0b6d993c23b8c2c530768e5c4f41"
+          }
+        },
+        {
+          "name": "menu-native",
+          "command": [
+            "C:\\BusyBooksQualification\\busybooks\\build\\native-menu-probe\\Release\\busybooks_native_menu_probe.exe"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:14.6490181Z",
+          "finishedUtc": "2026-10-26T22:45:22.6863606Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\menu-native.log",
+          "sha256": "fbef76dd4c18916b8bd9ae9a76cba20c1c3640bb3126928f17dba57817eb7ff0",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/menu-native.log",
+            "bytes": 102,
+            "sha256": "fbef76dd4c18916b8bd9ae9a76cba20c1c3640bb3126928f17dba57817eb7ff0"
+          }
+        },
+        {
+          "name": "menu-selection",
+          "command": [
+            "C:\\BusyBooksQualification\\busybooks\\build\\native-menu-probe\\Release\\busybooks_menu_selection_test.exe"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:22.6957022Z",
+          "finishedUtc": "2026-10-26T22:45:22.7843697Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\menu-selection.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/menu-selection.log",
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        {
+          "name": "reader-javascript",
+          "command": [
+            "node.exe",
+            "tools/reader_logic_probe.mjs"
+          ],
+          "exitCode": 0,
+          "startedUtc": "2026-10-26T22:45:25.5262266Z",
+          "finishedUtc": "2026-10-26T22:45:28.9676472Z",
+          "log": "Microsoft.PowerShell.Core\\FileSystem::\\\\VBOXSVR\\busybooks-qualification\\automated\\reader-javascript.log",
+          "sha256": "a1f042af1e19932d22fbf35ec0a68047b9cc9f0ae166700df206fb84fad645a6",
+          "retainedLog": {
+            "path": "evidence/windows-qualification-20261025/automated/reader-javascript.log",
+            "bytes": 3352,
+            "sha256": "a1f042af1e19932d22fbf35ec0a68047b9cc9f0ae166700df206fb84fad645a6"
+          }
+        }
+      ],
+      "releaseBuild": "passed",
+      "commandManifest": {
+        "path": "evidence/windows-qualification-20261025/automated/automated-results.json",
+        "bytes": 102861,
+        "sha256": "f884a7aa856eaaa77174e03dd96b3aa69b4e016c693ca5c3ee6558c984820267"
+      },
+      "formatFiles": 171,
+      "formatChanged": 0,
+      "analysis": "no issues",
+      "lockfileUnchanged": true
+    }
   },
   "resourceManagement": {
     "baseline": {
@@ -564,7 +1023,65 @@
         395.7656
       ]
     },
-    "interpretation": "One live search/sidebar controller pair at every GC sample, zero providers/listeners after close; bounded presentation retention in this probe. Debug observer history was inspected separately and no third-party observer was changed. This is a native profile application exercising production controllers/store, not a full native WebKit process-memory ceiling."
+    "interpretation": "One live search/sidebar controller pair at every GC sample, zero providers/listeners after close; bounded presentation retention in this probe. Debug observer history was inspected separately and no third-party observer was changed. This is a native profile application exercising production controllers/store, not a full native WebKit process-memory ceiling.",
+    "windowsNativeStress": {
+      "summary": {
+        "revision": "52a92fe051cc2cff24398d80b8b4060bada7cabf",
+        "visits": 30,
+        "distinctBooks": 10,
+        "cycles": 3,
+        "appCounts": [
+          1
+        ],
+        "webView2Counts": [
+          6
+        ],
+        "readerHosts": [
+          1
+        ],
+        "privateMiB": {
+          "min": 187.3125,
+          "max": 224.58984375,
+          "end": 203.84375
+        },
+        "handles": {
+          "min": 923,
+          "max": 1093,
+          "atCycleEnd": [
+            1031,
+            1084,
+            1093
+          ]
+        },
+        "boundary": "Native process/host counts and bounded sampled private memory; not a portable memory ceiling or a direct provider allocation count. Exact provider counts are the retained 180-visit profile probe. Header tooltip geometry is the only later implementation change.",
+        "idleResources": {
+          "qualified-final-resource-after-driver-gc.json": {
+            "appHandles": 1003,
+            "appThreads": 74,
+            "appPrivateMiB": 218.27734375,
+            "webView2Count": 6
+          },
+          "qualified-final-resource-idle.json": {
+            "appHandles": 802,
+            "appThreads": 24,
+            "appPrivateMiB": 212.58984375,
+            "webView2Count": 6
+          }
+        },
+        "interpretation": "One app, one native reader host and six WebView2 processes across all 30 visits. Sampled app private memory stayed within 187.31–224.59 MiB. Handles rose during automation then fell from 1093 to 802 after test-driver COM release/idle; all seven owned processes exited normally. No monotonic retained-controller/resource growth was demonstrated."
+      },
+      "evidence": {
+        "path": "evidence/windows-qualification-20261025/qualified-final-native-resource-cycles.json",
+        "bytes": 333391,
+        "sha256": "ff6eb736678ee074cae20c25c2a02fd2e013427b32e951d93230f4292a4fb13a"
+      },
+      "normalClose": {
+        "path": "evidence/windows-qualification-20261025/qualified-final-cycles-clean-close.json",
+        "bytes": 514,
+        "sha256": "7c6271d939405f6089eeea0b7ab4fd65447486d78b0a4a0faed4322a47107a80"
+      },
+      "boundary": "30 native visits at 52a92fe; later tooltip and diagnostic changes identified explicitly. Active-session provider ownership and cancellation remain unchanged."
+    }
   },
   "linuxNative": {
     "environment": {
@@ -1056,132 +1573,954 @@
       "exitCode": 0,
       "engineImplicitViewRemovalDiagnosticPresent": true,
       "scope": "One actual final application close; not general clean-shutdown certification"
-    }
+    },
+    "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+    "continuationBoundary": "No repeated Linux testing, as requested. Current shared-code regressions execute on Windows; retained native evidence keeps its original revision."
   },
   "windows": {
+    "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
     "existingVm": {
       "name": "Windows 11",
       "uuid": "474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3",
       "originalPowerState": "saved",
       "finalPowerState": "saved",
-      "virtualBox": "7.1.8r168469",
+      "virtualBox": "7.2.22r175245",
+      "os": "Windows 11 Enterprise 24H2 10.0.26100.2894 x64",
+      "guestAdditions": "7.1.8r168469",
       "cpus": 8,
       "ramMiB": 4096,
-      "diskCapacityMiB": 81920,
-      "diskFormat": "dynamic VDI, SATA",
-      "vramMiB": 128,
-      "display": "VBoxSVGA",
-      "acceleration3d": false,
-      "firmware": "EFI",
-      "cachedGuestArchitecture": "x64",
-      "cachedGuestBuild": "10.0.26100",
-      "cachedGuestAdditions": "7.1.8",
-      "cachedLoggedInUsers": 1,
-      "cachedPropertiesAreLiveAcceptance": false
+      "storage": "80 GiB dynamic SATA VDI",
+      "graphics": "VBoxSVGA, 128 MiB VRAM, 3D disabled",
+      "interactiveSession": 1
     },
-    "prerequisiteAttempt": {
-      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-      "capturedUtc": "2026-10-26T01:34:14.872434+00:00",
-      "deviceExists": false,
-      "checks": [
-        {
-          "command": [
-            "VBoxManage",
-            "--version"
+    "automation": "Official VirtualBox shared folder and console keyboard/mouse APIs; PowerShell queue in existing unlocked user desktop. MSAA for Flutter, UI Automation for Windows controls. No service-session GUI substituted.",
+    "officialTools": {
+      "flutter": "3.47.5",
+      "dart": "3.13.4",
+      "framework": "6a19cca56475dbfba1478ee68d7bd0c2ef891da1",
+      "engine": "af7e796e161ae0bb1ff0758c71a7105418bd9ded",
+      "visualStudioBuildTools": "2022 17.14.43",
+      "msvc": "19.44.35229",
+      "windowsSdk": "10.0.26100.0",
+      "cmake": "3.31.6-msvc6",
+      "node": "24.22.1",
+      "python": "3.13.4",
+      "git": "2.56.0.windows.3",
+      "webView2Runtime": "135.0.3179.98",
+      "projectWebView2Sdk": "1.0.3537.50",
+      "sdkTrackedChanges": []
+    },
+    "automatedSuiteExecuted": true,
+    "windowsReleaseBuild": "passed",
+    "nativeAcceptance": {
+      "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+      "passed": true,
+      "recordedUtc": "2026-10-26T23:08:32.058675+00:00",
+      "platform": "Existing Windows 11 Enterprise 24H2 VirtualBox console session 1",
+      "application": "Hash-matched packaged release from the complete final workflow, not a modified diagnostic asset variant",
+      "nativeMechanisms": "Actual WebView2, Win32 TrackPopupMenuEx menus and native FlutterViewController popovers; official console keyboard/pointer input and actual MSAA/UIA observations",
+      "checks": {
+        "native-final-dpi-proof.json": {
+          "readerVisible": true,
+          "fatalError": false,
+          "utc": "2026-10-26T22:47:06.3354974Z",
+          "loading": false,
+          "dpi": 192,
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8"
+        },
+        "qualified-final-note-proof.json": {
+          "creationDates": [
+            {
+              "name": "October 26, 2026",
+              "role": 20
+            },
+            {
+              "name": "Oct 26, 2026 2:02 PM",
+              "role": 41
+            }
           ],
-          "exitCode": 0,
-          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\n7.1.8r168469"
+          "saved": true,
+          "readerHidden": true,
+          "annotationId": "annotation-1793012524652249",
+          "utc": "2026-10-26T23:04:18.2478788Z",
+          "noteLength": 1000000,
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+          "exactExpectedNote": true,
+          "focus": {
+            "active": 2556788,
+            "focusClass": "FLUTTERVIEW",
+            "capture": 0,
+            "focus": 1966976,
+            "menuOwner": 0
+          }
+        },
+        "qualified-final-narration-proof.json": {
+          "audioQualityVerified": false,
+          "readerHidden": true,
+          "started": true,
+          "stoppedOnNotebook": true,
+          "utc": "2026-10-26T22:49:55.0406617Z",
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8"
+        },
+        "qualified-final-search-escape-proof.json": {
+          "noteUnchanged": true,
+          "oneKeypress": true,
+          "readerHidden": true,
+          "sidebarRestored": true,
+          "searchClosed": true,
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8"
+        },
+        "qualified-final-popover-focus-proof.json": {
+          "closed": true,
+          "readerVisible": true,
+          "oneKeypress": true,
+          "afterFocus": {
+            "active": 3801752,
+            "focusClass": "Chrome_WidgetWin_1",
+            "capture": 0,
+            "focus": 1049580,
+            "menuOwner": 0
+          },
+          "beforeFocus": {
+            "active": 3801752,
+            "focusClass": "Chrome_WidgetWin_1",
+            "capture": 0,
+            "focus": 1049580,
+            "menuOwner": 0
+          },
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8"
+        },
+        "qualified-final-goto-proof.json": {
+          "passed": true,
+          "focus": {
+            "active": 3801752,
+            "focusClass": "Chrome_WidgetWin_1",
+            "capture": 0,
+            "focus": 1049580,
+            "menuOwner": 0
+          },
+          "boundary": "Renderer page-aligned location is 53%, Chapter 2, genuine publisher label 17; an exact 50% header was an invalid test assumption",
+          "popoverClosed": true,
+          "readerVisible": true,
+          "publisherLabel": true,
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+          "utc": "2026-10-26T22:56:05.5539176Z",
+          "settledLocation": "BusyBooks\nA Quiet Library\nGo to Location · Chapter 2 · 53%\nA Quiet Library. A Quiet Library",
+          "requestedProgressPercent": 50
+        },
+        "native-final-format-summary.json": {
+          "passed": true,
+          "utc": "2026-10-26T22:58:55.4311750Z",
+          "completed": 10,
+          "results": [
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-epub3.png",
+              "dpi": 96,
+              "filename": "reflowable.epub",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "epub3"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-epub2.png",
+              "dpi": 96,
+              "filename": "epub2.epub",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "epub2"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-kepub.png",
+              "dpi": 96,
+              "filename": "representative.kepub.epub",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "kepub"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-pdf.png",
+              "dpi": 96,
+              "filename": "text.pdf",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "pdf"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-image-pdf.png",
+              "dpi": 96,
+              "filename": "image-only.pdf",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "image-pdf"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-fixed-epub.png",
+              "dpi": 96,
+              "filename": "fixed-layout.epub",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "fixed-epub"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-fb2.png",
+              "dpi": 96,
+              "filename": "fiction-utf8.fb2",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "fb2"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-fbz.png",
+              "dpi": 96,
+              "filename": "fiction.fbz",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "fbz"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-cbz.png",
+              "dpi": 96,
+              "filename": "comic-deflated.cbz",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "cbz"
+            },
+            {
+              "readerVisible": true,
+              "capture": "native-final-format-cbr.png",
+              "dpi": 96,
+              "filename": "comic-rar5-solid.cbr",
+              "appCount": 1,
+              "hostCount": 1,
+              "format": "cbr"
+            }
+          ],
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+          "capturesInspected": true,
+          "inspectionUtc": "2026-10-26T22:59:25.481333+00:00",
+          "inspection": "All ten captured real WebView2 frames inspected, including genuine PDF/comic content and fixed/reflowable content. FB2/FBZ first frames display their title page; follow-up next-page frame recorded separately."
+        },
+        "qualified-final-main-menu.json": {
+          "loadingAtActivation": true,
+          "entries": [
+            {
+              "name": "Context",
+              "value": null,
+              "error": null,
+              "role": 11,
+              "state": 1048576,
+              "depth": 0,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                60,
+                253,
+                150
+              ]
+            },
+            {
+              "name": "Open Book\tCtrl+O",
+              "value": null,
+              "error": null,
+              "role": 12,
+              "state": 0,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                60,
+                253,
+                22
+              ]
+            },
+            {
+              "name": "Open Collection\tCtrl+Shift+O",
+              "value": null,
+              "error": null,
+              "role": 12,
+              "state": 0,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                82,
+                253,
+                22
+              ]
+            },
+            {
+              "name": "Create Collection\tCtrl+Shift+N",
+              "value": null,
+              "error": null,
+              "role": 12,
+              "state": 0,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                104,
+                253,
+                22
+              ]
+            },
+            {
+              "name": null,
+              "value": null,
+              "error": null,
+              "role": 21,
+              "state": 1,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                126,
+                253,
+                9
+              ]
+            },
+            {
+              "name": "Full Screen\tF11",
+              "value": null,
+              "error": null,
+              "role": 12,
+              "state": 0,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                135,
+                253,
+                22
+              ]
+            },
+            {
+              "name": null,
+              "value": null,
+              "error": null,
+              "role": 21,
+              "state": 1,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                157,
+                253,
+                9
+              ]
+            },
+            {
+              "name": "Settings\tCtrl+Alt+S",
+              "value": null,
+              "error": null,
+              "role": 12,
+              "state": 0,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                166,
+                253,
+                22
+              ]
+            },
+            {
+              "name": "About BusyBooks",
+              "value": null,
+              "error": null,
+              "role": 12,
+              "state": 0,
+              "depth": 1,
+              "valueLength": 0,
+              "rect": [
+                1344,
+                188,
+                253,
+                22
+              ]
+            }
+          ],
+          "focus": {
+            "active": 2556788,
+            "focusClass": "FLUTTERVIEW",
+            "capture": 2556788,
+            "focus": 1966976,
+            "menuOwner": 2556788
+          },
+          "loadingNodes": [
+            {
+              "name": "Opening book",
+              "value": "",
+              "error": null,
+              "role": 43,
+              "state": 3145728,
+              "depth": 5,
+              "valueLength": 0,
+              "rect": [
+                450,
+                27,
+                110,
+                26
+              ]
+            }
+          ],
+          "utc": "2026-10-26T23:03:28.2038281Z",
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+          "menu": {
+            "Handle": 3670992,
+            "Title": "",
+            "Class": "#32768",
+            "ProcessId": 5412,
+            "Rect": {
+              "Left": 1341,
+              "Top": 57,
+              "Right": 1600,
+              "Bottom": 213
+            },
+            "Dpi": 96
+          }
+        },
+        "native-final-navigation-minimize-proof.json": {
+          "restored": true,
+          "afterLocation": "BusyBooks\nFB2 Library — Библиотека\nGo to Location · 25%\nFB2 Library — Библиотека. FB2 Library — Библиотека",
+          "focus": {
+            "active": 3801752,
+            "focusClass": "Chrome_WidgetWin_1",
+            "capture": 0,
+            "focus": 3211952,
+            "menuOwner": 0
+          },
+          "utc": "2026-10-26T22:59:39.7420505Z",
+          "minimized": true,
+          "readerVisible": true,
+          "beforeLocation": "BusyBooks\nFB2 Library — Библиотека\nGo to Location · 12%\nFB2 Library — Библиотека. FB2 Library — Библиотека",
+          "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8"
+        }
+      },
+      "storageAfterNormalClose": {
+        "stage": "native-final-after-close",
+        "annotationCount": 544,
+        "integrity": "ok",
+        "records": [
+          {
+            "id": "annotation-probe-add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1-5",
+            "bookId": "add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1",
+            "kind": "highlight",
+            "anchor": {
+              "cfi": "epubcfi(/6/2!/4/2/1:0)",
+              "index": 0
+            },
+            "text": "A saved passage for thoughtful reading — record 5.",
+            "created": 1792911605000,
+            "length": 2361,
+            "sha256": "19aeac2eefb87a24a96411db4108bbfca9ecefc5c60468389f9f775e29fc8afe",
+            "end": "s and punctuation. \nFINAL_LINE_NATIVE_NOTE\nWINDOWS_FAILURE_RETRY_PROTECTED_DRAFT"
+          },
+          {
+            "id": "annotation-1793012524652249",
+            "bookId": "add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1",
+            "kind": "highlight",
+            "anchor": {
+              "cfi": "epubcfi(/6/2!/4/4,/1:0,/1:44)",
+              "index": 0
+            },
+            "text": "Find this exact passage after a font change.",
+            "created": 1793012524652249,
+            "length": 1000000,
+            "sha256": "161909ad35909e3dbef9e1290e6f8fc3d410f4a17576eb45e3750817b28b8153",
+            "end": "mplete multiline note.\nWindows — 日本語, complete multiline notWINDOWS_MAX_NOTE_END"
+          },
+          {
+            "id": "annotation-1793013228529698",
+            "bookId": "a1fbf6148b447c94bd899be6e5b6d54ebcd38546a01956ceae219bf4225fbb9e",
+            "kind": "region",
+            "anchor": {
+              "kind": "comic",
+              "version": 1,
+              "format": "cbr",
+              "page": 0,
+              "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+              "region": [
+                0.25,
+                0.25,
+                0.5,
+                0.5
+              ]
+            },
+            "text": "",
+            "created": 1793013228529698,
+            "length": 65,
+            "sha256": "f48647ba22c47cb7e8f06c500d233f68f6258e5741ccbce75bf28dc49529006a",
+            "end": "WINDOWS_REGION_NOTE\nA region selected with native keyboard input."
+          }
+        ]
+      },
+      "shutdown": {
+        "remaining": [],
+        "termination": "WM_CLOSE through the normal app shutdown path; no process termination",
+        "exitCode": 0,
+        "wait": 0,
+        "utc": "2026-10-26T23:05:06.0828932Z",
+        "requested": true,
+        "ownedProcesses": [
+          5412,
+          6124,
+          9724,
+          1256,
+          7232,
+          7388,
+          2452
+        ],
+        "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8"
+      },
+      "selectedInspectedCaptures": [
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-note-editor.png",
+          "bytes": 351805,
+          "sha256": "937df172707cdf08c47a0073e94efcf3f02546dae300942d98388b770cec4527"
         },
         {
-          "command": [
-            "VBoxManage",
-            "list",
-            "vms"
-          ],
-          "exitCode": 0,
-          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\n\"Windows 11\" {474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3}"
+          "path": "evidence/windows-qualification-20261025/qualified-final-reading-200.png",
+          "bytes": 486076,
+          "sha256": "f755b9953c896110a5f78afa43aabb68f76dec0a786fab8124a685d43496f362"
         },
         {
-          "command": [
-            "VBoxManage",
-            "startvm",
-            "Windows 11",
-            "--type",
-            "headless"
-          ],
-          "exitCode": 1,
-          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nWaiting for VM \"Windows 11\" to power on...\nVBoxManage: error: The virtual machine 'Windows 11' has terminated unexpectedly during startup with exit code 1 (0x1)\nVBoxManage: error: Details: code NS_ERROR_FAILURE (0x80004005), component MachineWrap, interface IMachine"
+          "path": "evidence/windows-qualification-20261025/qualified-final-tooltip-200.png",
+          "bytes": 489312,
+          "sha256": "cbe5c9b11ddde49ddb8a86420af8b527f16bb243098049edb6e7c60179f2805c"
         },
         {
-          "command": [
-            "VBoxManage",
-            "guestcontrol",
-            "Windows 11",
-            "list",
-            "sessions"
-          ],
-          "exitCode": 1,
-          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nVBoxManage: error: Machine \"Windows 11\" is not running (currently saved)!"
+          "path": "evidence/windows-qualification-20261025/qualified-final-appearance-200.png",
+          "bytes": 438452,
+          "sha256": "3f933049cd6b6b700af6f0db25311882ee5e4c8322475e546d7f422d24c9529b"
         },
         {
-          "command": [
-            "modinfo",
-            "vboxdrv"
-          ],
-          "exitCode": 1,
-          "output": "modinfo: ERROR: Module vboxdrv not found."
+          "path": "evidence/windows-qualification-20261025/qualified-final-goto-200.png",
+          "bytes": 487154,
+          "sha256": "c2571b33e266d6f8c79bd7d1b14a52ebe43109a1e4201ca91af2b99d2c98a4a7"
         },
         {
-          "command": [
-            "sudo",
-            "-n",
-            "/sbin/modprobe",
-            "vboxdrv"
-          ],
-          "exitCode": 1,
-          "output": "sudo: a password is required"
+          "path": "evidence/windows-qualification-20261025/qualified-final-goto-settled.png",
+          "bytes": 593078,
+          "sha256": "cece134006a5b7e951e501d108abb9c7f31fc09d15fcb8c21e228d79b1bd4d35"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-main-menu.png",
+          "bytes": 288659,
+          "sha256": "dd497998df6ab0db39b67166700fa592b9c9cbaefadf7a146cdd081d6a8345c2"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-fb2-chapter-enter.png",
+          "bytes": 317474,
+          "sha256": "96e28041d5d79765365b3ab0cd4a4c8b58fda8d293423dd1b57128b7ca1fb2d3"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-epub3.png",
+          "bytes": 426498,
+          "sha256": "2a8d48ddcfc00bf1692283732b9a9b3e6554af14cb45fd0378aa8196235cebf1"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-epub2.png",
+          "bytes": 337230,
+          "sha256": "52b78e091fdfebcef8688640bf7853ffabcd834a640d7ae8db9204a54028b2ac"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-kepub.png",
+          "bytes": 337313,
+          "sha256": "3233a353aafbfc690edc69ee795ae46ad1098b42c5c5780e08f1cc4f74161c6e"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-pdf.png",
+          "bytes": 356557,
+          "sha256": "ab16b5bdbd645d2284ddb24b6b9e6585912dadd081707699e2bdb295074bf401"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-image-pdf.png",
+          "bytes": 331862,
+          "sha256": "c3d5346293e2fd52fa0c50983d9d86f1814e01378de0aedbf0c3cf1b5de6186c"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-fixed-epub.png",
+          "bytes": 386007,
+          "sha256": "fbc0b2d322c654d2da672bbcab5da61d2dcfb5bfe7d43aa599f3bb920df54dcd"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-fb2.png",
+          "bytes": 303561,
+          "sha256": "1ae4f5056fd0a146f42a123aa7e22d2db00de6da8770aa2d28c725c8315964e7"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-fbz.png",
+          "bytes": 303561,
+          "sha256": "1ae4f5056fd0a146f42a123aa7e22d2db00de6da8770aa2d28c725c8315964e7"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-cbz.png",
+          "bytes": 460281,
+          "sha256": "29267f6f0a255955701165d91c56063c036462a0969ab895424929c301c71575"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-cbr.png",
+          "bytes": 441466,
+          "sha256": "588204c2ce1b5c2e9e66531b606eccf43a8f6d5d6a3240bf528ef06d119f0982"
         }
       ],
-      "finalVmState": {
-        "name": "\"Windows 11\"",
-        "ostype": "\"Windows 11 (64-bit)\"",
-        "UUID": "\"474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3\"",
-        "memory": "4096",
-        "vram": "128",
-        "cpus": "8",
-        "VMState": "\"saved\"",
-        "graphicscontroller": "\"vboxsvga\"",
-        "accelerate3d": "\"off\""
-      },
-      "guestExecution": "not established; host driver prevents saved VM resume",
-      "credentialsStored": false,
-      "guestOrVmSettingsChanged": false
-    },
-    "diskInspection": {
-      "command": [
-        "VBoxManage",
-        "showmediuminfo",
-        "disk",
-        "ca75e2c4-6f72-4e46-bf30-3a376be89d39"
+      "probeArtifacts": [
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-dpi-proof.json",
+          "bytes": 219,
+          "sha256": "877103a357dba1bb1a390013f82e85ca247f4f37284578111a46416576f34bce"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-note-proof.json",
+          "bytes": 895,
+          "sha256": "d151f45f883904cbabc5854b11947eae4f6d1069d377ddea657d95011290baec"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-narration-proof.json",
+          "bytes": 242,
+          "sha256": "196e741344f80544b146d39ea6645cf6dfd20632034e89433ffc263e1c3b4826"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-search-escape-proof.json",
+          "bytes": 219,
+          "sha256": "9727b120fc5f9983f025eec1c80d273a1d6181fea7dd58f73365b2b92b5b92d1"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-popover-focus-proof.json",
+          "bytes": 705,
+          "sha256": "8745883cf42ea5b658bd031717c8b01e97f4c3132196e6ca53fb27e65ad0fd52"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-goto-proof.json",
+          "bytes": 781,
+          "sha256": "259d955d4704a665fbc542772d7d7ce171aaf08cc51a061852804aced51bfe86"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-format-summary.json",
+          "bytes": 2608,
+          "sha256": "8bb26b34c66c4322442739948deed8c5abcfdea8ef87f804edd4e44e913dfcd6"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-final-main-menu.json",
+          "bytes": 6843,
+          "sha256": "9a1c0257995472833450e1bbbda41a4c71844b91755d210c2b25d12487a941b3"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-navigation-minimize-proof.json",
+          "bytes": 783,
+          "sha256": "9a0f31b54f5cdc78a3f781b3f36b859316c4ad52dd90517a756e77a23b578a94"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-after-close.json",
+          "bytes": 2050,
+          "sha256": "e546bb7e4109d9955fb7683761cd945e3ae65c44a64e80f37b76eb8533aba9ae"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-final-clean-close.json",
+          "bytes": 613,
+          "sha256": "573ca43b5efb69e037d195c34d92314352c79aa3451e97d7161dfe50a02638bf"
+        }
       ],
-      "exitCode": 0,
-      "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nUUID:           ca75e2c4-6f72-4e46-bf30-3a376be89d39\nParent UUID:    base\nState:          created\nType:           normal (base)\nLocation:       /home/albert/VirtualBox VMs/Windows 11/Windows 11.vdi\nStorage format: VDI\nFormat variant: dynamic default\nCapacity:       81920 MBytes\nSize on disk:   40646 MBytes\nEncryption:     disabled\nProperty:       AllocationBlockSize=1048576\nIn use by VMs:  Windows 11 (UUID: 474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3)"
+      "retainedEarlierScope": "Native protected failure/retry, backup/restore, missing original/Locate, light/dark and 150%/contrast at earlier source revisions remain identified separately. The final complete suite and format pass do not relabel those captures.",
+      "exploratoryBoundary": "Early blank/unready frames, driver selector/foreground failures, exact-percentage assumption and superseded genuine defects are retained without passing claims. FB2 chapter content independently inspected after outline/Enter navigation.",
+      "limitations": [
+        "VirtualBox functional results do not qualify physical GPU/driver performance",
+        "Audible SAPI voice quality not verified",
+        "Complex IME composition, full screen-reader audit and installer/file associations not qualified"
+      ],
+      "publicReleasePublished": false,
+      "artifactPathBase": "repository root",
+      "startupCaptureBoundary": "Cold-start Home was observed and source-identical to the earlier qualified Home workflow. The later startup snapshot precedes the test driver resize from 2528px to 1568px on a 1600px display; it is retained as startup observation, not a viewport-fit capture."
     },
-    "blockedBy": "No vboxdrv module or /dev/vboxdrv for kernel 7.0.0-38-generic; saved VM resume fails NS_ERROR_FAILURE; sudo -n modprobe requires administrator authentication",
-    "minimumExternalAction": "Administrator restoration of a compatible official VirtualBox host driver while preserving the existing saved VM. VBoxManage recommends sudo /sbin/vboxconfig. No passwords should be provided in chat/logs/scripts.",
-    "guestExecution": "not established; guestcontrol list sessions reports saved/not running",
-    "developmentToolsInventory": "not verified",
-    "officialToolsInstalledInGuest": false,
-    "sourceTransferred": false,
-    "automatedSuiteExecuted": false,
-    "windowsReleaseBuild": "not executed; not a Windows compilation failure",
-    "nativeWin32MenuWebView2Acceptance": "not executed",
-    "screenshotsCapturedInGuest": 0,
+    "win32ComponentProbe": {
+      "checks": 26,
+      "actualPopups": 23,
+      "productionHost": true,
+      "windowsApisMocked": false,
+      "flutterMessageTransportTestDouble": true,
+      "evidence": {
+        "path": "evidence/windows-qualification-20261025/automated/menu-native.log",
+        "bytes": 102,
+        "sha256": "fbef76dd4c18916b8bd9ae9a76cba20c1c3640bb3126928f17dba57817eb7ff0"
+      }
+    },
+    "fallbackBoundary": "Controlled Flutter service/widget failure tests and real native unavailable-host contract passed; no naturally occurring host failure is claimed as an application fallback run.",
+    "normalShutdown": {
+      "remaining": [],
+      "termination": "WM_CLOSE through the normal app shutdown path; no process termination",
+      "exitCode": 0,
+      "wait": 0,
+      "utc": "2026-10-26T23:05:06.0828932Z",
+      "requested": true,
+      "ownedProcesses": [
+        5412,
+        6124,
+        9724,
+        1256,
+        7232,
+        7388,
+        2452
+      ],
+      "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8"
+    },
+    "restoration": {
+      "recordedUtc": "2026-10-26T23:09:23.896038+00:00",
+      "vmName": "Windows 11",
+      "uuid": "474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3",
+      "virtualBox": "7.2.22r175245",
+      "originalPowerState": "saved",
+      "finalPowerState": "saved",
+      "saveCommand": "VBoxManage controlvm \"Windows 11\" savestate",
+      "saveCommandExitCode": 0,
+      "saveProgressReached": "100%",
+      "network": {
+        "mode": "bridged",
+        "adapter": "eno2",
+        "restored": true
+      },
+      "taskTransientShareRemoved": true,
+      "originalShareRetained": true,
+      "display": {
+        "backgroundMode": "Windows Spotlight; restored earlier through the actual Personalization control",
+        "resolution": {
+          "height": 768,
+          "width": 1024
+        },
+        "remainingUserSession": 1,
+        "taskBridgeReadyToExit": true,
+        "dpi": 96,
+        "utc": "2026-10-26T23:06:23.0028333Z",
+        "highContrast": false
+      },
+      "guestCleanup": {
+        "taskPowerRequestReleased": true,
+        "missingOriginalRenames": 0,
+        "clipboard": "unchanged: no task-owned clipboard text",
+        "utc": "2026-10-26T23:05:58.1808326Z",
+        "highContrast": false,
+        "taskConsolesClosed": [
+          2736,
+          4356,
+          5124,
+          2364
+        ],
+        "remainingTaskBridgePid": 4656,
+        "nativeAppCount": 0,
+        "executionPolicy": "Restricted",
+        "originalsPresent": true
+      },
+      "taskBridgeExited": true,
+      "taskConsoleWindowsAbsentInInspectedFinalCapture": true,
+      "userSessionPreserved": true,
+      "snapshotsDeleted": false,
+      "vmRelocated": false,
+      "guestReinstalled": false,
+      "ramMiB": 4096,
+      "cpus": 8,
+      "vramMiB": 128,
+      "graphicsController": "vboxsvga",
+      "acceleration3d": "off"
+    },
+    "releaseArchive": {
+      "path": "evidence/windows-qualification-20261025/windows-final-release.zip",
+      "bytes": 18970274,
+      "sha256": "23011a96bc62461dfb95a73e4555629ce919154f2065ebed0c078682f029ffb1"
+    },
+    "priorFunctionalMatrix": {
+      "scope": "Native workflows before final local tooltip/resize diagnostic corrections; source revisions retained, not relabeled as final runs.",
+      "stressRevision": "52a92fe051cc2cff24398d80b8b4060bada7cabf",
+      "earlierNotebookAndDataRevision": "02303f081caf5944b55070026e771cf821d43ad3",
+      "evidence": [
+        {
+          "path": "evidence/windows-qualification-20261025/native-backup-content-proof.json",
+          "bytes": 277,
+          "sha256": "1767e69041b80da4a958b6097d0d15c8ecfa363eadcc4c4cc53d4564e81cf16c"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-restore-proof.json",
+          "bytes": 186,
+          "sha256": "22ba68cddb0d9027619ed66af1d6ce580c33ff55ab0438053f1be27996bd641a"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/native-protected-draft-confirmed.json",
+          "bytes": 290,
+          "sha256": "e540609c87c29fcfec92f0b175eaab5a396750729ebe2743ab9be835379faba3"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-offline-search-proof.json",
+          "bytes": 172,
+          "sha256": "64e427b173f2ecfb22189f9a099fe1f52d8845d70a136670461a4287f98b2424"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/qualified-locate-proof.json",
+          "bytes": 229,
+          "sha256": "4067a6e23e74b6453adc3d1cf8d88b60804696a7e6770886c8328df7714921a8"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/windows-scale-150.json",
+          "bytes": 97,
+          "sha256": "18dc2595f8cec559f9b88eff3c6aaea142444c77a4c5abc5d70b2ef58fb03b3a"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/windows-scale-200.json",
+          "bytes": 869,
+          "sha256": "f4b004073d4a115c83ca4d29e5f058a320d830d13d12f81f1a8ca91d6aef662c"
+        },
+        {
+          "path": "evidence/windows-qualification-20261025/windows-contrast-active.json",
+          "bytes": 104,
+          "sha256": "19875858a92fc2170ae6e7e3fb6ff0869a9563289b00642c3490dc1fcb55c76c"
+        }
+      ]
+    },
     "credentialsStored": false,
     "authenticationWeakened": false,
-    "vmSettingsSnapshotsOrGuestFilesChanged": false,
-    "continuation": "Use existing guest, official pinned toolchain and existing Windows CI/native workflow after host prerequisite is restored; restore original saved power state without discarding user work",
-    "virtualizationBoundary": "Future VirtualBox functional acceptance cannot establish compatibility/performance across physical GPUs and drivers"
+    "thirdPartySoftwareModified": false,
+    "virtualizationBoundary": "Functional Win32/WebView2 acceptance in VirtualBox; physical GPU/driver performance and audible voice quality are not established.",
+    "historicalHostPrerequisite": {
+      "existingVm": {
+        "name": "Windows 11",
+        "uuid": "474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3",
+        "originalPowerState": "saved",
+        "finalPowerState": "saved",
+        "virtualBox": "7.1.8r168469",
+        "cpus": 8,
+        "ramMiB": 4096,
+        "diskCapacityMiB": 81920,
+        "diskFormat": "dynamic VDI, SATA",
+        "vramMiB": 128,
+        "display": "VBoxSVGA",
+        "acceleration3d": false,
+        "firmware": "EFI",
+        "cachedGuestArchitecture": "x64",
+        "cachedGuestBuild": "10.0.26100",
+        "cachedGuestAdditions": "7.1.8",
+        "cachedLoggedInUsers": 1,
+        "cachedPropertiesAreLiveAcceptance": false
+      },
+      "prerequisiteAttempt": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "capturedUtc": "2026-10-26T01:34:14.872434+00:00",
+        "deviceExists": false,
+        "checks": [
+          {
+            "command": [
+              "VBoxManage",
+              "--version"
+            ],
+            "exitCode": 0,
+            "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\n7.1.8r168469"
+          },
+          {
+            "command": [
+              "VBoxManage",
+              "list",
+              "vms"
+            ],
+            "exitCode": 0,
+            "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\n\"Windows 11\" {474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3}"
+          },
+          {
+            "command": [
+              "VBoxManage",
+              "startvm",
+              "Windows 11",
+              "--type",
+              "headless"
+            ],
+            "exitCode": 1,
+            "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nWaiting for VM \"Windows 11\" to power on...\nVBoxManage: error: The virtual machine 'Windows 11' has terminated unexpectedly during startup with exit code 1 (0x1)\nVBoxManage: error: Details: code NS_ERROR_FAILURE (0x80004005), component MachineWrap, interface IMachine"
+          },
+          {
+            "command": [
+              "VBoxManage",
+              "guestcontrol",
+              "Windows 11",
+              "list",
+              "sessions"
+            ],
+            "exitCode": 1,
+            "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nVBoxManage: error: Machine \"Windows 11\" is not running (currently saved)!"
+          },
+          {
+            "command": [
+              "modinfo",
+              "vboxdrv"
+            ],
+            "exitCode": 1,
+            "output": "modinfo: ERROR: Module vboxdrv not found."
+          },
+          {
+            "command": [
+              "sudo",
+              "-n",
+              "/sbin/modprobe",
+              "vboxdrv"
+            ],
+            "exitCode": 1,
+            "output": "sudo: a password is required"
+          }
+        ],
+        "finalVmState": {
+          "name": "\"Windows 11\"",
+          "ostype": "\"Windows 11 (64-bit)\"",
+          "UUID": "\"474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3\"",
+          "memory": "4096",
+          "vram": "128",
+          "cpus": "8",
+          "VMState": "\"saved\"",
+          "graphicscontroller": "\"vboxsvga\"",
+          "accelerate3d": "\"off\""
+        },
+        "guestExecution": "not established; host driver prevents saved VM resume",
+        "credentialsStored": false,
+        "guestOrVmSettingsChanged": false
+      },
+      "diskInspection": {
+        "command": [
+          "VBoxManage",
+          "showmediuminfo",
+          "disk",
+          "ca75e2c4-6f72-4e46-bf30-3a376be89d39"
+        ],
+        "exitCode": 0,
+        "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nUUID:           ca75e2c4-6f72-4e46-bf30-3a376be89d39\nParent UUID:    base\nState:          created\nType:           normal (base)\nLocation:       /home/albert/VirtualBox VMs/Windows 11/Windows 11.vdi\nStorage format: VDI\nFormat variant: dynamic default\nCapacity:       81920 MBytes\nSize on disk:   40646 MBytes\nEncryption:     disabled\nProperty:       AllocationBlockSize=1048576\nIn use by VMs:  Windows 11 (UUID: 474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3)"
+      },
+      "blockedBy": "No vboxdrv module or /dev/vboxdrv for kernel 7.0.0-38-generic; saved VM resume fails NS_ERROR_FAILURE; sudo -n modprobe requires administrator authentication",
+      "minimumExternalAction": "Administrator restoration of a compatible official VirtualBox host driver while preserving the existing saved VM. VBoxManage recommends sudo /sbin/vboxconfig. No passwords should be provided in chat/logs/scripts.",
+      "guestExecution": "not established; guestcontrol list sessions reports saved/not running",
+      "developmentToolsInventory": "not verified",
+      "officialToolsInstalledInGuest": false,
+      "sourceTransferred": false,
+      "automatedSuiteExecuted": false,
+      "windowsReleaseBuild": "not executed; not a Windows compilation failure",
+      "nativeWin32MenuWebView2Acceptance": "not executed",
+      "screenshotsCapturedInGuest": 0,
+      "credentialsStored": false,
+      "authenticationWeakened": false,
+      "vmSettingsSnapshotsOrGuestFilesChanged": false,
+      "continuation": "Use existing guest, official pinned toolchain and existing Windows CI/native workflow after host prerequisite is restored; restore original saved power state without discarding user work",
+      "virtualizationBoundary": "Future VirtualBox functional acceptance cannot establish compatibility/performance across physical GPUs and drivers"
+    },
+    "nativeAcceptanceSummary": {
+      "path": "evidence/windows-qualification-20261025/native-final-smoke-summary.json",
+      "bytes": 20636,
+      "sha256": "d253ddf98bf554ba567ffcc4c1f56db269f1d6b26731efbcc15a4918509b4927"
+    },
+    "releaseArtifactAudit": {
+      "path": "evidence/windows-qualification-20261025/release-artifact-audit.json",
+      "bytes": 378,
+      "sha256": "d9d8dbedca58676b14701f54b4481b3735441fb9c32b69acd12d7381f9b877d0"
+    }
   },
   "shutdown": {
     "risk": "present",
@@ -1360,14 +2699,11 @@
         }
       ]
     },
-    "boundary": "No engine/SDK/dependency patch, arbitrary shutdown delay, forced-exit workaround or weakened crash detection. The debugger stops after its first captured abort. Data hashes/integrity support tested application flushing, not immunity to all crashes."
+    "boundary": "No engine/SDK/dependency patch, arbitrary shutdown delay, forced-exit workaround or weakened crash detection. The debugger stops after its first captured abort. Data hashes/integrity support tested application flushing, not immunity to all crashes.",
+    "platform": "Linux",
+    "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d"
   },
   "limitations": [
-    {
-      "category": "unavailable_environment",
-      "essential": true,
-      "scope": "Windows release compilation, complete guest suite, Win32/WebView2 and interactive native acceptance; existing VM cannot resume without official host driver/admin authentication"
-    },
     {
       "category": "third_party_runtime_defect",
       "essentialRiskDecision": true,
@@ -1387,6 +2723,16 @@
       "category": "optional_hardware_qualification",
       "essential": false,
       "scope": "Physical GPU/driver/performance coverage, audible narration/voice quality, full screen-reader and system high-contrast audit"
+    },
+    {
+      "category": "virtualization_limitation",
+      "essential": false,
+      "scope": "Windows functional testing uses VirtualBox software graphics, not physical GPU/driver/performance qualification."
+    },
+    {
+      "category": "unqualified_facility",
+      "essential": false,
+      "scope": "Complex/CJK IME composition, full screen-reader audit, audible voice quality and installer/file-association execution are not qualified by the recorded local executable tests."
     }
   ],
   "captureDisposition": {
@@ -1442,179 +2788,249 @@
       "pre-accessibility-dc755f4",
       "intermediate-accessibility-flags"
     ],
-    "overlappingBuild": "qualified-accessibility-release-build.log failed with AOT ApiError during overlapping build; serialized final build passed and matches UI-tested bundle. No concurrent artifact is treated as independently qualified."
+    "overlappingBuild": "qualified-accessibility-release-build.log failed with AOT ApiError during overlapping build; serialized final build passed and matches UI-tested bundle. No concurrent artifact is treated as independently qualified.",
+    "windows": "Selected inspected captures and source revisions are recorded in native-final-smoke-summary.json. Failed driver timing, selector or foreground attempts, earlier genuine defects and unready/failed DPI frames remain retained and are not passing final acceptance."
   },
   "provenance": {
-    "nativeInputEquivalence": {
-      "capturedUtc": "2026-10-26T02:05:09.215333+00:00",
-      "nativeProbeStartRevision": "1dd615df3576ef34531380f08221731cbb7cb6b4",
-      "qualifiedImplementationRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-      "runtimeNativeProbeAndProfileInputsIdentical": true,
-      "difference": "Current semantics flags/import assertions in the Dart test only; complete final Dart suite and release build rerun at qualified revision",
-      "checks": [
-        {
-          "command": [
-            "git",
-            "diff",
-            "--name-only",
-            "1dd615df3576ef34531380f08221731cbb7cb6b4",
-            "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-            "--",
-            "lib",
-            "linux",
-            "windows",
-            "assets",
-            "tools",
-            "pubspec.yaml",
-            "pubspec.lock",
-            "test/fixtures",
-            "test/src/linux_reader_surface_test.cc",
-            "test/src/native_menu_selection_test.cc"
-          ],
-          "exitCode": 0,
-          "output": ""
-        },
-        {
-          "command": [
-            "git",
-            "diff",
-            "--name-only",
-            "1dd615df3576ef34531380f08221731cbb7cb6b4",
-            "a85db3feaad7b897c0ab90ad0868af066f42df7d"
-          ],
-          "exitCode": 0,
-          "output": "test/src/busybooks_design_test.dart\n"
-        },
-        {
-          "command": [
-            "git",
-            "diff",
-            "1dd615df3576ef34531380f08221731cbb7cb6b4",
-            "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-            "--",
-            "test/src/busybooks_design_test.dart"
-          ],
-          "exitCode": 0,
-          "output": "diff --git a/test/src/busybooks_design_test.dart b/test/src/busybooks_design_test.dart\nindex d9be798..8e7cd59 100644\n--- a/test/src/busybooks_design_test.dart\n+++ b/test/src/busybooks_design_test.dart\n@@ -1,3 +1,5 @@\n+import 'dart:ui' show Tristate;\n+\n import 'package:busybooks/src/app/app_theme.dart';\n import 'package:busybooks/src/app/busybooks_design.dart';\n import 'package:flutter/material.dart';\n@@ -46,16 +48,16 @@ void main() {\n     final buttons = find.byType(IconButton);\n     final home = tester.getSemantics(buttons.at(0));\n     expect(home.label, 'Home');\n-    expect(home.hasFlag(SemanticsFlag.isButton), isTrue);\n-    expect(home.hasFlag(SemanticsFlag.isSelected), isTrue);\n+    expect(home.flagsCollection.isButton, isTrue);\n+    expect(home.flagsCollection.isSelected, Tristate.isTrue);\n     expect(home.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);\n     final previous = tester.getSemantics(buttons.at(1));\n     expect(previous.label, 'Previous');\n-    expect(previous.hasFlag(SemanticsFlag.isEnabled), isFalse);\n+    expect(previous.flagsCollection.isEnabled, Tristate.isFalse);\n     expect(previous.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);\n     final edit = tester.getSemantics(buttons.at(2));\n     expect(edit.label, 'Edit Note');\n-    expect(edit.hasFlag(SemanticsFlag.isButton), isTrue);\n+    expect(edit.flagsCollection.isButton, isTrue);\n     expect(edit.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);\n     expect(tester.getSemantics(buttons.at(3)).label, 'Search');\n     expect(find.byTooltip('Home (Alt+Home)'), findsOneWidget);\n"
-        }
-      ]
-    },
-    "finalInputSnapshot": {
-      "path": "evidence/release-qualification-20261025/final-source-inputs.json",
-      "bytes": 90924,
-      "sha256": "b48dcc6710fcd5efe000f9658a3ed47ec16b8d1ed70f6d09c3740f182e17e563"
-    },
-    "trackedInputCount": 585,
-    "bundle": {
-      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-      "capturedUtc": "2026-10-26T01:23:24.259385+00:00",
-      "files": [
-        {
-          "path": "build/linux/x64/release/bundle/busybooks",
-          "bytes": 222464,
-          "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad"
-        },
-        {
-          "path": "build/linux/x64/release/bundle/lib/libapp.so",
-          "bytes": 11633544,
-          "sha256": "02c33430a465e9036614891d098189d6f95c040063e852a3c81dee2e24ee39a7"
-        },
-        {
-          "path": "build/linux/x64/release/bundle/lib/libflutter_linux_gtk.so",
-          "bytes": 17218152,
-          "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1"
-        }
-      ]
-    },
-    "immutableNativeBundle": {
-      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-      "capturedUtc": "2026-10-26T01:16:32.690829+00:00",
-      "build": "intermediate-accessibility-flags/final-linux-release-build.log",
-      "snapshot": "/tmp/busybooks-qualified-release-bundle",
-      "files": [
-        {
-          "relative": "busybooks",
-          "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad",
-          "bytes": 222464
-        },
-        {
-          "relative": "lib/libapp.so",
-          "sha256": "02c33430a465e9036614891d098189d6f95c040063e852a3c81dee2e24ee39a7",
-          "bytes": 11633544
-        },
-        {
-          "relative": "lib/libflutter_linux_gtk.so",
-          "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1",
-          "bytes": 17218152
-        }
-      ],
-      "purpose": "Immutable native acceptance bundle; excludes later simultaneous build writes"
-    },
-    "preDeliveryAudit": {
-      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
-      "capturedUtc": "2026-10-26T01:57:11.421885+00:00",
-      "trackedInputCount": 585,
-      "inputMismatches": [],
-      "bundleMismatches": [],
-      "commandManifests": {
-        "final-qualification-commands.jsonl": {
-          "count": 9,
-          "failed": []
-        },
-        "final-storage-checks.jsonl": {
-          "count": 8,
-          "failed": []
-        },
-        "final-native-checks.jsonl": {
-          "count": 6,
-          "failed": []
-        }
+    "linuxRetained": {
+      "nativeInputEquivalence": {
+        "capturedUtc": "2026-10-26T02:05:09.215333+00:00",
+        "nativeProbeStartRevision": "1dd615df3576ef34531380f08221731cbb7cb6b4",
+        "qualifiedImplementationRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "runtimeNativeProbeAndProfileInputsIdentical": true,
+        "difference": "Current semantics flags/import assertions in the Dart test only; complete final Dart suite and release build rerun at qualified revision",
+        "checks": [
+          {
+            "command": [
+              "git",
+              "diff",
+              "--name-only",
+              "1dd615df3576ef34531380f08221731cbb7cb6b4",
+              "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+              "--",
+              "lib",
+              "linux",
+              "windows",
+              "assets",
+              "tools",
+              "pubspec.yaml",
+              "pubspec.lock",
+              "test/fixtures",
+              "test/src/linux_reader_surface_test.cc",
+              "test/src/native_menu_selection_test.cc"
+            ],
+            "exitCode": 0,
+            "output": ""
+          },
+          {
+            "command": [
+              "git",
+              "diff",
+              "--name-only",
+              "1dd615df3576ef34531380f08221731cbb7cb6b4",
+              "a85db3feaad7b897c0ab90ad0868af066f42df7d"
+            ],
+            "exitCode": 0,
+            "output": "test/src/busybooks_design_test.dart\n"
+          },
+          {
+            "command": [
+              "git",
+              "diff",
+              "1dd615df3576ef34531380f08221731cbb7cb6b4",
+              "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+              "--",
+              "test/src/busybooks_design_test.dart"
+            ],
+            "exitCode": 0,
+            "output": "diff --git a/test/src/busybooks_design_test.dart b/test/src/busybooks_design_test.dart\nindex d9be798..8e7cd59 100644\n--- a/test/src/busybooks_design_test.dart\n+++ b/test/src/busybooks_design_test.dart\n@@ -1,3 +1,5 @@\n+import 'dart:ui' show Tristate;\n+\n import 'package:busybooks/src/app/app_theme.dart';\n import 'package:busybooks/src/app/busybooks_design.dart';\n import 'package:flutter/material.dart';\n@@ -46,16 +48,16 @@ void main() {\n     final buttons = find.byType(IconButton);\n     final home = tester.getSemantics(buttons.at(0));\n     expect(home.label, 'Home');\n-    expect(home.hasFlag(SemanticsFlag.isButton), isTrue);\n-    expect(home.hasFlag(SemanticsFlag.isSelected), isTrue);\n+    expect(home.flagsCollection.isButton, isTrue);\n+    expect(home.flagsCollection.isSelected, Tristate.isTrue);\n     expect(home.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);\n     final previous = tester.getSemantics(buttons.at(1));\n     expect(previous.label, 'Previous');\n-    expect(previous.hasFlag(SemanticsFlag.isEnabled), isFalse);\n+    expect(previous.flagsCollection.isEnabled, Tristate.isFalse);\n     expect(previous.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);\n     final edit = tester.getSemantics(buttons.at(2));\n     expect(edit.label, 'Edit Note');\n-    expect(edit.hasFlag(SemanticsFlag.isButton), isTrue);\n+    expect(edit.flagsCollection.isButton, isTrue);\n     expect(edit.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);\n     expect(tester.getSemantics(buttons.at(3)).label, 'Search');\n     expect(find.byTooltip('Home (Alt+Home)'), findsOneWidget);\n"
+          }
+        ]
       },
-      "projectLockfileDiff": "",
-      "workingTree": " M docs/development/professional-workspace-verification.md\n M docs/development/windows.md\n"
+      "finalInputSnapshot": {
+        "path": "evidence/release-qualification-20261025/final-source-inputs.json",
+        "bytes": 90924,
+        "sha256": "b48dcc6710fcd5efe000f9658a3ed47ec16b8d1ed70f6d09c3740f182e17e563"
+      },
+      "trackedInputCount": 585,
+      "bundle": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "capturedUtc": "2026-10-26T01:23:24.259385+00:00",
+        "files": [
+          {
+            "path": "build/linux/x64/release/bundle/busybooks",
+            "bytes": 222464,
+            "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad"
+          },
+          {
+            "path": "build/linux/x64/release/bundle/lib/libapp.so",
+            "bytes": 11633544,
+            "sha256": "02c33430a465e9036614891d098189d6f95c040063e852a3c81dee2e24ee39a7"
+          },
+          {
+            "path": "build/linux/x64/release/bundle/lib/libflutter_linux_gtk.so",
+            "bytes": 17218152,
+            "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1"
+          }
+        ]
+      },
+      "immutableNativeBundle": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "capturedUtc": "2026-10-26T01:16:32.690829+00:00",
+        "build": "intermediate-accessibility-flags/final-linux-release-build.log",
+        "snapshot": "/tmp/busybooks-qualified-release-bundle",
+        "files": [
+          {
+            "relative": "busybooks",
+            "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad",
+            "bytes": 222464
+          },
+          {
+            "relative": "lib/libapp.so",
+            "sha256": "02c33430a465e9036614891d098189d6f95c040063e852a3c81dee2e24ee39a7",
+            "bytes": 11633544
+          },
+          {
+            "relative": "lib/libflutter_linux_gtk.so",
+            "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1",
+            "bytes": 17218152
+          }
+        ],
+        "purpose": "Immutable native acceptance bundle; excludes later simultaneous build writes"
+      },
+      "preDeliveryAudit": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "capturedUtc": "2026-10-26T01:57:11.421885+00:00",
+        "trackedInputCount": 585,
+        "inputMismatches": [],
+        "bundleMismatches": [],
+        "commandManifests": {
+          "final-qualification-commands.jsonl": {
+            "count": 9,
+            "failed": []
+          },
+          "final-storage-checks.jsonl": {
+            "count": 8,
+            "failed": []
+          },
+          "final-native-checks.jsonl": {
+            "count": 6,
+            "failed": []
+          }
+        },
+        "projectLockfileDiff": "",
+        "workingTree": " M docs/development/professional-workspace-verification.md\n M docs/development/windows.md\n"
+      },
+      "deliveryRelationship": "Documentation/results-only successor to tested implementation; post-delivery audit records exact delivery SHA and checks all input hashes without a self-referential commit-hash cycle",
+      "postDeliveryAuditPath": "evidence/release-qualification-20261025/post-delivery-audit.json",
+      "historicalExportReconciliation": "01ad861..0bf8dad differs only in documentation and two verification tools; runtime/tests unchanged. These prior tests are historical, not final-source qualification.",
+      "historicalOriginalManifest": {
+        "path": "evidence/release-qualification-20261025/historical-workspace-results.json",
+        "bytes": 30820,
+        "sha256": "bda7305f66d9a2be40efbe5ec8ce39457b0be64e47c7ba6986cc4c67f812ae6d",
+        "scope": "Original record retained verbatim; build paths/hashes are historical and may have been superseded, not current artifact references"
+      },
+      "evidenceIndex": {
+        "path": "evidence/release-qualification-20261025/evidence-index.json",
+        "bytes": 85810,
+        "sha256": "e2aa8017ee09c97e7683d795761e1196802ead482c5080322026eab5a03dc0bc"
+      },
+      "retainedRoot": "evidence/release-qualification-20261025",
+      "generatedArtifactsCommitted": false,
+      "retention": "Logs, screenshots, native backup and harnesses retained under repository evidence directory; no disposable /tmp path is the sole evidence for a final claim"
     },
-    "deliveryRelationship": "Documentation/results-only successor to tested implementation; post-delivery audit records exact delivery SHA and checks all input hashes without a self-referential commit-hash cycle",
-    "postDeliveryAuditPath": "evidence/release-qualification-20261025/post-delivery-audit.json",
-    "historicalExportReconciliation": "01ad861..0bf8dad differs only in documentation and two verification tools; runtime/tests unchanged. These prior tests are historical, not final-source qualification.",
-    "historicalOriginalManifest": {
-      "path": "evidence/release-qualification-20261025/historical-workspace-results.json",
-      "bytes": 30820,
-      "sha256": "bda7305f66d9a2be40efbe5ec8ce39457b0be64e47c7ba6986cc4c67f812ae6d",
-      "scope": "Original record retained verbatim; build paths/hashes are historical and may have been superseded, not current artifact references"
+    "windowsFinal": {
+      "sourceRevision": "767f692fda74292149532afb44b8013f0ca53cf8",
+      "inputs": {
+        "path": "evidence/windows-qualification-20261025/windows-source-inputs.json",
+        "bytes": 105509,
+        "sha256": "513d38ac42c669af8cec5ac8ef16f27a8f86fd7b0a578b0056d605ad8a53cf96"
+      },
+      "inputCount": 598,
+      "guestAudit": {
+        "path": "evidence/windows-qualification-20261025/qualified-final-source-audit.json",
+        "bytes": 451,
+        "sha256": "4005f114aab36678779226566de65779cfcdca37dd786d0dc3fa75304ff75fa7"
+      },
+      "bundle": {
+        "path": "evidence/windows-qualification-20261025/qualified-final-native-bundle.json",
+        "bytes": 76284,
+        "sha256": "8fbee6f4f5b725112843b72e5c620533d707b39acf0e6e2b4c55829e6413770d"
+      },
+      "sourceEquivalence": {
+        "path": "evidence/windows-qualification-20261025/platform-input-equivalence.json",
+        "bytes": 2286,
+        "sha256": "02af3d83063ea49355a02937331d30d5a108c09c7c9a2f663ed68b42dad9ba81"
+      },
+      "retainedRoot": "evidence/windows-qualification-20261025",
+      "evidenceIndex": {
+        "path": "evidence/windows-qualification-20261025/evidence-index.json",
+        "bytes": 282091,
+        "sha256": "38f4f9c2dd9315088413b7da7fc7c62d81d04a39754e68003fb86ecc4e4b56ba"
+      },
+      "referenceAudit": {
+        "path": "evidence/windows-qualification-20261025/evidence-reference-audit.json",
+        "bytes": 415,
+        "sha256": "2eb06f380df7b7e1846ceba9e7a23e8fcc07250eb40ee207445129d0f1f2174d"
+      }
     },
-    "evidenceIndex": {
-      "path": "evidence/release-qualification-20261025/evidence-index.json",
-      "bytes": 85810,
-      "sha256": "e2aa8017ee09c97e7683d795761e1196802ead482c5080322026eab5a03dc0bc"
-    },
-    "retainedRoot": "evidence/release-qualification-20261025",
-    "generatedArtifactsCommitted": false,
-    "retention": "Logs, screenshots, native backup and harnesses retained under repository evidence directory; no disposable /tmp path is the sole evidence for a final claim"
+    "deliveryRelationship": "Documentation/results-only successor to the immutable tested implementation. Post-delivery audit records exact delivery SHA and rechecks all inputs, avoiding a self-referential commit hash.",
+    "postDeliveryAuditPath": "evidence/windows-qualification-20261025/post-delivery-audit.json",
+    "generatedBinariesAndCapturesCommitted": false,
+    "retainedInputRelocations": [
+      {
+        "path": "evidence/windows-qualification-20261025/host-additional-task-moves.json",
+        "bytes": 1422,
+        "sha256": "95a827d57d035f68c1f423bd9fa21fba336a8e80ffbc1bb82a5efe9bde02c801"
+      },
+      {
+        "path": "evidence/windows-qualification-20261025/host-space-recovery.json",
+        "bytes": 1984,
+        "sha256": "c36cac96737f8d75ed27ef43956a32e3f03324e232f218f12161aaa4118dd53f"
+      },
+      {
+        "path": "evidence/windows-qualification-20261025/scratch-retention-audit.json",
+        "bytes": 451,
+        "sha256": "2429b780f4c5b87158e20c908d82587e38e5ffc9cb49b98188dde9e109345a4c"
+      }
+    ]
   },
   "materiallyChangedFiles": [
+    "assets/reader/bootstrap.js",
+    "docs/development/professional-workspace-results.json",
+    "docs/development/professional-workspace-verification.md",
     "docs/development/reading-workspace.md",
+    "docs/development/windows.md",
+    "lib/src/annotations/presentation/annotation_presentation.dart",
     "lib/src/app/busybooks_design.dart",
     "lib/src/book_workspace/application/book_session_lifetime.dart",
     "lib/src/book_workspace/application/book_sidebar_controller.dart",
+    "lib/src/book_workspace/presentation/book_header.dart",
     "lib/src/notebook/application/notebook_controller.dart",
     "lib/src/notebook/presentation/book_view_selector.dart",
+    "lib/src/notebook/presentation/notebook_screen.dart",
     "lib/src/platform/speech_service.dart",
     "lib/src/reading/application/narration_controller.dart",
     "lib/src/reading/application/reader_controller.dart",
+    "lib/src/reading/presentation/reader_popover.dart",
     "lib/src/search/book_search_session.dart",
     "lib/src/search/book_search_widgets.dart",
     "test/src/busybooks_design_test.dart",
     "test/src/linux_reader_surface_test.cc",
+    "test/src/notebook_view_test.dart",
     "test/src/reader_hardening_test.dart",
     "test/src/reader_original_file_test.dart",
+    "test/src/reader_popover_test.dart",
     "test/src/reader_workspace_test.dart",
     "tools/book_session_memory_probe.dart",
     "tools/flutter_view_shutdown_probe.cc",
+    "tools/native_menu_probe/CMakeLists.txt",
+    "tools/native_menu_probe/windows_menu_probe.cpp",
+    "tools/prepare_workspace_probe.dart",
     "tools/probe_linux_shutdown.py",
     "tools/probe_linux_workspace.py",
-    "docs/development/professional-workspace-verification.md",
-    "docs/development/professional-workspace-results.json",
-    "docs/development/windows.md"
+    "tools/qualify_windows.ps1",
+    "tools/reader_startup_probe.mjs"
   ],
   "git": {
     "branch": "fix/ui-elements",
@@ -1626,9 +3042,21 @@
       "90c0e7e Add native lifetime diagnostics and isolated Wayland acceptance tools",
       "3cd1a4a Validate annotation activation and release inactive book sessions"
     ],
-    "deliveryCommit": "Exact SHA recorded by post-delivery audit and final response",
+    "deliveryCommit": "Recorded by post-delivery audit after this documentation-only commit",
     "pushPerformed": false,
     "releasePublicationPerformed": false,
-    "unrelatedUserChangesOverwritten": false
-  }
+    "unrelatedUserChangesOverwritten": false,
+    "taskWindowsSourceCommits": [
+      "767f692 Recognize document-attributed browser resize notifications",
+      "15063a2 Report browser resize notifications without failing the reader",
+      "64a1f18 Keep book header tooltips clear of overlaid window controls",
+      "52a92fe Display annotation creation dates using the stored microsecond contract",
+      "02303f0 Let shared search own Escape while the Notebook editor is focused",
+      "74e0b80 Drive Win32 menu qualification through actual enabled selection",
+      "181923d Preserve tooltip semantics and initial appearance keyboard focus",
+      "dfcf6a7 Avoid repeated accessible names on native icon actions",
+      "b7ac82f Add reproducible Windows qualification and native menu probe"
+    ]
+  },
+  "windowsContinuationBaselineRevision": "cd914fddca897b187fd2a6b10e221294c2f06770"
 }
