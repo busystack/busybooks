@@ -22,7 +22,7 @@
         // Resize Observer's specified notification defers remaining observations
         // to another rendering update. Keep it diagnostic; an actual exception,
         // rejected promise or resource failure must still fail the reader.
-        if (event.isTrusted === true && event.error == null && event.filename === '' && event.lineno === 0 && event.colno === 0 &&
+        if (event.isTrusted === true && event.error == null && (event.filename === '' || event.filename === window.location.href) && event.lineno === 0 && event.colno === 0 &&
             event.message === 'ResizeObserver loop completed with undelivered notifications.') {
             report('diagnostic', {stage: 'resize-observer', message: event.message})
             return

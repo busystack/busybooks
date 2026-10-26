@@ -41,9 +41,12 @@ for (const platform of ['linux', 'windows']) {
   const reader = boot(platform, () => Promise.resolve())
   reader.listeners.error(resizeNotification)
   assert.deepEqual(reader.events, [{type: 'diagnostic', session: '123', stage: 'resize-observer', message: resizeNotification.message}])
+  // WebView2 attributes this browser notification to the current document.
+  reader.listeners.error({...resizeNotification, filename: 'https://busybooks.local/index.html?session=123&loading=Loading+book'})
+  assert.equal(reader.events[1].type, 'diagnostic')
   reader.listeners.error({error: new Error('Real script failure'), message: 'Real script failure'})
-  assert.equal(reader.events[1].type, 'error', 'a diagnostic must not disable subsequent failure reporting')
-  assert.equal(reader.events[1].message, 'Real script failure')
+  assert.equal(reader.events[2].type, 'error', 'a diagnostic must not disable subsequent failure reporting')
+  assert.equal(reader.events[2].message, 'Real script failure')
   for (const changed of [{isTrusted: false}, {error: new Error(resizeNotification.message)}, {filename: 'reader.js'}, {lineno: 1}, {colno: 1}]) {
     const broken = boot(platform, () => Promise.resolve())
     broken.listeners.error({...resizeNotification, ...changed})
