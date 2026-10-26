@@ -420,8 +420,10 @@ abstract final class BusyBooksTooltipStyle {
   /// Place book-header hints beside their trigger, within Flutter's header.
   static Offset insideHeader(
     BuildContext context,
-    TooltipPositionContext info,
-  ) {
+    TooltipPositionContext info, {
+    double leftObstruction = 0,
+    double rightObstruction = 0,
+  }) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null ||
         !box.hasSize ||
@@ -430,8 +432,12 @@ abstract final class BusyBooksTooltipStyle {
       return info.target;
     }
     final origin = box.localToGlobal(Offset.zero),
-        left = origin.dx + BusyBooksSpacing.sm,
-        right = origin.dx + box.constraints.maxWidth - BusyBooksSpacing.sm;
+        left = origin.dx + leftObstruction + BusyBooksSpacing.sm,
+        right =
+            origin.dx +
+            box.constraints.maxWidth -
+            rightObstruction -
+            BusyBooksSpacing.sm;
     final after =
         info.target.dx + info.targetSize.width / 2 + BusyBooksSpacing.sm;
     final before =

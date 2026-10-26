@@ -82,9 +82,14 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
     String? binding(String id) => registry[id]?.shortcut?.label;
     return LayoutBuilder(
       builder: (context, constraints) {
-        Offset tooltipPosition(TooltipPositionContext info) =>
-            BusyBooksTooltipStyle.insideHeader(context, info);
         final insets = LinuxPageHeaderInsetsScope.of(context);
+        Offset tooltipPosition(TooltipPositionContext info) =>
+            BusyBooksTooltipStyle.insideHeader(
+              context,
+              info,
+              leftObstruction: insets.leftObstruction,
+              rightObstruction: insets.rightObstruction,
+            );
         final available =
             constraints.maxWidth -
             insets.leftObstruction -

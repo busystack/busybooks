@@ -72,6 +72,53 @@ void main() {
     expect(find.byTooltip('Search'), findsOneWidget);
     semantics.dispose();
   });
+  testWidgets('header hints avoid overlaid window caption controls', (
+    tester,
+  ) async {
+    late BuildContext headerContext;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 600,
+              height: 48,
+              child: LayoutBuilder(
+                builder: (context, _) {
+                  headerContext = context;
+                  return const SizedBox.expand();
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    const captionControls = Rect.fromLTWH(476, 0, 124, 48);
+    const tooltipSize = Size(100, 30);
+    final offset = BusyBooksTooltipStyle.insideHeader(
+      headerContext,
+      const TooltipPositionContext(
+        target: Offset(450, 24),
+        targetSize: Size(34, 34),
+        tooltipSize: tooltipSize,
+        verticalOffset: 8,
+        overlaySize: Size(800, 600),
+      ),
+      rightObstruction: captionControls.width,
+    );
+    final tooltip = offset & tooltipSize;
+    expect(tooltip.overlaps(captionControls), isFalse);
+    expect(
+      const Rect.fromLTWH(0, 0, 600, 48).contains(tooltip.topLeft),
+      isTrue,
+    );
+    expect(
+      const Rect.fromLTWH(0, 0, 600, 48).contains(tooltip.bottomRight),
+      isTrue,
+    );
+  });
   for (final brightness in Brightness.values) {
     test('semantic surfaces preserve Yaru control geometry in $brightness', () {
       const accent = Color(0xff3584e4);
