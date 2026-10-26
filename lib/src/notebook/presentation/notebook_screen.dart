@@ -9,6 +9,7 @@ import '../../app/busybooks_design.dart';
 import '../../app/localization.dart';
 import '../../app/product_actions.dart';
 import '../../library/domain/book.dart';
+import '../../search/book_search_session.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/notebook_controller.dart';
 import '../application/notebook_view.dart';
@@ -186,7 +187,8 @@ class _NotebookContentState extends ConsumerState<NotebookContent> {
       onKeyEvent: (_, event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape &&
-            view.editFocused) {
+            view.editFocused &&
+            !ref.read(bookSearchProvider(widget.id)).active) {
           controller.view(widget.id, focusEditor: false);
           _listFocus.requestFocus();
           return KeyEventResult.handled;

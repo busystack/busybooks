@@ -8294,6 +8294,62 @@ void _professionalWorkspaceTests() {
   );
 
   testWidgets(
+    'Escape closes shared search from the Notebook editor without changing its draft',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        await f.select();
+        await f.reader.annotation('highlight', note: 'Private note');
+      });
+      try {
+        final id = f.state.bookId!, annotation = f.reader.annotations.single;
+        await _mountHeaderApplication(tester, f, '/notebook/$id');
+        await _readerAction(
+          tester,
+          () => f.searchController.open(
+            category: BookSearchCategory.notebook,
+            query: 'Private',
+          ),
+        );
+        final snapshot = f.search;
+        final header = tester.element(find.byType(BookHeader));
+        await _readerAction(
+          tester,
+          () => activateBookSearchResult(
+            header,
+            header as WidgetRef,
+            id,
+            snapshot.results.single,
+            snapshot.generation,
+          ),
+        );
+        final editor = find.descendant(
+          of: find.byType(NotebookContent),
+          matching: find.byType(TextField),
+        );
+        await tester.tap(editor);
+        await tester.enterText(editor, 'Private draft remains intact');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(f.search.active, false);
+        expect(
+          f.drafts.drafts[annotation.id]?.text,
+          'Private draft remains intact',
+        );
+        expect(f.reader.suspended, true);
+        expect(f.state.surfaceVisible, false);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  testWidgets(
     'returning to an edited Notebook preserves active header search focus',
     (tester) async {
       late _ReaderFixture f;
