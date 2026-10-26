@@ -83,10 +83,9 @@ void Key(WORD key) {
   const UINT scan = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);
   inputs[0].ki.wScan = inputs[1].ki.wScan = static_cast<WORD>(scan & 0xff);
   inputs[0].ki.dwFlags = inputs[1].ki.dwFlags = KEYEVENTF_SCANCODE |
-      ((scan & 0xff00) ? KEYEVENTF_EXTENDEDKEY : 0);
+      ((key == VK_DOWN || (scan & 0xff00)) ? KEYEVENTF_EXTENDEDKEY : 0);
   inputs[1].ki.dwFlags |= KEYEVENTF_KEYUP;
   const UINT sent = SendInput(2, inputs, sizeof(INPUT));
-  std::fprintf(stderr, "key=%u inserted=%u error=%lu\n", key, sent, GetLastError());
   if (sent != 2) EndMenu();
 }
 enum class Action { kKeyboard, kDisabledPointer, kDismiss };
@@ -170,13 +169,20 @@ void CALLBACK Advance(HWND window, UINT, UINT_PTR, DWORD) {
     return;
   }
   if (scenario.reply->completed) scenario.failure = "Disabled row executed or dismissed the menu";
-  if (scenario.stage < 2) {
+  // Native Windows menus may initially highlight the selected disabled row.
+  // Move through the real menu until its enabled row has keyboard focus.
+  if (!(GetMenuState(scenario.menu, 1, MF_BYPOSITION) & MF_HILITE)) {
+    if (++scenario.stage > 4) {
+      scenario.failure = "Keyboard did not reach enabled native menu row";
+      EndMenu(); return;
+    }
     Key(VK_DOWN);
-    scenario.stage = 2;
     return;
   }
-  KillTimer(window, 1);
-  Key(VK_RETURN);
+  if (scenario.stage < 5) {
+    scenario.stage = 5;
+    Key(VK_RETURN);
+  }
 }
 void PumpUntil(Reply& reply) {
   const ULONGLONG deadline = GetTickCount64() + 10000;
@@ -208,11 +214,6 @@ void Exercise(HWND window, ProbeMessenger& messenger, int64_t session,
   if (action == Action::kDismiss) {
     Require(std::holds_alternative<std::monostate>(reply.value), "Dismissal activated a command");
   } else {
-    if (!std::get_if<int32_t>(&reply.value) || std::get<int32_t>(reply.value) != 1) {
-      std::fprintf(stderr, "session=%lld result_type=%zu index=%d\n",
-          static_cast<long long>(session), reply.value.index(),
-          std::get_if<int32_t>(&reply.value) ? std::get<int32_t>(reply.value) : -1);
-    }
     Require(std::get_if<int32_t>(&reply.value) && std::get<int32_t>(reply.value) == 1,
             "Wrong menu index or disabled command activation");
   }
