@@ -7282,6 +7282,40 @@ void main() {
     },
   );
   test(
+    'reader diagnostics retain readiness and log only the owning session',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      final previousDebugPrint = debugPrint;
+      final diagnostics = <String>[];
+      debugPrint = (String? message, {int? wrapWidth}) {
+        diagnostics.add(message ?? '');
+      };
+      try {
+        await f.event('diagnostic', {
+          'session': 'obsolete',
+          'stage': 'resize-observer',
+          'message': 'Stale observation',
+        });
+        expect(diagnostics, isEmpty);
+        await f.event('diagnostic', {
+          'stage': 'resize-observer',
+          'message':
+              'ResizeObserver loop completed with undelivered notifications.',
+        });
+        expect(f.state.ready, isTrue);
+        expect(f.state.error, isNull);
+        expect(diagnostics.single, contains('resize-observer'));
+        expect(diagnostics.single, contains(f.reader.sessionId));
+        await f.event('error', {'message': 'Real script failure'});
+        expect(f.state.ready, isFalse);
+        expect(f.state.error, 'Real script failure');
+      } finally {
+        debugPrint = previousDebugPrint;
+        await f.dispose();
+      }
+    },
+  );
+  test(
     'preparing shared chrome transfers native focus without restoring the publication',
     () async {
       final f = await _ReaderFixture.create('text.pdf');

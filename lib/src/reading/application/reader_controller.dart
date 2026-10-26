@@ -1320,6 +1320,10 @@ class ReaderController extends Notifier<ReaderState> {
             _flushing!.complete();
           }
         }
+      case 'diagnostic':
+        debugPrint(
+          'BusyBooks reader diagnostic [${state.bookId}/$_session/${event['stage']}]: ${event['message']}',
+        );
       case 'error':
         if (event['cacheFailure'] == true &&
             book?.format != 'pdf' &&
