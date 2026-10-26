@@ -15,12 +15,22 @@ ReadingAnnotation record(
   'annotationKind': kind,
 });
 void main() {
+  test('Notebook creation dates preserve epoch microseconds', () {
+    final created = DateTime.utc(2026, 10, 26, 14, 13, 8, 529, 698);
+    final annotation = record(
+      'native-created',
+      created.microsecondsSinceEpoch,
+      0,
+    );
+    expect(annotationCreationTime(annotation)?.toUtc(), created);
+    expect(annotation.data['created'], created.microsecondsSinceEpoch);
+  });
   test(
     'valid stored timestamps outside DateTime retain order without inventing a date',
     () {
       expect(
         annotationCreationTime(record('valid', 0, 0)),
-        DateTime.fromMillisecondsSinceEpoch(0),
+        DateTime.fromMicrosecondsSinceEpoch(0),
       );
       expect(
         annotationCreationTime(record('beyond-date', 9223372036854775807, 0)),

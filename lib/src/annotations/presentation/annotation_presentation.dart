@@ -70,7 +70,7 @@ String annotationFilterLabel(
 
 DateTime? annotationCreationTime(ReadingAnnotation annotation) {
   final timestamp = annotation.data['created'];
-  return timestamp is int && timestamp >= 0 && timestamp <= 8640000000000000
-      ? DateTime.fromMillisecondsSinceEpoch(timestamp)
+  return timestamp is int && timestamp >= 0 && timestamp <= 8640000000000000000
+      ? DateTime.fromMicrosecondsSinceEpoch(timestamp)
       : null;
 }

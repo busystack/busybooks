@@ -148,6 +148,8 @@ Marks always retains those bookmarks. Cards use the shared 760px content width,
 show type/date/location/passage and selectable multiline private-note previews,
 and offer explicit full-note expansion. Dates outside Dart's supported calendar
 range display an unavailable label without modifying the valid stored timestamp.
+Annotation `created` values are epoch microseconds, matching both reader creation
+paths. Calendar presentation uses that unit directly; it does not rewrite records.
 
 Notebook editing uses the existing debounced autosave: Saving, Saved only after
 successful persistence, Save failed and Retry. Discard is offered for a pending

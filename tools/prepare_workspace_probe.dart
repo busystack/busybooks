@@ -42,7 +42,7 @@ Future<void> main(List<String> args) async {
       'collectionId': collection['id'],
       'paths': books.map((b) => b['path']).toList(),
     });
-    final now = DateTime(2026, 10, 25, 10).millisecondsSinceEpoch;
+    final now = DateTime(2026, 10, 25, 10).microsecondsSinceEpoch;
     for (final book in books.where(
       (b) => ['epub', 'pdf', 'cbz'].contains(b['format']),
     )) {
@@ -101,7 +101,7 @@ Future<void> main(List<String> args) async {
             'yellow',
             'yellow',
           ][index],
-          'created': now + index * 1000,
+          'created': now + index * const Duration(seconds: 1).inMicroseconds,
         });
       }
     }
