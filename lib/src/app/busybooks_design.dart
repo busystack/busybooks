@@ -1060,7 +1060,12 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
       tooltip: tooltipPosition == null
           ? (shortcut == null ? tooltip : '$tooltip ($shortcut)')
           : null,
-      icon: BusyBooksGtkHeaderIcon(icon, nativeIcon: nativeIcon),
+      // Native accessibility bridges do not consistently expose tooltip
+      // metadata as a name. Label the artwork inside the button's semantics.
+      icon: Semantics(
+        label: tooltip,
+        child: BusyBooksGtkHeaderIcon(icon, nativeIcon: nativeIcon),
+      ),
       padding: EdgeInsets.zero,
       style: style.merge(yaruDefaults),
       onPressed: onPressed,
@@ -1124,7 +1129,7 @@ class BusyBooksCompactIconButton extends StatelessWidget {
     ).defaultStyleOf(context);
     final button = IconButton(
       tooltip: tooltip,
-      icon: Icon(icon, size: glyphSize),
+      icon: Icon(icon, size: glyphSize, semanticLabel: tooltip),
       constraints: BoxConstraints.tightFor(width: size, height: size),
       padding: EdgeInsets.zero,
       style: semanticStyle.merge(yaruDefaults),
