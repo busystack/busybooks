@@ -1,14 +1,17 @@
 {
+  "schemaVersion": 2,
   "recordedDate": "2026-10-25",
-  "implementationRevision": "01ad861d86ec4e72766a9503cd69aaa14c718c88",
-  "baselineRevision": "cb7ded3aaed330a0e2e605a4b1ba33d1b209e248",
-  "busyMarkReferenceRevision": "7008772ce26b0d133bed9c0d01754b43d93c672b",
+  "recordedUtc": "2026-10-26T02:05:09.278819+00:00",
+  "implementationRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+  "baselineRevision": "0bf8dade27080b73c8814340754eabf0b2e56518",
   "status": {
-    "implementation": "committed",
-    "automated": "passed",
-    "linuxNative": "partial: UI/format/durability checks performed; compositor shutdown fails intermittently",
-    "windowsNative": "not verified",
-    "releaseAcceptance": "blocked"
+    "busyBooksImplementation": "pass for completed corrections and executed scope",
+    "linuxApplicationOwnedAcceptance": "pass within documented native environments",
+    "windowsNativeAcceptance": "not verified: host driver prerequisite blocks existing VM startup",
+    "knownUpstreamFlutterShutdownRisk": "present",
+    "overallReleaseQualification": "blocked by an essential unverified Windows requirement",
+    "productionReleasePublished": false,
+    "pushed": false
   },
   "toolchain": {
     "flutter": "3.47.5",
@@ -18,707 +21,1614 @@
     "pinChanged": false,
     "dependenciesChanged": false,
     "schemaChanged": false,
-    "backupFormatChanged": false
+    "backupFormatChanged": false,
+    "officialFrameworkCompilerEngineUnmodified": true,
+    "preExistingSdkGitDifference": "Root pubspec.lock was already modified at baseline; no SDK framework/compiler/engine source or binary was patched",
+    "sdkInspection": {
+      "path": "evidence/release-qualification-20261025/qualified-upstream-review.json",
+      "bytes": 1692,
+      "sha256": "173a61c5479bf9ede6236bb1895e55a29d70b2abc56ce9c96c556e3c535738fc"
+    }
   },
-  "automated": {
-    "baseline": {
-      "passed": 401,
-      "skipped": 3
+  "baseline": {
+    "revision": "0bf8dad",
+    "initialWorkingTree": "clean",
+    "testsPassed": 425,
+    "testsSkipped": 3,
+    "analysis": "no issues",
+    "formatFiles": 169,
+    "formatChanges": 0,
+    "linuxReleaseBuild": "passed",
+    "scope": "Executed before final corrections; separate from final-source results"
+  },
+  "repairs": [
+    {
+      "finding": "Cached search membership could validate a deleted annotation",
+      "result": "Current matching Workspace records or legitimate protected Notebook drafts are authoritative; cached result objects never establish existence. Deferred handoffs revalidate book, record, route and generation. Stale results refresh.",
+      "coverage": "Deletion, stale cached records, queued deletion/query/category/book changes, protected failed insertion, asynchronous updates and valid navigation"
     },
+    {
+      "finding": "Book families retained every visited book and subscriptions",
+      "result": "Auto-disposing families with an explicit lease for WorkspaceState.openedBook; active Reading/Notebook/Settings state survives, replaced/closed sessions release resources. Existing Notebook owns protected drafts.",
+      "coverage": "60-book lifecycle tests, cancellation/disposal tests and profile-mode live allocations"
+    },
+    {
+      "finding": "Obsolete native search cancellation overwrote newer query state",
+      "result": "Session/query-revision-guarded cancellation completion",
+      "coverage": "Paused cancellation followed by a newer query"
+    },
+    {
+      "finding": "Renderer input/layout flush could wait on a hidden PDF frame",
+      "result": "Drain before hiding; suspended operations flush durable application records without a hidden native handshake; concurrent drains share completion; requests validate acknowledgement identity.",
+      "coverage": "Delay/failure/retry, final position, stale/future/unowned replies, concurrent flush/suspend, protected writes and actual narration-to-Notebook-to-close"
+    },
+    {
+      "finding": "Speech service failure retained ownership and bypassed connection cleanup",
+      "result": "Typed expected service failures, finally-based ownership/connection cleanup, shared disposal and late-call/event rejection; programming errors propagate.",
+      "coverage": "Service failure/programming error/disposal regressions; actual healthy host speech start/stop and view handoff"
+    },
+    {
+      "finding": "Native probe leaked its XTest connection",
+      "result": "Probe owns and closes its connection before unloading the library; production reader surface unchanged",
+      "coverage": "ASan/UBSan/leak-detection native surface test without suppressions"
+    },
+    {
+      "finding": "Icon controls had empty GTK accessible names",
+      "result": "Localized labels inside existing header/compact icon button semantics; visual tooltip behavior and enabled/selected/action state retained",
+      "coverage": "Failing-before/passing-after focused regression plus actual GTK AT-SPI labels"
+    }
+  ],
+  "automated": {
+    "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
     "final": {
-      "passed": 425,
-      "skipped": 3
+      "passed": 447,
+      "skipped": 3,
+      "failed": 0
     },
     "skipReasons": [
-      "opt-in live Wiktionary request",
-      "two Windows-only checks"
+      {
+        "test": "Live Wiktionary integration",
+        "reason": "Existing opt-in BUSYBOOKS_LIVE_WIKTIONARY flag not enabled"
+      },
+      {
+        "test": "Windows short and long paths share saved locations without string equality",
+        "reason": "Existing Platform.isWindows guard; Linux execution"
+      },
+      {
+        "test": "F26: Windows returns a full stable identity and detects replacements",
+        "reason": "Existing Platform.isWindows guard; Linux execution"
+      }
     ],
-    "analysis": "no issues",
     "format": {
-      "files": 169,
-      "changed": 0
+      "files": 171,
+      "changed": 0,
+      "exitCode": 0
     },
+    "analysis": "no issues",
     "linuxReleaseBuild": "passed",
-    "nativeInputAndPortableMenuContract": "passed",
-    "readerJavascript": "passed: controlled logic probes"
+    "commands": [
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "pub-get",
+        "command": [
+          "flutter",
+          "pub",
+          "get",
+          "--enforce-lockfile"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 0.88
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "l10n",
+        "command": [
+          "flutter",
+          "gen-l10n"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 0.41
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "format",
+        "command": [
+          "dart",
+          "format",
+          "--output=none",
+          "--set-exit-if-changed",
+          "lib",
+          "test",
+          "tools"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 1.45
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "analyze",
+        "command": [
+          "flutter",
+          "analyze"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 15.51
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "reader-javascript",
+        "command": [
+          "node",
+          "tools/reader_logic_probe.mjs"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 0.7
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "epubcheck",
+        "command": [
+          "python3",
+          "tools/check_epub2_fixtures.py",
+          "/tmp/busybooks-epubcheck/epubcheck-5.4.0/epubcheck.jar"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 34.96
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "tests",
+        "command": [
+          "flutter",
+          "test",
+          "--concurrency=2",
+          "--reporter=expanded"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 324.15
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "linux-release-build",
+        "command": [
+          "flutter",
+          "build",
+          "linux",
+          "--release"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 11.31
+      },
+      {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "name": "storage-pipeline",
+        "command": [
+          "python3",
+          "-u",
+          "/tmp/busybooks-final-storage-checks.py"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 26.75
+      }
+    ],
+    "storageCommands": [
+      {
+        "name": "final-storage",
+        "command": [
+          "dart",
+          "run",
+          "tools/storage_probe.dart"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 6.5
+      },
+      {
+        "name": "final-move-volume",
+        "command": [
+          "dart",
+          "run",
+          "tools/move_volume_probe.dart",
+          "/tmp",
+          "/dev/shm"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 1.46
+      },
+      {
+        "name": "final-cache",
+        "command": [
+          "dart",
+          "run",
+          "tools/cache_probe.dart"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 2.76
+      },
+      {
+        "name": "final-annotation-order",
+        "command": [
+          "dart",
+          "run",
+          "tools/annotation_order_probe.dart"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 0.36
+      },
+      {
+        "name": "final-linux-mime",
+        "command": [
+          "python3",
+          "tools/probe_linux_mime.py",
+          "build/linux/x64/release/bundle/share/mime"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 0.14
+      },
+      {
+        "name": "final-native-rar",
+        "command": [
+          "python3",
+          "tools/qualify_rar.py",
+          "/mnt/Media/busystack/busybooks/build/linux/x64/release/bundle/busybooks_comic_archive"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 0.2
+      },
+      {
+        "name": "final-format-probe",
+        "command": [
+          "dart",
+          "run",
+          "tools/format_probe.dart"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 10.37
+      },
+      {
+        "name": "final-format-resources",
+        "command": [
+          "dart",
+          "run",
+          "tools/format_resources_probe.dart"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 4.91
+      }
+    ],
+    "nativeCommands": [
+      {
+        "name": "final-native-input-menu",
+        "command": [
+          "env",
+          "G_DEBUG=fatal-criticals",
+          "bash",
+          "tools/probe_linux_input.sh"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 6.93
+      },
+      {
+        "name": "final-native-engines",
+        "command": [
+          "bash",
+          "tools/probe_linux_engines.sh"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 30.56
+      },
+      {
+        "name": "final-native-typography",
+        "command": [
+          "bash",
+          "tools/probe_linux_typography.sh"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 45.2
+      },
+      {
+        "name": "final-native-formats",
+        "command": [
+          "bash",
+          "tools/probe_linux_formats.sh"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 472.57
+      },
+      {
+        "name": "final-native-format-review",
+        "command": [
+          "bash",
+          "tools/probe_linux_format_review.sh"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 118.78
+      },
+      {
+        "name": "final-native-opening",
+        "command": [
+          "python3",
+          "tools/probe_linux_opening.py"
+        ],
+        "exitCode": 0,
+        "elapsedSeconds": 41.94
+      }
+    ],
+    "extra": [
+      {
+        "command": [
+          "node",
+          "--experimental-websocket",
+          "tools/probe_chromium_format_review.mjs"
+        ],
+        "exitCode": 0,
+        "proofs": 4,
+        "scope": "Actual Chromium with controlled resources; not native WebView2 acceptance",
+        "log": {
+          "path": "evidence/release-qualification-20261025/final-chromium-format-review.log",
+          "bytes": 2227,
+          "sha256": "b0505650466b92cba295cd996bf11a59177228f9bc1fd518846f26d1036f1eb1"
+        }
+      },
+      {
+        "command": [
+          "g++",
+          "-std=c++17",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-fsanitize=address,undefined",
+          "-fno-omit-frame-pointer",
+          "-g",
+          "-Ilinux/runner",
+          "test/src/linux_reader_surface_test.cc",
+          "linux/runner/reader_surface.cc",
+          "-o",
+          "/tmp/busybooks-qualified-native-surface-asan",
+          "$(pkg-config --cflags --libs gtk+-3.0 x11)",
+          "-ldl"
+        ],
+        "buildExitCode": 0,
+        "runCommand": [
+          "bash",
+          "harness/busybooks-qualified-native-surface-asan.sh"
+        ],
+        "runExitCode": 0,
+        "asanOptions": "detect_leaks=1:abort_on_error=1",
+        "ubsanOptions": "halt_on_error=1:print_stacktrace=1",
+        "suppressionUsed": false,
+        "scope": "BusyBooks native surface/test compiled with sanitizers; official third-party libraries remain unmodified",
+        "log": {
+          "path": "evidence/release-qualification-20261025/qualified-native-surface-asan.log",
+          "bytes": 1075,
+          "sha256": "32ab7a2717b03005343933726ea172a0bd2b69b05a9682adce8d784aff330ed5"
+        }
+      }
+    ],
+    "counts": {
+      "epubFixtures": 8,
+      "expectedNormativeFixtureExceptions": 2,
+      "formatChecks": 153,
+      "nativeFormatProofs": 34,
+      "nativeFormatFixtures": 22,
+      "nativeRestarts": 12,
+      "nativeExpectedInvalidFallbackRejections": 2,
+      "nativeTypographyProofs": 7,
+      "nativeFormatReviewProofs": 8,
+      "actualMainBundleBookOpenings": 19
+    },
+    "nativeOpeningShutdownScope": "Opening probe terminates its owned process for cleanup. It does not establish normal shutdown; guarded native closes and debugger diagnostics are recorded separately."
   },
-  "nativeEnvironment": {
-    "gtk": "3.24.41",
-    "webKitGtk": "2.52.6",
-    "display": "private Xvfb :108, 2800x1800x24",
-    "windowManager": "Openbox",
-    "session": "private D-Bus",
-    "profiles": "disposable /tmp copies, seeded through production ReadingDataStore",
-    "surfaces": "actual bundled GTK/WebKit application and native popovers/menus",
-    "gtkScales": [
-      1,
-      2
+  "resourceManagement": {
+    "baseline": {
+      "at20Books": {
+        "searchProviders": 21,
+        "sidebarProviders": 20
+      },
+      "at40Books": {
+        "searchProviders": 41,
+        "sidebarProviders": 40
+      },
+      "at60Books": {
+        "searchProviders": 61,
+        "sidebarProviders": 60
+      },
+      "extraSearchProvider": "Application Actions"
+    },
+    "ownership": "Active-book keepAlive lease only; widget listeners complete disposal; protected drafts remain in NotebookController",
+    "resourcesReviewed": [
+      "debounce timer",
+      "reader-intent event subscription",
+      "Riverpod-owned Workspace/route/settings listeners",
+      "per-category query/selection and result snapshots",
+      "borrowed return FocusNode",
+      "outline/page labels/panel offsets/filter snapshots",
+      "outstanding async scans/native query cancellation"
     ],
-    "portalTextScales": [
-      1,
-      1.5
-    ],
-    "themes": [
+    "disposal": "Timers/subscriptions cancelled; Riverpod listeners removed; mounted/book/route/generation/session/revision guards prevent stale publication/activation",
+    "profileRun": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "mode": "profile",
+      "binarySha256": "4c6d1af055d8f46cfb2fe8b39e737a36bbf7211f21b9576a2bde4b94bc953119",
+      "dartAotSha256": "9c316d95d3ee203e3294a1f7fc59539e8c4d1ab34e282a0149bce542e440ad09",
+      "command": [
+        "/mnt/Media/busystack/busybooks/build/linux/x64/profile/bundle/busybooks"
+      ],
+      "exitCode": 0,
+      "result": "qualified-provider-memory-result.json",
+      "scope": "180 visits/60 stored PDF books/300 chapter results each; live allocation GC; normal WM close requested"
+    },
+    "profileResult": {
+      "mode": "profile",
+      "samples": [
+        {
+          "visits": 20,
+          "distinctBooks": 20,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 368214016,
+          "heapUsedBytes": 8401504,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 40,
+          "distinctBooks": 40,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 387805184,
+          "heapUsedBytes": 8484976,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 60,
+          "distinctBooks": 60,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 391327744,
+          "heapUsedBytes": 8531952,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 80,
+          "distinctBooks": 60,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 412254208,
+          "heapUsedBytes": 8538288,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 100,
+          "distinctBooks": 60,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 397459456,
+          "heapUsedBytes": 8544496,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 120,
+          "distinctBooks": 60,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 398528512,
+          "heapUsedBytes": 8550672,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 140,
+          "distinctBooks": 60,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 414990336,
+          "heapUsedBytes": 8555248,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 160,
+          "distinctBooks": 60,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 402644992,
+          "heapUsedBytes": 8559824,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        },
+        {
+          "visits": 180,
+          "distinctBooks": 60,
+          "searchProviders": 1,
+          "sidebarProviders": 1,
+          "rssBytes": 401739776,
+          "heapUsedBytes": 8564464,
+          "BookSearchControllerInstances": 1,
+          "BookSidebarControllerInstances": 1
+        }
+      ],
+      "remainingProviders": 0,
+      "passed": true
+    },
+    "rangeMiB": {
+      "dartHeap": [
+        8.0123,
+        8.1677
+      ],
+      "rss": [
+        351.1562,
+        395.7656
+      ]
+    },
+    "interpretation": "One live search/sidebar controller pair at every GC sample, zero providers/listeners after close; bounded presentation retention in this probe. Debug observer history was inspected separately and no third-party observer was changed. This is a native profile application exercising production controllers/store, not a full native WebKit process-memory ceiling."
+  },
+  "linuxNative": {
+    "environment": {
+      "capturedUtc": "2026-10-26T01:51:49.545653+00:00",
+      "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+      "checks": [
+        {
+          "command": [
+            "uname",
+            "-a"
+          ],
+          "exitCode": 0,
+          "output": "Linux skynet1 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64 x86_64 x86_64 GNU/Linux"
+        },
+        {
+          "command": [
+            "lsb_release",
+            "-ds"
+          ],
+          "exitCode": 0,
+          "output": "Ubuntu 24.04.5 LTS"
+        },
+        {
+          "command": [
+            "pkg-config",
+            "--modversion",
+            "gtk+-3.0",
+            "webkit2gtk-4.1"
+          ],
+          "exitCode": 0,
+          "output": "3.24.41\n2.52.6"
+        },
+        {
+          "command": [
+            "google-chrome",
+            "--version"
+          ],
+          "exitCode": 0,
+          "output": "Google Chrome 156.0.8078.47"
+        },
+        {
+          "command": [
+            "node",
+            "--version"
+          ],
+          "exitCode": 0,
+          "output": "v24.15.0"
+        },
+        {
+          "command": [
+            "python3",
+            "--version"
+          ],
+          "exitCode": 0,
+          "output": "Python 3.13.5"
+        }
+      ],
+      "nativeGraphics": "Private Xvfb/Openbox and nested Weston/pixman; official Flutter Impeller OpenGLES, software graphics; physical GPU performance not qualified"
+    },
+    "x11": "Private Xvfb/Openbox with private D-Bus; final UI :116, native components :111, sanitizer :117, debugger :112",
+    "wayland": "Actual GTK Wayland/WebKit application in official Weston 13.0.0 desktop shell/pixman, nested on private :118; no XWayland substitution",
+    "scales": {
+      "gtk": [
+        1,
+        2
+      ],
+      "portalText": [
+        1,
+        1.5
+      ]
+    },
+    "applicationThemes": [
       "light",
       "dark"
     ],
-    "fractionalMonitorScaling": "not verified"
-  },
-  "nativeFormats": {
-    "passedProofEvents": 34,
-    "initialFixtures": 22,
-    "restarts": 12,
-    "expectedInvalidRejections": 2,
-    "details": "evidence/professional-workspace-20261025/format-proofs.json",
-    "scope": "Existing actual WebKit format probe; PDF/reflowable/fixed layout desktop UI also inspected separately"
-  },
-  "nativeNoteDurability": {
-    "profile": "/tmp/busybooks-native-workspace-c98zqgsm",
-    "annotationId": "annotation-probe-add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1-5",
-    "verification": "Read-only production SQLite record after native save, restart, backup, edit and restore",
-    "characters": 1000000,
-    "utf16Units": 1000000,
-    "lines": 30304,
-    "sha256Utf8": "37d00ff3489d0eaecaa7e54c373b8e2cc4b6c7893e5d1cc583049e18cd72eaf0",
-    "backupBytes": 1068734,
-    "backupSha256": "931a66d1fff0054fe7417c6781abd9e0ba2b021d36122ee66b4164756dec5b09",
-    "backupZipIntegrity": "passed",
-    "screenshots": [
-      "notebook-maximum-note-light-100.png",
-      "backup-complete-native-light-100.png",
-      "restore-complete-native-light-100.png"
-    ]
-  },
-  "nativeShutdown": {
-    "status": "failed: SIGABRT, g_mutex_clear in pinned Flutter FlCompositorOpenGL teardown",
-    "reproducedOnPristineBaseline": true,
-    "pristineDebugCycles": {
-      "normal": 0,
-      "abort": 1
+    "nativeArtworkThemes": [
+      "Yaru",
+      "Adwaita",
+      "HighContrast"
+    ],
+    "nativeAccessibility": {
+      "result": "Actual button names confirmed",
+      "reading": {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-accessibility-reading.json",
+        "bytes": 42117,
+        "sha256": "934260a8f0d77d02d1ce0baeeb3e0dbc46cb6d4cfe558120c3050f3949b7d592"
+      },
+      "notebook": {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-accessibility-notebook-final.json",
+        "bytes": 54694,
+        "sha256": "368cb91167badda546d90eba2f4824e7f64380c818634ed53c257127ec35004d"
+      },
+      "scope": "AT-SPI names/states; Yaru window controls retain named nodes; full assistive-technology qualification not claimed"
     },
-    "remediatedDebugCycles": {
-      "normalBeforeAbort": 8,
-      "abort": 1
+    "narration": "Healthy host Speech Dispatcher start/stop and Notebook handoff exercised; audible output/quality not qualified. Broken isolated audio server and its official-client failure retained as environmental evidence.",
+    "offlineOriginal": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "original": "/tmp/busybooks-release-qualification-seed/text.pdf",
+      "disposableFixture": true,
+      "offlineSince": 1792979081.0222912,
+      "originalPresent": false,
+      "temporary": "/tmp/busybooks-release-qualification-seed/text.pdf.qualification-offline",
+      "restoredAt": 1792979381.9876087,
+      "originalPresentAfterTest": true,
+      "personalFilesChanged": false,
+      "finalQueuedPositiveQueryScope": "Original was restored after enqueueing the last query batch; final positive/restore screenshots are post-restoration and are excluded from offline evidence. Earlier offline-note-search, offline-marks and offline-search-restores-marks captures were recorded while the source was absent."
     },
-    "separateNativeOwnershipOrderDefect": "repaired; does not resolve engine abort",
-    "sdkUpgradeOrPrivateShimAdded": false,
-    "observedDesktopExitCodeCounts": {
-      "0": 18,
-      "-6": 4
+    "noteDurability": {
+      "afterSave": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "stage": "after-save",
+        "capturedUtc": "2026-10-26T01:23:30.160839+00:00",
+        "annotationId": "annotation-probe-add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1-5",
+        "characters": 1000000,
+        "utf16Units": 1000000,
+        "lines": 55556,
+        "sha256Utf8": "7ded207b8c41342b9dc1d78266b027a2ddfa67c6ee2dfe307d6d016940f14cbc",
+        "matchesMaximumInput": true,
+        "integrityCheck": "ok"
+      },
+      "afterRestore": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "stage": "after-restore",
+        "capturedUtc": "2026-10-26T01:28:24.688456+00:00",
+        "annotationId": "annotation-probe-add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1-5",
+        "characters": 1000000,
+        "utf16Units": 1000000,
+        "lines": 55556,
+        "sha256Utf8": "7ded207b8c41342b9dc1d78266b027a2ddfa67c6ee2dfe307d6d016940f14cbc",
+        "matchesMaximumInput": true,
+        "integrityCheck": "ok"
+      },
+      "afterRestart": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "stage": "after-restart",
+        "capturedUtc": "2026-10-26T01:28:58.791230+00:00",
+        "annotationId": "annotation-probe-add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1-5",
+        "characters": 1000000,
+        "utf16Units": 1000000,
+        "lines": 55556,
+        "sha256Utf8": "7ded207b8c41342b9dc1d78266b027a2ddfa67c6ee2dfe307d6d016940f14cbc",
+        "matchesMaximumInput": true,
+        "integrityCheck": "ok"
+      },
+      "afterNarrationAbort": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "stage": "after-narration-abort",
+        "capturedUtc": "2026-10-26T01:32:32.902437+00:00",
+        "annotationId": "annotation-probe-add3db8a33db2daeb62de3f261454d57e13f1e5467cb12e52a3a1773d265b4d1-5",
+        "characters": 1000000,
+        "utf16Units": 1000000,
+        "lines": 55556,
+        "sha256Utf8": "7ded207b8c41342b9dc1d78266b027a2ddfa67c6ee2dfe307d6d016940f14cbc",
+        "matchesMaximumInput": true,
+        "integrityCheck": "ok"
+      },
+      "retry": {
+        "stage": "native Retry after released SQLite transaction",
+        "length": 88,
+        "sha256Utf8": "cf21ab2c46d7228e522256a4f6254432f3af94983f035eed360eb15263806488",
+        "matchesExpected": true,
+        "integrityCheck": "ok"
+      },
+      "differentReplacementBeforeRestore": {
+        "stage": "changed after native backup",
+        "characters": 102,
+        "sha256Utf8": "2941fc1e78e0d7678d032f7cfe92423dcd382235686eeaaff98593ee0552cdf3",
+        "matchesReplacement": true
+      },
+      "nativeBackup": {
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "producedBy": "actual Settings Data + native GTK Save dialog",
+        "path": "evidence/release-qualification-20261025/qualified-native-note-backup.busybooks",
+        "bytes": 1260482,
+        "sha256": "c9f9734f0e083a92a032e4159db1edc56d88952fc5f48f47ca7c2adb291d49c2",
+        "zipIntegrity": true,
+        "entries": [
+          "manifest.json"
+        ],
+        "noteCharacters": 1000000,
+        "noteSha256Utf8": "7ded207b8c41342b9dc1d78266b027a2ddfa67c6ee2dfe307d6d016940f14cbc"
+      }
+    },
+    "selectedScreenshots": [
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-home-high-contrast.png",
+        "bytes": 114284,
+        "sha256": "8e8c73bed08ce46f0697e4c7183cc0dc269c001a7c11330fa0c53208704e888c",
+        "purpose": "Home, native HighContrast artwork and 150% portal text",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-collection-wide.png",
+        "bytes": 115391,
+        "sha256": "0619739e2323087fef20b4c45b7ed5bc44b567abf1a2fc80a102f5452b0f81d7",
+        "purpose": "Wide Collection layout",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-collection-narrow.png",
+        "bytes": 77616,
+        "sha256": "d214d0c68afe5b743711e37e3de7964fdb89312159f0cf64514ccd73b65b1b71",
+        "purpose": "Narrow Collection uses full content width",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-collection-sidebar-open.png",
+        "bytes": 73679,
+        "sha256": "19b4c22a7e01a212ad66600d1928a5e3b24fb6760f91c80002dde0cf793b6b4f",
+        "purpose": "Actual narrow Collection overlay",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-collection-sidebar-closed.png",
+        "bytes": 77685,
+        "sha256": "6f6be2366379af328872cfbe05ea61c7ea6a5d6c0fe246be9034ac8f9fa998bf",
+        "purpose": "Overlay dismissed, selection retained",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-collection-book-pointer-navigation.png",
+        "bytes": 11845,
+        "sha256": "695c04a9a7f426d3ae0ab528d6f6414c7e3f3b6299fdf6e9494fc9d9cb17a5b0",
+        "purpose": "Book pointer activation after overlay dismissal",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-reading-light-150.png",
+        "bytes": 97877,
+        "sha256": "a792fde335dbc9053f249482c43771b941ebaa7c5948ac138bef5a5caa978f08",
+        "purpose": "Actual reflowable WebKit reader with Adwaita artwork and 150% text",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-note-after-restart.png",
+        "bytes": 104164,
+        "sha256": "1c5d27e7c6580cbf511023b2d79cdfdb90e7dde81079ad52922806a5862a2fe6",
+        "purpose": "Maximum multiline note remains available after native restore and restart",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-save-failed-verified.png",
+        "bytes": 112408,
+        "sha256": "5b8abd7a66f0f613337abd53196a4b07ef29c874030d214d699220ced578da8c",
+        "purpose": "SQLite write failure retains the complete Unicode draft and offers Retry",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-note-retry-saved.png",
+        "bytes": 106909,
+        "sha256": "6496baa3586b8f49251ed0b5f40479482d519b917d3a744f9087edc94d794f83",
+        "purpose": "Successful native Retry",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-maximum-note-saved.png",
+        "bytes": 93808,
+        "sha256": "d990cc70ac983699d6f62db40c232ea75e63e10fb81b0c25a53e32c798f735a5",
+        "purpose": "Maximum-length native editing and successful persistence status",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-settings-open.png",
+        "bytes": 37698,
+        "sha256": "662e244e958a01a2a8ad14d71ebe464b9a5ceb2e09aaceb841ac0c364ccb725b",
+        "purpose": "Semantic Settings surfaces and adaptive wide navigation",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-settings-data.png",
+        "bytes": 52374,
+        "sha256": "1dfc4a2bd867b803d82d183cb9b908121c45c32137a76b05f97160ccf9160fe7",
+        "purpose": "Settings Data exposes backup and restore",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-backup-file-dialog.png",
+        "bytes": 79464,
+        "sha256": "e370dfe2d9beea3bbac5f149a6055a38215a6861611aac0a0ae904f011166311",
+        "purpose": "Actual native GTK Save dialog",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-backup-complete.png",
+        "bytes": 57009,
+        "sha256": "9b5507cb690e1ed45b159bdf01e747f6023af3aef2c6fac03df056d5c63d6d91",
+        "purpose": "Native backup success",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-note-before-restore.png",
+        "bytes": 108027,
+        "sha256": "5a669dbea7cf8ba1332c20bf131d01eeda7a0284006a531c38e626a74b5a66f7",
+        "purpose": "A distinct saved replacement after backup",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-restore-confirmation.png",
+        "bytes": 87936,
+        "sha256": "9f44a0fd8de2434866eac21961642e46d703a740b128b836a4ce2276c86d3920",
+        "purpose": "Transactional restore confirmation",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-restore-complete.png",
+        "bytes": 119122,
+        "sha256": "f8bd2f87030b71cdbce106314edafef9f5d242ea87a1aeb4c433a623d4c06c1e",
+        "purpose": "Native restore success",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-main-menu.png",
+        "bytes": 102500,
+        "sha256": "4f7efdc5f70e82037a2c4c9e97931b5149987ddc6cb289771cbf286794d8ff0b",
+        "purpose": "Application-scoped GTK Main Menu",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-narration-playing.png",
+        "bytes": 102405,
+        "sha256": "ea0f5ab6c5dd87a977d2a034e41e5719d20cb8dfec2e113e8a15290317d412e5",
+        "purpose": "Native narration started through healthy host Speech Dispatcher",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-narration-notebook.png",
+        "bytes": 104164,
+        "sha256": "1c5d27e7c6580cbf511023b2d79cdfdb90e7dde81079ad52922806a5862a2fe6",
+        "purpose": "Narration-to-Notebook handoff hides reader and does not time out",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-pdf-dark-200.png",
+        "bytes": 52910,
+        "sha256": "ca3d79bc8ee8bbef7062460a7c88925d5351a66dad1062fed5853848054b44a8",
+        "purpose": "PDF at GTK scale 2 with dark chrome",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-goto-input-dark-200.png",
+        "bytes": 63759,
+        "sha256": "81fbf2a0f628ab39907d6113f3597384dbb8586aa98a5c621287c60732ebad79",
+        "purpose": "Native PDF Go To with physical page 3 input",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-appearance-dark-200.png",
+        "bytes": 65236,
+        "sha256": "4c56d4172491e10df42a2b7aebfb6c1f30ac77de79bc78f34ae3777c95f3374f",
+        "purpose": "Applicable fixed-layout options in native appearance popover",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-pdf-search-dark-200.png",
+        "bytes": 116309,
+        "sha256": "1279fac984ea51d368b158040736899764934927175b3f0276d3e336b2f3e60e",
+        "purpose": "Complete passage query and four physical/printed-label results",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-sidebar-tooltip-dark-200.png",
+        "bytes": 58271,
+        "sha256": "d87badf45c127cbbc2cebc94990e7296c79ef16d5beb6d4236c010d29454f540",
+        "purpose": "Tooltip remains within the unobstructed sidebar beside real WebKit",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-reading-overflow-dark-200-full.png",
+        "bytes": 125154,
+        "sha256": "71336ce36f8cd7bf2c6a04ddc62f0e5cceac72e8522ebf33a7d57a097f56095b",
+        "purpose": "Complete native contextual overflow, disabled commands and shortcut labels",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-wayland-reading.png",
+        "bytes": 82645,
+        "sha256": "f8896dac9fe5f845cb29aeb8fbe986ef2058d104a5879ef479062346a5914439",
+        "purpose": "Actual GTK Wayland reader under nested Weston desktop shell",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-wayland-goto.png",
+        "bytes": 89754,
+        "sha256": "0afa7d9e3aefa968fb4770f15b2117441ecd26a0a16cb53078bd1cc019a2e73b",
+        "purpose": "Wayland native Go To above real WebKit",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-wayland-appearance.png",
+        "bytes": 96760,
+        "sha256": "c33c64de81ab6cf76e2d7cb44db33adaab73475c73d838e6aeb79ba1c98cbcc9",
+        "purpose": "Wayland native compact reading appearance above WebKit",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-wayland-notebook-search.png",
+        "bytes": 144704,
+        "sha256": "0beb3c692f70c8a1079938803aba3d2296ce24867e3108fbb008f38805530991",
+        "purpose": "Wayland Notebook search with the complete reading query",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-wayland-settings-return-search-verified.png",
+        "bytes": 146307,
+        "sha256": "696f0f57b681e4bb381f5f120f1ff133da0c9bd2a2d5d7f7b9a36d4bae67de91",
+        "purpose": "Settings return retains Notebook query/results",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-wayland-main-menu.png",
+        "bytes": 52173,
+        "sha256": "45e7785206f204773a1104da7540362af3c9f242b04a65bb49d89aad450f9f00",
+        "purpose": "Actual GTK menu fully visible within the Weston output",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-missing-original-reading.png",
+        "bytes": 35355,
+        "sha256": "713cf917b6c9adfd8f3eef154043561d09e726f1d8c916211da657762ab22507",
+        "purpose": "Missing original has inline recovery and Notebook/Locate actions",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-offline-note-search.png",
+        "bytes": 155434,
+        "sha256": "839fd027e7e40653ea98dc7e8d3a42ddc96eb72df04a0e23510b4f0fef98a561",
+        "purpose": "Positive private-note search while disposable original PDF was absent",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-offline-marks.png",
+        "bytes": 201230,
+        "sha256": "b007dd130fb76f228ce9bc6ef59f2260fd74aa0f5205f89be4af83a230250d28",
+        "purpose": "Data-backed Marks available without the original PDF",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      },
+      {
+        "path": "evidence/release-qualification-20261025/qualified-a85db3f-offline-search-restores-marks.png",
+        "bytes": 201230,
+        "sha256": "b007dd130fb76f228ce9bc6ef59f2260fd74aa0f5205f89be4af83a230250d28",
+        "purpose": "Closing local search restores Marks while the original was absent",
+        "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+        "kind": "actual native GTK/WebKit capture"
+      }
+    ],
+    "actionTranscript": {
+      "path": "evidence/release-qualification-20261025/native-actions.jsonl",
+      "bytes": 97609,
+      "sha256": "6073cb90e3aad7ab3dce8fb2a73642fbdc6bd7d36b733d48765d6c90fab2dd4e",
+      "scope": "Includes original and final runs, exact commands/results, retained errors and observed exit codes. Only selected captures above qualify final acceptance."
+    },
+    "waylandClose": {
+      "exitCode": 0,
+      "engineImplicitViewRemovalDiagnosticPresent": true,
+      "scope": "One actual final application close; not general clean-shutdown certification"
     }
   },
-  "unverified": [
-    "native Windows compilation, Win32 menu and WebView2 acceptance",
-    "Wayland and true fractional monitor scaling",
-    "real hardware GPU variations",
-    "complete screen-reader, high-contrast and IME acceptance",
-    "audible narration acceptance"
+  "windows": {
+    "existingVm": {
+      "name": "Windows 11",
+      "uuid": "474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3",
+      "originalPowerState": "saved",
+      "finalPowerState": "saved",
+      "virtualBox": "7.1.8r168469",
+      "cpus": 8,
+      "ramMiB": 4096,
+      "diskCapacityMiB": 81920,
+      "diskFormat": "dynamic VDI, SATA",
+      "vramMiB": 128,
+      "display": "VBoxSVGA",
+      "acceleration3d": false,
+      "firmware": "EFI",
+      "cachedGuestArchitecture": "x64",
+      "cachedGuestBuild": "10.0.26100",
+      "cachedGuestAdditions": "7.1.8",
+      "cachedLoggedInUsers": 1,
+      "cachedPropertiesAreLiveAcceptance": false
+    },
+    "prerequisiteAttempt": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "capturedUtc": "2026-10-26T01:34:14.872434+00:00",
+      "deviceExists": false,
+      "checks": [
+        {
+          "command": [
+            "VBoxManage",
+            "--version"
+          ],
+          "exitCode": 0,
+          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\n7.1.8r168469"
+        },
+        {
+          "command": [
+            "VBoxManage",
+            "list",
+            "vms"
+          ],
+          "exitCode": 0,
+          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\n\"Windows 11\" {474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3}"
+        },
+        {
+          "command": [
+            "VBoxManage",
+            "startvm",
+            "Windows 11",
+            "--type",
+            "headless"
+          ],
+          "exitCode": 1,
+          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nWaiting for VM \"Windows 11\" to power on...\nVBoxManage: error: The virtual machine 'Windows 11' has terminated unexpectedly during startup with exit code 1 (0x1)\nVBoxManage: error: Details: code NS_ERROR_FAILURE (0x80004005), component MachineWrap, interface IMachine"
+        },
+        {
+          "command": [
+            "VBoxManage",
+            "guestcontrol",
+            "Windows 11",
+            "list",
+            "sessions"
+          ],
+          "exitCode": 1,
+          "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nVBoxManage: error: Machine \"Windows 11\" is not running (currently saved)!"
+        },
+        {
+          "command": [
+            "modinfo",
+            "vboxdrv"
+          ],
+          "exitCode": 1,
+          "output": "modinfo: ERROR: Module vboxdrv not found."
+        },
+        {
+          "command": [
+            "sudo",
+            "-n",
+            "/sbin/modprobe",
+            "vboxdrv"
+          ],
+          "exitCode": 1,
+          "output": "sudo: a password is required"
+        }
+      ],
+      "finalVmState": {
+        "name": "\"Windows 11\"",
+        "ostype": "\"Windows 11 (64-bit)\"",
+        "UUID": "\"474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3\"",
+        "memory": "4096",
+        "vram": "128",
+        "cpus": "8",
+        "VMState": "\"saved\"",
+        "graphicscontroller": "\"vboxsvga\"",
+        "accelerate3d": "\"off\""
+      },
+      "guestExecution": "not established; host driver prevents saved VM resume",
+      "credentialsStored": false,
+      "guestOrVmSettingsChanged": false
+    },
+    "diskInspection": {
+      "command": [
+        "VBoxManage",
+        "showmediuminfo",
+        "disk",
+        "ca75e2c4-6f72-4e46-bf30-3a376be89d39"
+      ],
+      "exitCode": 0,
+      "output": "WARNING: The vboxdrv kernel module is not loaded. Either there is no module\n         available for the current kernel (7.0.0-38-generic) or it failed to\n         load. Please recompile the kernel module and install it by\n\n           sudo /sbin/vboxconfig\n\n         You will not be able to start VMs until this problem is fixed.\nUUID:           ca75e2c4-6f72-4e46-bf30-3a376be89d39\nParent UUID:    base\nState:          created\nType:           normal (base)\nLocation:       /home/albert/VirtualBox VMs/Windows 11/Windows 11.vdi\nStorage format: VDI\nFormat variant: dynamic default\nCapacity:       81920 MBytes\nSize on disk:   40646 MBytes\nEncryption:     disabled\nProperty:       AllocationBlockSize=1048576\nIn use by VMs:  Windows 11 (UUID: 474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3)"
+    },
+    "blockedBy": "No vboxdrv module or /dev/vboxdrv for kernel 7.0.0-38-generic; saved VM resume fails NS_ERROR_FAILURE; sudo -n modprobe requires administrator authentication",
+    "minimumExternalAction": "Administrator restoration of a compatible official VirtualBox host driver while preserving the existing saved VM. VBoxManage recommends sudo /sbin/vboxconfig. No passwords should be provided in chat/logs/scripts.",
+    "guestExecution": "not established; guestcontrol list sessions reports saved/not running",
+    "developmentToolsInventory": "not verified",
+    "officialToolsInstalledInGuest": false,
+    "sourceTransferred": false,
+    "automatedSuiteExecuted": false,
+    "windowsReleaseBuild": "not executed; not a Windows compilation failure",
+    "nativeWin32MenuWebView2Acceptance": "not executed",
+    "screenshotsCapturedInGuest": 0,
+    "credentialsStored": false,
+    "authenticationWeakened": false,
+    "vmSettingsSnapshotsOrGuestFilesChanged": false,
+    "continuation": "Use existing guest, official pinned toolchain and existing Windows CI/native workflow after host prerequisite is restored; restore original saved power state without discarding user work",
+    "virtualizationBoundary": "Future VirtualBox functional acceptance cannot establish compatibility/performance across physical GPUs and drivers"
+  },
+  "shutdown": {
+    "risk": "present",
+    "classification": "Pinned official Flutter Linux compositor teardown; distinct from the previously repaired BusyBooks native signal-disconnection defect",
+    "cleanShutdownAcceptancePassed": false,
+    "finalDebugger": {
+      "binary": "/mnt/Media/busystack/busybooks/build/linux/x64/release/bundle/busybooks",
+      "profile": "/tmp/busybooks-shutdown-proof-2h06vj5e/profile",
+      "outcomes": [
+        {
+          "cycle": 0,
+          "normal": false,
+          "abort": true,
+          "log": "evidence/release-qualification-20261025/qualified-busybooks-shutdown/close-0-gdb.log"
+        }
+      ],
+      "cleanShutdownPassed": false
+    },
+    "finalDataIntegrity": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "before": {
+        "annotations": 42,
+        "sha256": "14b315ef5ced0cda239e2d3d2fc24d48239ea6ba183049f4b9c9982ad2394007",
+        "integrityCheck": "ok"
+      },
+      "afterAbort": {
+        "annotations": 42,
+        "sha256": "14b315ef5ced0cda239e2d3d2fc24d48239ea6ba183049f4b9c9982ad2394007",
+        "integrityCheck": "ok"
+      }
+    },
+    "signature": "SIGABRT / g_mutex_clear inside bundled libflutter_linux_gtk.so FlCompositorOpenGL disposal during GTK view destruction",
+    "preRemediationReproduction": {
+      "revision": "cb7ded3aaed330a0e2e605a4b1ba33d1b209e248",
+      "scope": "Pristine BusyBooks baseline; same engine stack, separate from final-version evidence"
+    },
+    "controls": {
+      "officialUnmodifiedCounter": {
+        "binary": "/tmp/busybooks-official-flutter-shutdown/build/linux/x64/release/bundle/busybooks_shutdown_reproducer",
+        "profile": "/tmp/busybooks-shutdown-proof-5z7bhbof/profile",
+        "outcomes": [
+          {
+            "cycle": 0,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/flutter-template-shutdown/close-0-gdb.log"
+          },
+          {
+            "cycle": 1,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/flutter-template-shutdown/close-1-gdb.log"
+          },
+          {
+            "cycle": 2,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/flutter-template-shutdown/close-2-gdb.log"
+          },
+          {
+            "cycle": 3,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/flutter-template-shutdown/close-3-gdb.log"
+          },
+          {
+            "cycle": 4,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/flutter-template-shutdown/close-4-gdb.log"
+          }
+        ],
+        "cleanShutdownPassed": true
+      },
+      "publicApiTwoViewHarness": {
+        "binary": "/tmp/busybooks-official-flutter-shutdown/build/linux/x64/release/bundle/flutter_view_shutdown_probe",
+        "profile": "/tmp/busybooks-shutdown-proof-4pupvdu2/profile",
+        "outcomes": [
+          {
+            "cycle": 0,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/two-flutter-views-shutdown-pid/close-0-gdb.log"
+          },
+          {
+            "cycle": 1,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/two-flutter-views-shutdown-pid/close-1-gdb.log"
+          },
+          {
+            "cycle": 2,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/two-flutter-views-shutdown-pid/close-2-gdb.log"
+          },
+          {
+            "cycle": 3,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/two-flutter-views-shutdown-pid/close-3-gdb.log"
+          },
+          {
+            "cycle": 4,
+            "normal": true,
+            "abort": false,
+            "log": "evidence/release-qualification-20261025/two-flutter-views-shutdown-pid/close-4-gdb.log"
+          }
+        ],
+        "cleanShutdownPassed": true
+      },
+      "independentMinimalAbortReproduced": false
+    },
+    "upstreamReview": {
+      "capturedUtc": "2026-10-26T01:51:09.199116+00:00",
+      "primarySources": [
+        "https://github.com/flutter/flutter/issues/192873",
+        "https://github.com/flutter/flutter/pull/193268",
+        "https://api.flutter.dev/linux-embedder/fl__compositor__opengl_8cc_source.html"
+      ],
+      "finding": "192873/193268 concerns destruction during rendering, not a verified exact mutex-abort match. No exact released correction was verified. A runtime attribution is supported by pinned engine stack/source and pre-remediation reproduction; an independent minimal counter reproduction was not obtained. No third-party software was modified.",
+      "sdkSourceChecks": [
+        {
+          "command": [
+            "git",
+            "-C",
+            "/home/albert/flutter",
+            "rev-parse",
+            "HEAD"
+          ],
+          "exitCode": 0,
+          "stdout": "6a19cca56475dbfba1478ee68d7bd0c2ef891da1\n",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "git",
+            "-C",
+            "/home/albert/flutter",
+            "status",
+            "--short"
+          ],
+          "exitCode": 0,
+          "stdout": " M pubspec.lock\n",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "git",
+            "-C",
+            "/home/albert/flutter",
+            "diff",
+            "--name-only",
+            "3.47.5..3.47.6",
+            "--",
+            "engine/src/flutter/shell/platform/linux"
+          ],
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "command": [
+            "git",
+            "-C",
+            "/home/albert/flutter",
+            "diff",
+            "--name-only",
+            "3.47.5..3.47.7",
+            "--",
+            "engine/src/flutter/shell/platform/linux"
+          ],
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    "boundary": "No engine/SDK/dependency patch, arbitrary shutdown delay, forced-exit workaround or weakened crash detection. The debugger stops after its first captured abort. Data hashes/integrity support tested application flushing, not immunity to all crashes."
+  },
+  "limitations": [
+    {
+      "category": "unavailable_environment",
+      "essential": true,
+      "scope": "Windows release compilation, complete guest suite, Win32/WebView2 and interactive native acceptance; existing VM cannot resume without official host driver/admin authentication"
+    },
+    {
+      "category": "third_party_runtime_defect",
+      "essentialRiskDecision": true,
+      "scope": "Intermittent official Flutter compositor abort on Linux close; application-owned fixes and data flushing qualify separately"
+    },
+    {
+      "category": "unqualified_facility",
+      "essential": false,
+      "scope": "Complex/CJK IME composition; private US IBus attempt also failed in stock GTK control. Ordinary keys and Unicode clipboard passed."
+    },
+    {
+      "category": "unavailable_environment",
+      "essential": false,
+      "scope": "GNOME Wayland and fractional physical-monitor scaling; nested Weston functional testing is recorded separately"
+    },
+    {
+      "category": "optional_hardware_qualification",
+      "essential": false,
+      "scope": "Physical GPU/driver/performance coverage, audible narration/voice quality, full screen-reader and system high-contrast audit"
+    }
   ],
-  "captureProvenance": "UI acceptance was performed incrementally. Final feature-specific captures use the implementation revision above. Exploratory captures whose filenames overstated evidence are excluded; Actions activation deliberately closes its search before execution, whereas the separately verified Main Menu Settings round trip retains active search.",
-  "logsAndData": [
-    {
-      "path": "evidence/professional-workspace-20261025/baseline-analyze.log",
-      "bytes": 96,
-      "sha256": "1bc3b6421933edf603114e6611be2b2b6ccf7e4983697a9ecfa46e35bce81ee3"
+  "captureDisposition": {
+    "rule": "Filenames can describe intended actions. Only selected inspected captures qualify final claims; all other exploratory artifacts retain their original scope.",
+    "examplesExcluded": [
+      {
+        "path": "qualified-dc755f4-ime-commit-verified.png",
+        "reason": "Attempt produced literal digits; also reproduced with stock GTK, not successful composition"
+      },
+      {
+        "path": "qualified-a85db3f-notebook-restarted-maximum.png",
+        "reason": "Actually a native View radio menu; correct Notebook/restart capture selected separately"
+      },
+      {
+        "path": "qualified-a85db3f-settings-data-before-backup.png",
+        "reason": "Ctrl+comma was not the configured Settings shortcut; actual Saved Notebook status"
+      },
+      {
+        "path": "qualified-a85db3f-save-failed.png",
+        "reason": "Over-limit paste correctly rejected; not a SQLite save failure"
+      },
+      {
+        "path": "qualified-a85db3f-wayland-settings-return-search.png",
+        "reason": "Wrong pointer target left Settings visible; corrected verified return selected"
+      },
+      {
+        "path": "qualified-a85db3f-reading-overflow-dark-200.png",
+        "reason": "Application-only crop excludes part of an otherwise visible native menu; full display capture selected"
+      },
+      {
+        "path": "qualified-a85db3f-collection-overlay.png",
+        "reason": "F9 is a book command, not the Collection toggle; actual pointer-opened sidebar captured later"
+      },
+      {
+        "path": "qualified-a85db3f-collection-overlay-verified.png",
+        "reason": "Intended target was actually a Reading view; corrected Collection captures selected"
+      },
+      {
+        "path": "qualified-a85db3f-offline-notebook-search-verified.png",
+        "reason": "Retained private query plus appended private produced privateprivate/no results; positive offline search captured earlier"
+      },
+      {
+        "path": "qualified-a85db3f-offline-search-positive.png",
+        "reason": "Original was restored while this final queued batch ran; excluded from offline qualification"
+      },
+      {
+        "path": "qualified-a85db3f-main-menu-file-handoff.png",
+        "reason": "Actual GTK menu during forwarded handoff, but visible old FB2 title does not prove a paused Loading state; loading/failure contracts are automated regressions"
+      }
+    ],
+    "supersededRuns": [
+      "pre-native-lifecycle",
+      "pre-accessibility-dc755f4",
+      "intermediate-accessibility-flags"
+    ],
+    "overlappingBuild": "qualified-accessibility-release-build.log failed with AOT ApiError during overlapping build; serialized final build passed and matches UI-tested bundle. No concurrent artifact is treated as independently qualified."
+  },
+  "provenance": {
+    "nativeInputEquivalence": {
+      "capturedUtc": "2026-10-26T02:05:09.215333+00:00",
+      "nativeProbeStartRevision": "1dd615df3576ef34531380f08221731cbb7cb6b4",
+      "qualifiedImplementationRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "runtimeNativeProbeAndProfileInputsIdentical": true,
+      "difference": "Current semantics flags/import assertions in the Dart test only; complete final Dart suite and release build rerun at qualified revision",
+      "checks": [
+        {
+          "command": [
+            "git",
+            "diff",
+            "--name-only",
+            "1dd615df3576ef34531380f08221731cbb7cb6b4",
+            "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+            "--",
+            "lib",
+            "linux",
+            "windows",
+            "assets",
+            "tools",
+            "pubspec.yaml",
+            "pubspec.lock",
+            "test/fixtures",
+            "test/src/linux_reader_surface_test.cc",
+            "test/src/native_menu_selection_test.cc"
+          ],
+          "exitCode": 0,
+          "output": ""
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--name-only",
+            "1dd615df3576ef34531380f08221731cbb7cb6b4",
+            "a85db3feaad7b897c0ab90ad0868af066f42df7d"
+          ],
+          "exitCode": 0,
+          "output": "test/src/busybooks_design_test.dart\n"
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "1dd615df3576ef34531380f08221731cbb7cb6b4",
+            "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+            "--",
+            "test/src/busybooks_design_test.dart"
+          ],
+          "exitCode": 0,
+          "output": "diff --git a/test/src/busybooks_design_test.dart b/test/src/busybooks_design_test.dart\nindex d9be798..8e7cd59 100644\n--- a/test/src/busybooks_design_test.dart\n+++ b/test/src/busybooks_design_test.dart\n@@ -1,3 +1,5 @@\n+import 'dart:ui' show Tristate;\n+\n import 'package:busybooks/src/app/app_theme.dart';\n import 'package:busybooks/src/app/busybooks_design.dart';\n import 'package:flutter/material.dart';\n@@ -46,16 +48,16 @@ void main() {\n     final buttons = find.byType(IconButton);\n     final home = tester.getSemantics(buttons.at(0));\n     expect(home.label, 'Home');\n-    expect(home.hasFlag(SemanticsFlag.isButton), isTrue);\n-    expect(home.hasFlag(SemanticsFlag.isSelected), isTrue);\n+    expect(home.flagsCollection.isButton, isTrue);\n+    expect(home.flagsCollection.isSelected, Tristate.isTrue);\n     expect(home.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);\n     final previous = tester.getSemantics(buttons.at(1));\n     expect(previous.label, 'Previous');\n-    expect(previous.hasFlag(SemanticsFlag.isEnabled), isFalse);\n+    expect(previous.flagsCollection.isEnabled, Tristate.isFalse);\n     expect(previous.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);\n     final edit = tester.getSemantics(buttons.at(2));\n     expect(edit.label, 'Edit Note');\n-    expect(edit.hasFlag(SemanticsFlag.isButton), isTrue);\n+    expect(edit.flagsCollection.isButton, isTrue);\n     expect(edit.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);\n     expect(tester.getSemantics(buttons.at(3)).label, 'Search');\n     expect(find.byTooltip('Home (Alt+Home)'), findsOneWidget);\n"
+        }
+      ]
     },
-    {
-      "path": "evidence/professional-workspace-20261025/baseline-format.log",
-      "bytes": 49,
-      "sha256": "a012bde8b5f1e828b3d821688ae4da0acee4563e0c0bf3c3e0b9f405fe25f8e5"
+    "finalInputSnapshot": {
+      "path": "evidence/release-qualification-20261025/final-source-inputs.json",
+      "bytes": 90924,
+      "sha256": "b48dcc6710fcd5efe000f9658a3ed47ec16b8d1ed70f6d09c3740f182e17e563"
     },
-    {
-      "path": "evidence/professional-workspace-20261025/baseline-tests.log",
-      "bytes": 78109,
-      "sha256": "9f99d4a28f37c680936a9246b958ad7f43148219786637352ec53ea0d082483d"
+    "trackedInputCount": 585,
+    "bundle": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "capturedUtc": "2026-10-26T01:23:24.259385+00:00",
+      "files": [
+        {
+          "path": "build/linux/x64/release/bundle/busybooks",
+          "bytes": 222464,
+          "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad"
+        },
+        {
+          "path": "build/linux/x64/release/bundle/lib/libapp.so",
+          "bytes": 11633544,
+          "sha256": "02c33430a465e9036614891d098189d6f95c040063e852a3c81dee2e24ee39a7"
+        },
+        {
+          "path": "build/linux/x64/release/bundle/lib/libflutter_linux_gtk.so",
+          "bytes": 17218152,
+          "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1"
+        }
+      ]
     },
-    {
-      "path": "evidence/professional-workspace-20261025/baseline-linux-release-build.log",
-      "bytes": 116,
-      "sha256": "58073bc7250d4e137a074b1534eee1834e59a4661c2c9979fced0f5a0c97a556"
+    "immutableNativeBundle": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "capturedUtc": "2026-10-26T01:16:32.690829+00:00",
+      "build": "intermediate-accessibility-flags/final-linux-release-build.log",
+      "snapshot": "/tmp/busybooks-qualified-release-bundle",
+      "files": [
+        {
+          "relative": "busybooks",
+          "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad",
+          "bytes": 222464
+        },
+        {
+          "relative": "lib/libapp.so",
+          "sha256": "02c33430a465e9036614891d098189d6f95c040063e852a3c81dee2e24ee39a7",
+          "bytes": 11633544
+        },
+        {
+          "relative": "lib/libflutter_linux_gtk.so",
+          "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1",
+          "bytes": 17218152
+        }
+      ],
+      "purpose": "Immutable native acceptance bundle; excludes later simultaneous build writes"
     },
-    {
-      "path": "evidence/professional-workspace-20261025/baseline-native-input.log",
-      "bytes": 90,
-      "sha256": "7bd573b5242b17ad2336e14c018a6d70dcd9eeb83dbd6a6511f48f3aafd0f3d6"
+    "preDeliveryAudit": {
+      "sourceRevision": "a85db3feaad7b897c0ab90ad0868af066f42df7d",
+      "capturedUtc": "2026-10-26T01:57:11.421885+00:00",
+      "trackedInputCount": 585,
+      "inputMismatches": [],
+      "bundleMismatches": [],
+      "commandManifests": {
+        "final-qualification-commands.jsonl": {
+          "count": 9,
+          "failed": []
+        },
+        "final-storage-checks.jsonl": {
+          "count": 8,
+          "failed": []
+        },
+        "final-native-checks.jsonl": {
+          "count": 6,
+          "failed": []
+        }
+      },
+      "projectLockfileDiff": "",
+      "workingTree": " M docs/development/professional-workspace-verification.md\n M docs/development/windows.md\n"
     },
-    {
-      "path": "evidence/professional-workspace-20261025/final-analyze.log",
-      "bytes": 1310,
-      "sha256": "5a6e63a2792e71d2259f4486cc07d8a1d302c023d51b6275202458a2168e980d"
+    "deliveryRelationship": "Documentation/results-only successor to tested implementation; post-delivery audit records exact delivery SHA and checks all input hashes without a self-referential commit-hash cycle",
+    "postDeliveryAuditPath": "evidence/release-qualification-20261025/post-delivery-audit.json",
+    "historicalExportReconciliation": "01ad861..0bf8dad differs only in documentation and two verification tools; runtime/tests unchanged. These prior tests are historical, not final-source qualification.",
+    "historicalOriginalManifest": {
+      "path": "evidence/release-qualification-20261025/historical-workspace-results.json",
+      "bytes": 30820,
+      "sha256": "bda7305f66d9a2be40efbe5ec8ce39457b0be64e47c7ba6986cc4c67f812ae6d",
+      "scope": "Original record retained verbatim; build paths/hashes are historical and may have been superseded, not current artifact references"
     },
-    {
-      "path": "evidence/professional-workspace-20261025/final-format.log",
-      "bytes": 49,
-      "sha256": "b1f8c9ab6873d22c0cb7f709af328fed36612e857ffe228209e2f295cefd8cc6"
+    "evidenceIndex": {
+      "path": "evidence/release-qualification-20261025/evidence-index.json",
+      "bytes": 85810,
+      "sha256": "e2aa8017ee09c97e7683d795761e1196802ead482c5080322026eab5a03dc0bc"
     },
-    {
-      "path": "evidence/professional-workspace-20261025/final-tests.log",
-      "bytes": 82958,
-      "sha256": "7055898425cc2dd1957eef208c86dfbf123a09fa116903b496c11fef1a7fd52f"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/final-linux-release-build.log",
-      "bytes": 1330,
-      "sha256": "6a39383ce96784f596b71d8dc7c3b6f5e88d7d92ea0229598022eac27f1575e4"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/final-native-input-and-menu-contract.log",
-      "bytes": 67,
-      "sha256": "62973303084ef554b2126a3d9d1be318a61aafab0929dd70acd2af71ed247adc"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/reader-javascript-controlled-probes.log",
-      "bytes": 3265,
-      "sha256": "c9c2afa6590d8414e34a1be504270bcaf45b6ab712c7ac5258d218926427ae32"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/reader-formats-native-probe.log",
-      "bytes": 1168842,
-      "sha256": "e2b07447ad270bedc29c12992523e31f1ad063d5fff2a0eff64e8a7181fd1d8e"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-pristine-baseline-build.log",
-      "bytes": 10669,
-      "sha256": "d8e58fe44894c36e248b55deccf664ae6b603750b283e8aca3409ecea85582e1"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-pristine-baseline-driver.log",
-      "bytes": 3684,
-      "sha256": "c65f15a0835b344908046642403aaac841cd69ff1a45f4e22d83078408300b34"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-pristine-baseline-gdb.log",
-      "bytes": 297191,
-      "sha256": "e2fe75f20347fc7ff15e840bbc0d182895015867619a02041f88ecb025378685"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-driver.log",
-      "bytes": 4508,
-      "sha256": "318fa704fe50b45cf960ef5f8268f6cfbe1b4f7ef3b60ff205bd357cc3d3d204"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-abort-gdb.log",
-      "bytes": 295165,
-      "sha256": "af14ccaab5eca2a86766172d3f8177788e33a42cd98343a31f8f1d3a79d7e4c2"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-native-owner-order-before-gdb.log",
-      "bytes": 115402,
-      "sha256": "86c11f81f8aebae6422f016e4599bd97f2b88f4a2a9b281b6eed4f01b7bf6a0a"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-native-owner-order-after-gdb.log",
-      "bytes": 978,
-      "sha256": "80603424d731990c2194e7d1795dfef26313a26b670bfdbd8170509d9f231e96"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-0-gdb.log",
-      "bytes": 17134,
-      "sha256": "79cb94a17968483bfeb2516b42581173a352888f2f297e0dc253d9722cc9bbc4"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-1-gdb.log",
-      "bytes": 17134,
-      "sha256": "d67e82209c6c3be2b9a3c6b1b92736d64e5f11bcb3823ec1d4de4ed444dffa4f"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-2-gdb.log",
-      "bytes": 17134,
-      "sha256": "422230cfaa2e96ddc18457372f85f1c6afce2aa03972a5d29d869317d1bc3dc9"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-3-gdb.log",
-      "bytes": 17134,
-      "sha256": "13f9ecb982d432805c7473fee3f0ae7585693fff137fcf4c14ad438d93d8a7b8"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-4-gdb.log",
-      "bytes": 17134,
-      "sha256": "66ca30a6e3275f8c7de14a5285b9a3733640a251aebd6c786dfc12d47e1618e2"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-5-gdb.log",
-      "bytes": 17134,
-      "sha256": "e20bc7f173381957d249430185f8fbe49d967e897164ed18a9302f1bc8aaee38"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-6-gdb.log",
-      "bytes": 17134,
-      "sha256": "6ab4230c4d0cfe012be028cabb87a5e0a1602262ddf4a3f0888e54d7370742b2"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/shutdown-remediated-normal-7-gdb.log",
-      "bytes": 17134,
-      "sha256": "c2bc0beec5dfeda1e6851910a0c70ce22090e519412b0327f9ca9d78657de6d3"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/maximum-note-proof.json",
-      "bytes": 727,
-      "sha256": "4a8dc817b0aef7435d47af75018aa47d4a53e412772ce2bfaf8e9559b05e5b51"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/maximum-note-native-backup.busybooks",
-      "bytes": 1068734,
-      "sha256": "931a66d1fff0054fe7417c6781abd9e0ba2b021d36122ee66b4164756dec5b09"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/format-proofs.json",
-      "bytes": 15083,
-      "sha256": "143db9fb8982992ee7d2d3011493e4733af1ae83418894580e28e8b5e0932d58"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/native-run-outcomes.json",
-      "bytes": 5913,
-      "sha256": "e5b4f1217958dac44c742d989c38510c030dbcc1f2a8fa6988169524d2ba8f9a"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/native-actions.jsonl",
-      "bytes": 144698,
-      "sha256": "8348986e8cf0401d925964a7b9b05d91631f99587708fbcf473d4bfe0778b243"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/native-icons.json",
-      "bytes": 1091,
-      "sha256": "51f08707517473ed57f13a159a3874a1d7b0a54a91e0c370f33a212ba19dbb8e"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/linux-final-light-150.log",
-      "bytes": 410,
-      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/linux-final-dark-150.log",
-      "bytes": 410,
-      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/linux-final-light-200.log",
-      "bytes": 683,
-      "sha256": "a521c73e9a06ffd0f2c06b23cc27e658bc6e4e95ea2f828cc5db8f89a8095e92"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/linux-final-dark-200.log",
-      "bytes": 410,
-      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/linux-final-header-tooltip-200.log",
-      "bytes": 410,
-      "sha256": "49cfc14085b2fa63eae701b23756f16ebbfde4c1633b88be1abfe534f6eaa619"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/linux-final-search-category-200.log",
-      "bytes": 769,
-      "sha256": "88008c3101342ac9034511872603af11170984509b268f20a03be5126b14fb70"
-    }
+    "retainedRoot": "evidence/release-qualification-20261025",
+    "generatedArtifactsCommitted": false,
+    "retention": "Logs, screenshots, native backup and harnesses retained under repository evidence directory; no disposable /tmp path is the sole evidence for a final claim"
+  },
+  "materiallyChangedFiles": [
+    "docs/development/reading-workspace.md",
+    "lib/src/app/busybooks_design.dart",
+    "lib/src/book_workspace/application/book_session_lifetime.dart",
+    "lib/src/book_workspace/application/book_sidebar_controller.dart",
+    "lib/src/notebook/application/notebook_controller.dart",
+    "lib/src/notebook/presentation/book_view_selector.dart",
+    "lib/src/platform/speech_service.dart",
+    "lib/src/reading/application/narration_controller.dart",
+    "lib/src/reading/application/reader_controller.dart",
+    "lib/src/search/book_search_session.dart",
+    "lib/src/search/book_search_widgets.dart",
+    "test/src/busybooks_design_test.dart",
+    "test/src/linux_reader_surface_test.cc",
+    "test/src/reader_hardening_test.dart",
+    "test/src/reader_original_file_test.dart",
+    "test/src/reader_workspace_test.dart",
+    "tools/book_session_memory_probe.dart",
+    "tools/flutter_view_shutdown_probe.cc",
+    "tools/probe_linux_shutdown.py",
+    "tools/probe_linux_workspace.py",
+    "docs/development/professional-workspace-verification.md",
+    "docs/development/professional-workspace-results.json",
+    "docs/development/windows.md"
   ],
-  "selectedScreenshots": [
-    {
-      "path": "evidence/professional-workspace-20261025/home-final-light-100.png",
-      "bytes": 70379,
-      "sha256": "e2b2cd4aa81a0f702e963378fc17bd774a04eaa0c3060239239c79b381328e53",
-      "purpose": "Home with final chrome"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/home-dark-100.png",
-      "bytes": 70286,
-      "sha256": "afdab65147133cc841dd9eaaba1caa8f385f485ebbd611ab7a1d153841b37040",
-      "purpose": "Home dark shell"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/collection-final-light-100.png",
-      "bytes": 67295,
-      "sha256": "48fcabdc882654aacab9da09b0a29b50c3f4a4d7663173c6d713aa77e8766597",
-      "purpose": "Collection wide"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/collection-narrow-final-light-100.png",
-      "bytes": 51986,
-      "sha256": "2145aaf0a1563659e934f49100e3de19fc18e4e7a63fbb1d093f22aedfe4d0ec",
-      "purpose": "Collection narrow without reserved sidebar width"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/collection-overlay-final-light-100.png",
-      "bytes": 48778,
-      "sha256": "aa320cd8a80c516cdddfbf5441501c374b8119dabd04741a663a22aae64300a4",
-      "purpose": "Collection dismissible narrow overlay"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/reading-final-light-100.png",
-      "bytes": 61744,
-      "sha256": "6bdedf0166545470698bcc995a8f68c5ed6184b88425f7e1ba0f11a0b653d672",
-      "purpose": "Actual WebKit reflowable reader"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-sidebar-final-light-100.png",
-      "bytes": 45275,
-      "sha256": "4397bf8d958a9fe7c584d060333665b52f41986df85b72949bc827279d0b3faf",
-      "purpose": "Notebook in retained book shell with sidebar"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/marks-notebook-light-100.png",
-      "bytes": 137523,
-      "sha256": "f9f33f83d1f7b910b7dd9e5f83f8cd045ec4141c47be262cb0d005689503c7bd",
-      "purpose": "Marks navigation beside Notebook"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/sidebar-panel-selector-notebook-light-100.png",
-      "bytes": 106214,
-      "sha256": "20a71724d03005f843e8c807ce9dcd3f42d3dfa04e41f7ff81a8ea6ce9f0d07c",
-      "purpose": "Permanent sidebar panels"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/sidebar-tooltip-over-native-reader-light-100.png",
-      "bytes": 86731,
-      "sha256": "7b3f2275a4845888f46d32b11036794ef752abaa2e5a3e85cbedd7e726a53300",
-      "purpose": "Selector tooltip above unobstructed sidebar with native reader active"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/sidebar-tooltip-native-dark-200.png",
-      "bytes": 159473,
-      "sha256": "21efe32c763abb52e96a17f38203f0c62f13ca7a8427c155d579bc85c7893141",
-      "purpose": "Scaled dark selector tooltip with native reader active"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/header-home-tooltip-native-final-dark-200.png",
-      "bytes": 156924,
-      "sha256": "95f90ed208656a7672584c83b5738b4a1d457e63374c7b1691bb8e0dcf605c12",
-      "purpose": "Home hint within shared header bounds"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/header-clear-tooltip-native-final-dark-200.png",
-      "bytes": 281238,
-      "sha256": "0049aaf39c409aa55bd60fb3f63bf36f89e44154c200753ae6e6d6c48fe31517",
-      "purpose": "Clear Text hint within header bounds"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-close-tooltip-native-dark-200.png",
-      "bytes": 282558,
-      "sha256": "74586cc0c849bd9f2f0951ae64a9336fd59ea0fb3055c141e1f9cb98f828f908",
-      "purpose": "Bounded close-search tooltip with obsolete hints retired"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-final-keyboard-light-100.png",
-      "bytes": 114606,
-      "sha256": "3d0ed5a953f1277f775d502c9fd9c6a78332184297d4ffdf138fc008be9159e5",
-      "purpose": "Typed native Book Text search with results"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-notebook-keyboard-final-light-100.png",
-      "bytes": 74498,
-      "sha256": "a3e5570a8eaa30c1f7c4d9a26f2fc4ab8fd0b7fa94321a51f03e451bffda65f4",
-      "purpose": "Typed Notebook Ctrl+F query and result"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-bookmarks-verified-native-dark-200.png",
-      "bytes": 146392,
-      "sha256": "8c34f75c484c9f37e58ddfb5be9bde16b8338c9c676f31c59b9db51858a88c0d",
-      "purpose": "Verified Bookmarks query/result"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-chapters-verified-native-dark-200.png",
-      "bytes": 147636,
-      "sha256": "43cec51816df4e93009efff07cf083c71cfda5ec3bbfa10eefe96da84430ce3c",
-      "purpose": "Verified Chapters query/result"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-actions-query-native-final-dark-200.png",
-      "bytes": 152483,
-      "sha256": "db0eaaf8c42760cb3cb0edd9836f29ec20418ece4af5c9dfbc6e6fe951e90a1d",
-      "purpose": "Actions query reusing command identities"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-category-menu-verified-native-dark-200.png",
-      "bytes": 167188,
-      "sha256": "97cd41f8f88b74b7269f8d3460fdda577c145df3ab2375b5812755871f186439",
-      "purpose": "Actual native category menu with no All category"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-with-retained-search-verified-native-dark-200.png",
-      "bytes": 59545,
-      "sha256": "87ecb18d133f3b7021ae65665841a8c4c66200264ff5629a0f1affa1fcce346d",
-      "purpose": "Settings opened while Chapters search remained active"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-return-search-verified-native-dark-200.png",
-      "bytes": 151188,
-      "sha256": "0741aca6e002df25ff1edc275450978869167d064a2af94c5a467aa02e644940",
-      "purpose": "Settings return preserves category, query and selected result"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/chapter-activation-verified-native-dark-200.png",
-      "bytes": 149373,
-      "sha256": "05359719c96241987c2b9f95dbb795c43c28f459c4bfd5167385faf543f096af",
-      "purpose": "Enter activates Chapter 2 in actual publication"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-restored-outline-verified-native-dark-200.png",
-      "bytes": 156233,
-      "sha256": "d5e9a029b4e3a2e8997cd8525a6afe6ee7afdcd81c43be5b09976d5dc7518f38",
-      "purpose": "Escape restores Outline with active Chapter 2 selection"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/image-only-search-categories-light-100.png",
-      "bytes": 58409,
-      "sha256": "413f286d4830f0c7c54ce81fa62e50255fe852ff3424bbd3b26590b189039d64",
-      "purpose": "Image-only PDF excludes unsupported Book Text search"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-editor-light-100.png",
-      "bytes": 130664,
-      "sha256": "fb5576bf0464e6187ebf9dd676e3174e490d8ad2fdda79b2301e9bbb23a67759",
-      "purpose": "Notebook private editor and autosave presentation"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-region-final-light-100.png",
-      "bytes": 91665,
-      "sha256": "bd45eb442ea3ab98daf551b88aeab9e071afd062d2c7f0e6eb14bf199fb2de14",
-      "purpose": "Validated cached comic region artwork"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-missing-original-final-light-100.png",
-      "bytes": 75922,
-      "sha256": "110a14bba828320ab21114eeda7d3f938878cef7ece83200923b1b89f4ea03c1",
-      "purpose": "Stored notes accessible without original EPUB"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/marks-missing-original-final-light-100.png",
-      "bytes": 119115,
-      "sha256": "d13cd09d49c813b00a4905e2259a797c3eacb6ec8fb7f908c8f44e06d7a39547",
-      "purpose": "Stored Marks accessible without original EPUB"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/sidebar-missing-original-selector.png",
-      "bytes": 88252,
-      "sha256": "0cf90b25bfc226d21d00fa3d79c835175cb79dd5b755d91dd7de3b4610e1e789",
-      "purpose": "Offline outline and permanent sidebar presentation"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/search-offline-notebook-final-light-100.png",
-      "bytes": 88113,
-      "sha256": "35bac407f40ca7964b8ca50768adcc733c7b2476dde3aa1de166b44b0174cc30",
-      "purpose": "Notebook local search without original EPUB"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-save-failure-final-light-100.png",
-      "bytes": 107584,
-      "sha256": "630ce9cfd3a9046cf719e2a70c44fd23cc08f2e4a5daeca2f4727d03c1e175e9",
-      "purpose": "Real SQLite busy failure retains complete draft with Retry"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-save-retry-final-light-100.png",
-      "bytes": 103874,
-      "sha256": "79508269ea05cda036476d2982d6149c3d7285d2d3268126297c860bb73a3e3d",
-      "purpose": "Retry persists after external lock release"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-maximum-note-light-100.png",
-      "bytes": 113723,
-      "sha256": "a2a60ea7f0e05e2cb44bacc34555886caabcb1398fa032471d2543c5b9df6fea",
-      "purpose": "Actual million-character multiline note after autosave"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/backup-complete-native-light-100.png",
-      "bytes": 37552,
-      "sha256": "7b768eb3ee2cf2ae20ae44fa69f09adbfd987519d2ada50908aadbaa74d0e5cc",
-      "purpose": "Native backup completion"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/restore-complete-native-light-100.png",
-      "bytes": 73651,
-      "sha256": "4b8b1e6787614128bc2e08030c7c1072f0d947f1f04b7a2a873ef80773ade415",
-      "purpose": "Native restore completion"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/loading-menu-native-2.png",
-      "bytes": 28566,
-      "sha256": "becb3391fab39c1da06075b0a25873b3b847cef2c19bddf55cacb461ca08129c",
-      "purpose": "Actual GTK Main Menu while book reports Opening book"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/main-menu-missing-file-native-full.png",
-      "bytes": 91299,
-      "sha256": "6455aff357d334ec554b397b588a7e7e9ab67da41050a54da76e2b561845840e",
-      "purpose": "Actual GTK Main Menu after file opening failure"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/appearance-reflowable-light-100.png",
-      "bytes": 97804,
-      "sha256": "b859f5597e3c772b3b4ca0535d2aad29f939cb79e82fd79efbe8034e4819995f",
-      "purpose": "Compact native reflowable appearance"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/appearance-fixed-epub-light-100.png",
-      "bytes": 126487,
-      "sha256": "a550224539495585d708264df1aa5fe0a996ccc8b31b0b9b313f3da16cf610d1",
-      "purpose": "Applicable fixed EPUB appearance"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/appearance-pdf-light-200.png",
-      "bytes": 95874,
-      "sha256": "f21bb22e08e9f6ea7417936e35bf306ca9c3344e660727c9d04f8407cf0b01f6",
-      "purpose": "Scaled native PDF fit/zoom/rotation appearance"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/appearance-comic-light-100.png",
-      "bytes": 127187,
-      "sha256": "3927b3390f75744b71c3ddbc2e6c50d29dc17a6edfc13ffd8c21f4d979c39f17",
-      "purpose": "Applicable comic appearance"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/goto-reflowable-light-100.png",
-      "bytes": 92581,
-      "sha256": "5c82c4809f2a8379058083ea29fdde4360272ae634101e6124eeea1d5370268d",
-      "purpose": "Native reflowable Go To"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/goto-pdf-light-200.png",
-      "bytes": 88893,
-      "sha256": "82788129e6010fa8968cb3bfebe5be4b46ece0cb6e93b5ed5c7d47c7059a8245",
-      "purpose": "Scaled native PDF physical and printed page Go To"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-general-light-100.png",
-      "bytes": 26239,
-      "sha256": "01272eb8c4bbbc6147530487fa1361e6bc5b0b2c898004778a93bc9d70d2524c",
-      "purpose": "General Settings semantic surface"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-reading-light-100.png",
-      "bytes": 24756,
-      "sha256": "8af35b47d81040652d3e8a694b847f2ca1870c54ae4cb46bb0cc8edfe333125f",
-      "purpose": "Advanced Reading Settings"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-accessibility-light-100.png",
-      "bytes": 25491,
-      "sha256": "a537840b66c26478711ee26d4a206f38bbc85ccd71b5682cfe98daf035f026ff",
-      "purpose": "Informational system Reduced Motion status"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-shortcuts-light-100.png",
-      "bytes": 43215,
-      "sha256": "76a6d136ee586e62364000861d93bf114e838bc4f2694c93271dc6be3cacdfaa",
-      "purpose": "Configurable shortcut management"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-data-light-100.png",
-      "bytes": 34121,
-      "sha256": "2c6d0c74457ee3a1b9f96c1550ce6975dc79489824152a221c241a48054d4fe5",
-      "purpose": "Backup and Restore in Data Settings"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-light-150.png",
-      "bytes": 134034,
-      "sha256": "f1c56ce469547f8db8e7c3b37058210ae709d1fc1fc1aa30bc1f2eb97cfd76d6",
-      "purpose": "notebook light: GTK 1x with verified portal text scale 1.5"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-narrow-light-150.png",
-      "bytes": 115105,
-      "sha256": "6a25e5db75dfc401d00a7630ec6cdb28b45e4319d0f8006a75e56e12dac0c7a0",
-      "purpose": "notebook-narrow light: GTK 1x with verified portal text scale 1.5"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-narrow-light-150.png",
-      "bytes": 19416,
-      "sha256": "03d29a7cc4421ad430eb73cacb6533b73e9443724dad40f95da99bb88fe32ae1",
-      "purpose": "settings-narrow light: GTK 1x with verified portal text scale 1.5"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-light-200.png",
-      "bytes": 230086,
-      "sha256": "6f5d7d9caa7621ef5d4efd5093548f652f7d6efba804156faa2760e1aab252f8",
-      "purpose": "notebook light: GTK 2x with portal text scale 1"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-narrow-light-200.png",
-      "bytes": 211487,
-      "sha256": "95fb3a48f628a6600b4b63dd799d421c96c16d51dc153fce3ff9d9a95b5cb821",
-      "purpose": "notebook-narrow light: GTK 2x with portal text scale 1"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-narrow-light-200.png",
-      "bytes": 34314,
-      "sha256": "cac2d2ceb65f5239e44fe8d7828ace13bf9c034989cd64c98fc21348f0a5fe34",
-      "purpose": "settings-narrow light: GTK 2x with portal text scale 1"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-dark-150.png",
-      "bytes": 131342,
-      "sha256": "42fa20f7b0de00b687c21a5dbc39dd14c130c13c8ee04096219864334f50c815",
-      "purpose": "notebook dark: GTK 1x with verified portal text scale 1.5"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-narrow-dark-150.png",
-      "bytes": 113951,
-      "sha256": "0f21fb07704482ee27ed891fb717865a962c62c2c8847bdd2f7ea4a6ba41f881",
-      "purpose": "notebook-narrow dark: GTK 1x with verified portal text scale 1.5"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-narrow-dark-150.png",
-      "bytes": 18879,
-      "sha256": "5fa295fb7cec9b17cfb6e2566126a2a7c38474b32fd9affe49210396afc6cbf2",
-      "purpose": "settings-narrow dark: GTK 1x with verified portal text scale 1.5"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-dark-200.png",
-      "bytes": 223948,
-      "sha256": "1d1b58c2f780213389bc70d76999e6a4f8d0d2c6bb8aab1afd3d472d6043d401",
-      "purpose": "notebook dark: GTK 2x with portal text scale 1"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/notebook-narrow-dark-200.png",
-      "bytes": 200334,
-      "sha256": "2e8e745e4240356197a8dd9a08898fff40fcb448cde09a8c62af698ac4aa7254",
-      "purpose": "notebook-narrow dark: GTK 2x with portal text scale 1"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/settings-narrow-dark-200.png",
-      "bytes": 32908,
-      "sha256": "aad1749831a66e63672127ecfd61b7a82be6d68eef7c9983410ad34b66d1e95a",
-      "purpose": "settings-narrow dark: GTK 2x with portal text scale 1"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/annotation-icon-yaru-1x.png",
-      "bytes": 419,
-      "sha256": "4b871be67005ac09c4d28d73e54a2c8571b4fb17de42f83b4c3c717cdd9073e1",
-      "purpose": "Installed yaru document-edit-symbolic rendered at 1x"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/annotation-icon-yaru-2x.png",
-      "bytes": 794,
-      "sha256": "3860312249e957f23cc6ff55de7bedfc268511e95ab9fae0361aa83e38d86b92",
-      "purpose": "Installed yaru document-edit-symbolic rendered at 2x"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/annotation-icon-adwaita-1x.png",
-      "bytes": 342,
-      "sha256": "5a94ed84f30208d6a3057f862f7ba0e6dc06074e8852f6c44e1f693da48162e3",
-      "purpose": "Installed adwaita document-edit-symbolic rendered at 1x"
-    },
-    {
-      "path": "evidence/professional-workspace-20261025/annotation-icon-adwaita-2x.png",
-      "bytes": 526,
-      "sha256": "69218705c86907e6aa0fdfe4f8d69d859f5e6f68e2f9da8041d2dad35354e1d9",
-      "purpose": "Installed adwaita document-edit-symbolic rendered at 2x"
-    }
-  ],
-  "releaseBundle": [
-    {
-      "path": "build/linux/x64/release/bundle/busybooks",
-      "bytes": 222464,
-      "sha256": "fe6c790408c7c970869c17d2c7172ae8b9992c3804d51eb4235b2131bddee9ad"
-    },
-    {
-      "path": "build/linux/x64/release/bundle/lib/libapp.so",
-      "bytes": 11600776,
-      "sha256": "99a74edbe9a6928ca51fb2acb6ef7da3d598f91ca25a67a391bc59368381701f"
-    },
-    {
-      "path": "build/linux/x64/release/bundle/lib/libflutter_linux_gtk.so",
-      "bytes": 17218152,
-      "sha256": "d57449a5c2ee39e77b9e3488f0703b165c67e0b3c554089f388db96484ae62f1"
-    }
-  ]
+  "git": {
+    "branch": "fix/ui-elements",
+    "taskSourceCommits": [
+      "a85db3f Expose explicit accessible names for shared icon actions",
+      "dc755f4 Retain failed native acceptance actions and exit status",
+      "8c76c73 Drain native reader work before suspension and close speech resources safely",
+      "c46d9b3 Specify active book presentation lifetime and reopening behavior",
+      "90c0e7e Add native lifetime diagnostics and isolated Wayland acceptance tools",
+      "3cd1a4a Validate annotation activation and release inactive book sessions"
+    ],
+    "deliveryCommit": "Exact SHA recorded by post-delivery audit and final response",
+    "pushPerformed": false,
+    "releasePublicationPerformed": false,
+    "unrelatedUserChangesOverwritten": false
+  }
 }

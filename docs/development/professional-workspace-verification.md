@@ -1,4 +1,297 @@
-# Professional workspace remediation — 2026-10-25
+# Workspace remediation and release qualification — 2026-10-25
+
+The current implementation qualification revision is
+`a85db3feaad7b897c0ab90ad0868af066f42df7d`. The Reading/Notebook redesign is
+preserved. Final corrections address authoritative annotation activation,
+bounded book-session ownership, renderer flush/visibility ordering and speech
+resource cleanup and explicit native accessible names. This record distinguishes
+those application corrections from
+the pinned Flutter shutdown abort and from the blocked Windows environment.
+
+**Windows native qualification remains an essential open gate.** The installed
+Windows 11 VM was discovered and resuming it was attempted. Its host driver is
+missing and administrator authentication is required to restore it. No Windows
+build, WebView2 or Win32 acceptance result is claimed.
+
+## Final corrections
+
+| Finding | Correction | Verification |
+| --- | --- | --- |
+| Cached annotation search membership could validate a deleted record | Activation resolves the current matching book/annotation through Workspace records and Notebook's protected-draft contract. Cached result membership is never a data authority. Deferred navigation revalidates record, book, route and search generation. Missing records refresh the session. | Deleted cached snapshot; queued deletion/query/category/book switches in Notebook and Bookmarks; protected failed creation; async update and valid navigation regressions. |
+| Non-disposing book families retained every visited book | Auto-disposing search/sidebar families hold a lease only while their book owns the active workspace. Reading/Notebook and Settings retain that lease. Closing/replacing the book releases it; widget listeners complete disposal. | Exact provider counts over 60 distinct books, disposal/reopen, cancelled debounce/subscription work and profile-mode allocation measurement. |
+| An old native search cancellation could overwrite a newer query | Cancellation captures renderer session/query revision and rejects obsolete completion. | A paused cancellation followed by a new query retains the new searching state. |
+| Native PDF work could stall after its surface was hidden | Suspension drains native input/layout while frames remain available, then hides it. Later suspended flushes persist application records without requiring another hidden frame. Active close also drains before hiding. Native and durable-write phases remain separate so protected failed drafts can still be edited in Notebook. | Delayed final position/acknowledgement; failed native drain/retry; concurrent flush/suspend; protected Notebook writes; actual narration/Notebook/close workflow. |
+| A delayed flush reply could release another request | Native flush acknowledgements carry and validate request identity. Prior, future and unowned replies are rejected. | Focused stale-reply tests, faithful protocol fixtures and existing bridge-failure coverage. |
+| Speech-service failure could retain narration ownership and bypass connection cleanup | Expected service failures are typed, logged and exposed as diagnostic state. Stop releases narration ownership; disposal closes even after a failed Stop, shares its completion and rejects late requests/events. Programming errors propagate. | Service-loss recovery, programming-error propagation and disposed-service regressions; real native speech/close checks. |
+| A native test probe leaked its XTest connection | The probe owns and closes a separate X connection before unloading XTest. Application surface code is unchanged. | Actual GTK input/teardown with ASan, UBSan and leak detection; no suppressions. |
+| Icon buttons had empty names in the actual GTK accessibility tree | Shared header artwork and compact icons carry explicit localized labels inside their button semantics. Tooltip metadata alone is insufficient on the pinned Linux bridge. Existing selected/disabled/action semantics and positioned tooltips remain. | A failing-before/passing-after regression checks real button-node labels, flags and actions. Native AT-SPI inspection is recorded separately from widget semantics. |
+
+No SDK pins, application dependencies, database schema, backup format, reader
+engine, archive validation or transactional note implementation changed.
+
+## Book-session resource ownership
+
+Search owns a debounce timer, renderer-intent subscription, provider listeners,
+results, per-category query/selection maps, action references and a borrowed
+focus-return node. Disposal cancels the timer/subscription; Riverpod owns its
+listeners. Async publication and activation check mounted state, identity and
+generation. Sidebar owns navigation presentation and publication snapshots,
+plus its provider listeners; it owns no native engine or file handle. Closing
+their lease releases large result/outline/page-label snapshots. Protected notes
+remain in the existing Notebook owner.
+
+The baseline measurement retained 21/41/61 search providers and 20/40/60 sidebar
+providers after 20/40/60 books. The extra search provider was application
+Actions. After correction the final regression retained one search/sidebar
+pair, and closing the workspace removed both. Transient filters/outline state
+persist within an active book session; reopening a closed session reconstructs
+stored metadata/preferences with fresh transient state. The old test expectation
+of indefinite closed-book filter retention was replaced with explicit active
+view-switch retention and fresh-session assertions, preserving saved preferences
+and format capability checks.
+
+Debug-mode VM allocation alone is misleading here: Riverpod's installed
+development observer keeps provider history frames. Profile-mode measurement
+checks live allocations independently; the exact samples are retained in the
+results manifest. No third-party development observer was modified or disabled.
+RSS also includes GTK/WebKit/software graphics and is reported separately from
+Dart heap and controller counts.
+
+The final profile probe visited 60 distinct stored PDF books three times (180
+visits), loading 300 chapter results per visit. Every 20-visit sample retained
+exactly one search controller and one sidebar controller, also confirmed by
+post-GC VM allocation counts. Heap use ranged from 8.01 to 8.17 MiB; RSS ranged
+from 351.16 to 395.77 MiB and finished at 383.13 MiB. Closing the workspace left
+zero providers and no reader-intent listener. The probe then closed through the
+window manager with exit code 0. This measures the production controllers and
+store in a native profile application; the separate native opening probe covers
+real publication engines. It is not a claim of a hardware-independent memory
+ceiling.
+
+## Current verification and provenance
+
+The clean starting checkout was `0bf8dad`, with 425 passing tests, three skips,
+clean analysis/formatting and a successful Linux release build. The earlier
+manifest identified `01ad861`; comparison shows that `01ad861..0bf8dad` changed
+documentation and two verification tools, with no runtime or test changes.
+That reconciles the exported source boundary, but does not qualify subsequent
+implementation changes. The intermediate `c46d9b3` run passed 437 tests; it was
+superseded by the native lifecycle corrections and is retained as historical
+evidence.
+
+The complete suite at `a85db3f` passes **447 tests, with three existing skips**
+(opt-in live Wiktionary and two Windows-only cases). Lockfile enforcement,
+localization generation, formatting of 171 Dart files, analysis, reader
+JavaScript probes, normative EPUB fixture checks and the Linux release build
+also pass. The retained command manifest records the final platform probe
+commands and exit codes. Controlled JavaScript/widget tests are identified as
+such and do not substitute for native execution.
+
+The evidence root is
+[`evidence/release-qualification-20261025`](../../evidence/release-qualification-20261025/).
+[professional-workspace-results.json](professional-workspace-results.json)
+identifies commands, source revisions, platform results, selected screenshots,
+logs and hashes. `final-source-inputs.json` records hashes of all 585 tracked
+runtime/test/tool inputs. `qualified-bundle-provenance.json` identifies the actual
+release executable, Dart AOT library and Flutter engine used for final native
+qualification. Later documentation-only delivery changes are checked against
+these inputs; earlier baseline evidence is never relabeled as final testing.
+The native component/profile runs started at the accessibility correction's
+unpublished pre-amendment revision. Its only difference from `a85db3f` is the
+Dart semantics test's current flag API assertions/import; all runtime and native
+probe inputs are identical. That exact diff is retained in
+`qualified-native-input-equivalence.json`. The complete Dart suite and serialized
+release build were rerun at `a85db3f`; the UI-tested bundle matches that build.
+Generated evidence is retained under the repository's existing ignored evidence
+directory, rather than solely in disposable `/tmp` profiles.
+
+Flutter remains 3.47.5, framework
+`6a19cca56475dbfba1478ee68d7bd0c2ef891da1`, engine
+`af7e796e161ae0bb1ff0758c71a7105418bd9ded`, Dart 3.13.4. No framework, compiler,
+runtime or third-party source/binary was patched. The SDK checkout had an
+unrelated root `pubspec.lock` difference at baseline; it was not overwritten.
+BusyBooks' own dependency lockfile is unchanged.
+
+## Final Linux native acceptance
+
+The hash-qualified release bundle ran on Ubuntu 24.04.5, GTK 3.24.41 and
+WebKitGTK 2.52.6. Private Xvfb/Openbox desktops isolate test input from the user's
+desktop. The final Wayland run used official Weston 13.0.0, its desktop shell
+and pixman renderer, nested in a separate X11 display. BusyBooks itself used
+GTK's Wayland backend; this was not an XWayland application or a mocked reader.
+It does not qualify GNOME Wayland, fractional physical-monitor scaling or GPU
+performance.
+
+| Final check | Executed result |
+| --- | --- |
+| GTK input, modal, surface resize and teardown; portable menu contract | Passed, including fatal GTK critical diagnostics |
+| Reader engines and typography | Passed; seven native typography proofs |
+| WebKit format acceptance | 34 passing proofs: 22 fixtures and 12 restarts; two deliberately invalid fallback cases rejected |
+| Additional WebKit format review | Eight passing proofs |
+| Actual main application opening | 19 original books opened in one primary process, including forwarded relative paths, byte identity and saved typed locations |
+| Storage, cache, annotation order and cross-volume move | All commands passed |
+| Format/resource validation | 153 format checks passed; real decoder/store cancellation retained existing notes and left no published partial work |
+| Chromium format review | Four real-browser proofs passed with controlled local resources; this does not qualify Win32 or WebView2 |
+| Native surface ASan/UBSan/leak detection | Passed without suppressions or third-party instrumentation/patches |
+
+Inspected final-source screenshots cover Home; wide/narrow Collections;
+opening/dismissing the Collection sidebar and then opening a book through the
+unobstructed grid; Reading/Notebook; native menus, compact overflow and disabled
+commands; Go To and appearance over actual WebKit; typed Book Text and Notebook
+search; Settings/Data; private-note editing and missing-original recovery.
+Integer GTK scales 1 and 2, portal text scales 1 and 1.5, light/dark application
+themes, Adwaita/Yaru and GTK HighContrast symbolic artwork were exercised. The
+sidebar tooltip remains within the Flutter sidebar beside the visible native
+reader at 2×. Full-display menu captures distinguish a menu extending outside
+its application window from actual display clipping.
+
+The actual AT-SPI tree now names Home, Sidebar, Previous/Next, Bookmark,
+Appearance, Search, View, Book Actions, Main Menu, Sidebar View and annotation
+actions. Yaru window controls expose their existing named accessible nodes.
+This is native label inspection, not a complete Orca audit. Ordinary keyboard
+input, shortcuts, native-to-Flutter focus, Escape and Unicode clipboard input
+were exercised. Complex IME composition remains unqualified: the isolated US
+IBus profile's attempted Unicode compose sequence produced literal digits in
+both BusyBooks and a stock GTK entry. That control did not establish an
+application-specific defect. No CJK input engine or physical IME session was
+qualified. GTK HighContrast artwork inspection does not establish a complete
+system high-contrast audit.
+
+The final maximum-note workflow used the actual Notebook editor, native GTK
+file dialogs and Settings → Data. A SQLite transaction held by a separate test
+process caused Save failed while the complete multiline draft remained visible.
+After release, Retry saved exactly the expected Unicode text. A subsequent
+**1,000,000-unit, 55,556-line** note survived save, native backup, a different
+saved replacement, native restore, normal restart and an engine-aborted close.
+Its UTF-8 SHA-256 remained
+`7ded207b8c41342b9dc1d78266b027a2ddfa67c6ee2dfe307d6d016940f14cbc`;
+SQLite integrity checks were `ok`. The new retained native backup is 1,260,482
+bytes, ZIP-valid, and contains the same complete note. An initial paste without
+a completed Select All exceeded the supported limit and was correctly rejected;
+that screenshot is not evidence of a SQLite write failure.
+
+With a disposable original PDF temporarily absent, Reading showed inline
+Notebook/Locate recovery. Notebook, Marks and local note search remained usable;
+Escape restored Marks. The original fixture was restored after the test. A
+retained query intentionally survives reopening search: typing without clearing
+it produced `privateprivate` and no results in one exploratory capture. Only
+the inspected `private` result captured while the file was absent qualifies
+positive offline search.
+
+Read Aloud started through the healthy host Speech Dispatcher endpoint, then
+Notebook stopped narration and hid the publication without the former flush
+timeout. A broken, separately started private audio server also hung the
+official Speech Dispatcher client; that environment failure is recorded
+separately. Functional service start/stop does not certify audible output or
+voice quality. Failed disposable-run cleanup is recorded, not counted as a
+normal close. Final normal closes and compositor-aborted closes both remain in
+the transcript; the Wayland application close returned 0 and still logged the
+engine's implicit-view removal diagnostic.
+
+Earlier captures with incomplete focus/setup, wrong pointer targets, an expired
+nested display, or names describing an intended action rather than visible
+content are excluded from passing evidence. One overlapping release build
+failed with an AOT `ApiError`; the serialized final release build passed and
+its executable/AOT/engine hashes equal the immutable bundle used for native
+acceptance. Superseded test/API findings are retained separately; final analysis
+uses current semantics flags and has no issues. No assertions were suppressed.
+
+Material source changes are confined to search activation/session ownership,
+the active-book lease/sidebar provider, Notebook's authoritative draft lookup,
+guarded view switching, reader flush identity/order, speech/narration cleanup
+and shared icon semantics. Focused regressions, native diagnostic/acceptance
+tools and development documentation accompany them. The manifest lists the
+exact changed files and every retained evidence hash. No runtime dependency on
+BusyMark or new annotation cache was added.
+
+## Windows 11 prerequisite and remaining acceptance
+
+`VBoxManage` 7.1.8r168469 reports the existing Windows 11 x64 VM
+`474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3`, saved with 8 CPUs, 4 GiB RAM,
+an 80 GiB dynamic VDI on SATA, VBoxSVGA/128 MiB VRAM and 3D disabled.
+Historical guest properties report build
+26100, Guest Additions 7.1.8 and one logged-in user. They do not establish the
+current desktop or installed development tools.
+
+An actual headless resume fails with `NS_ERROR_FAILURE (0x80004005)` because
+`vboxdrv` is absent for host kernel `7.0.0-38-generic`; `/dev/vboxdrv` and the
+module are missing. Noninteractive privileged loading requires authentication.
+The official installed tool recommends `/sbin/vboxconfig`. The minimum external
+action is administrator restoration of the official host driver so the saved VM
+can resume. Guest control cannot operate while the VM is saved. No guest
+credentials were obtained or stored, and no authentication/security controls,
+snapshots, personal files, VM settings or saved state were changed. The original
+saved power state is preserved.
+
+The Windows CI workflow and official
+[Flutter setup requirements](https://docs.flutter.dev/platform-integration/windows/setup)
+were reviewed. Build/tool inventory, guest execution/transfer, Windows release
+compilation and actual Win32/WebView2 acceptance remain **not verified**.
+This is an environment prerequisite, not an observed Windows compilation
+failure. If qualification resumes, use the existing VM and pinned toolchain;
+virtualized graphics can establish functional behavior, not physical-GPU parity.
+See [windows.md](windows.md) for the continuation requirements.
+
+## Linux shutdown boundary and release decision
+
+The earlier pristine BusyBooks baseline and remediated application both captured
+the same `g_mutex_clear`/SIGABRT stack in the official Flutter
+`FlCompositorOpenGL` teardown. The separate BusyBooks signal-disconnection defect
+was already repaired. Current review preserves release of native children and
+channels before GTK destroys their containing view, and the native surface
+sanitizer probe reports no application-owned memory/undefined-behavior/leak
+failure. Final native run outcomes, including aborts, remain recorded explicitly.
+
+Five closes of an untouched official Flutter counter template and five of an
+independent public-API two-view harness completed normally. Those controls did
+**not** reproduce the intermittent compositor abort and are not claimed as an
+independent minimal reproduction. A separate mixed-display startup failure also
+occurred with the untouched template; fresh isolated displays/runtimes were
+used for acceptance. Failed exploratory runs are not passing native evidence.
+
+Upstream [issue 192873](https://github.com/flutter/flutter/issues/192873) was
+closed by [PR 193268](https://github.com/flutter/flutter/pull/193268), merged
+September 25, 2026, concerning destruction during pending rendering. It is
+related lifetime work, not a verified match for this mutex stack. The previously
+identified renderer-lifetime commits are outside the pinned release. No exact
+matching released correction was verified; the available 3.47.6/3.47.7 tags have
+no Linux embedder changes relative to 3.47.5. An SDK change requires a separate
+decision and its own native qualification.
+
+The user-visible residual risk is an intermittent abnormal process exit during
+window close after application data has flushed. This must be an explicit
+release-risk decision; it is not an obligation to patch or maintain Flutter.
+No engine changes, arbitrary shutdown delay, forced application exit workaround
+or weakened crash detection were introduced. Failed test-run cleanup is recorded
+separately and is never counted as successful shutdown acceptance.
+
+The final debugger run again aborted in the engine on the first close; the
+20-cycle probe stopped at that captured failure. All 42 seeded annotation
+records had identical before/after hashes and SQLite integrity was `ok`.
+The final million-unit native note also remained intact after its separate
+narration/Notebook close reached the same engine abort. These observations
+support application-owned flushing; they do not turn failed clean-shutdown
+acceptance into a pass or prove durability against every possible crash.
+
+| Release determination | Disposition |
+| --- | --- |
+| BusyBooks implementation | **Pass** for the implemented corrections and executed regressions |
+| Linux application-owned acceptance | **Pass**, within the native environments and explicit limits above |
+| Windows native acceptance | **Fail to qualify: unverified**, blocked before guest startup by the host driver prerequisite; no Windows source/build failure was observed |
+| Known upstream Flutter shutdown risk | **Present**; exact released correction not verified |
+| Overall release qualification | **Blocked by an essential unverified Windows requirement**. Once Windows passes, the engine shutdown risk still requires an explicit documented release decision. |
+
+The tested implementation revision is immutable. The delivery commit changes
+documentation/results only; `final-source-inputs.json` and the post-delivery
+hash audit establish that all runtime, test and tool inputs still match that
+revision. All task-owned completed source and documentation changes are
+committed; no push or release publication is authorized or performed.
+
+The historical workspace review follows. Its earlier test counts and captures
+retain their original implementation scope; current results above and in the
+manifest supersede its release-gate conclusions.
+
+## Historical workspace remediation at `01ad861`
 
 The workspace implementation is committed and automated verification passes.
 **Release acceptance remains open:** real Linux testing reproduced a shutdown
@@ -14,7 +307,7 @@ semantics. No BusyMark dependency was introduced. Flutter remains 3.47.5
 `af7e796e161ae0bb1ff0758c71a7105418bd9ded`, Dart 3.13.4. Package constraints,
 the lockfile, reading engines, database schema and backup format are unchanged.
 
-## Disposition of the requested findings
+## Historical disposition of the requested findings
 
 Numbers refer to the remediation brief. “Native” below means the real release
 application with GTK/WebKitGTK, except where a focused native probe is named.
@@ -41,7 +334,7 @@ application with GTK/WebKitGTK, except where a focused native probe is named.
 | 17: formats and safety | Existing Foliate/PDF integrations, format parsing, validation, locator/archive/resource limits, native surface ownership and persistence contracts remain. Cached region previews only read bounded, sealed resources and add no backup fields. | Full regression suite, existing JavaScript probes and 34 actual WebKit format proofs, including restarts and expected invalid fallback rejection. |
 | 18–20: baseline, native checks, docs and cleanup | Baseline recorded before edits; obsolete controllers/palette/native font-chooser branch removed; existing architectural docs reconciled; focused commits, no push. | Detailed results and native limitations below; generated evidence remains under the repository's existing ignored evidence directory. |
 
-## Automated results
+## Historical automated results
 
 | Check | Baseline | Final |
 | --- | --- | --- |
@@ -72,7 +365,7 @@ Linux frame/settings suites, storage/backup/resource/format/locator protections,
 failed first insertion/update/delete, draft revision races, restore rollback,
 native popover acknowledgements and actual maximum supported note transport.
 
-## Actual Linux evidence
+## Historical Linux evidence
 
 The release bundle ran with GTK 3.24.41 and WebKitGTK 2.52.6, Xvfb `:108`, a real
 Openbox window manager and private D-Bus session. The application used disposable
@@ -166,7 +459,7 @@ copy was restored afterward; repository fixtures were never renamed/deleted.
   widgets disappear. A debugger-confirmed invalid signal disconnect from the
   old application-disposal order is repaired and covered by the GTK probe.
 
-## Remaining release gates
+## Earlier shutdown observations
 
 ### Pinned Flutter compositor shutdown failure
 
@@ -174,8 +467,8 @@ Normal guarded close sometimes exits with SIGABRT after application data is
 flushed/closed. GDB captured `g_mutex_clear` inside `FlCompositorOpenGL` teardown
 in `libflutter_linux_gtk.so` while GTK disposes the view renderer. This reproduced
 after the separate BusyBooks ownership-order repair, including a repeated-close
-run with eight normal exits followed by an abort. It is an open Linux acceptance
-failure, not a successful shutdown check.
+run with eight normal exits followed by an abort. Clean shutdown acceptance failed in that run; the current release-risk
+disposition is recorded above.
 
 The desktop-driver transcript records 18 normal guarded closes and four SIGABRT
 exits. The separately instrumented repeated-close run and pristine-baseline
@@ -195,8 +488,8 @@ and
 addressing renderer lifetime and active-draw teardown. They are on the available
 `origin/windowing_test_linux` development branch, outside the pinned release.
 No private GTK-child retention shim, SDK mutation, forced process exit or
-arbitrary shutdown sleep was added. A verified fixed Flutter release/engine and
-repeated native shutdown acceptance are required before release. Existing
+arbitrary shutdown sleep was added. No verified released fix was established. An SDK upgrade is a separate
+release decision; maintaining Flutter is not a BusyBooks implementation task. Existing
 implicit-view removal and software-GL diagnostics are retained in the logs.
 The locally available 3.47.6/3.47.7 tags have no Linux embedder changes relative
 to 3.47.5 and do not contain the identified renderer-lifetime fixes; an
@@ -204,15 +497,13 @@ unverified patch-version bump was therefore not used as a purported repair.
 
 ### Other platform coverage
 
-Windows has no execution/build toolchain in this environment. Shared menu C++
-contracts and Dart Windows presentation tests passed; native Win32 menus,
-WebView2 focus/popovers and Windows compilation remain **not verified**.
-Wayland, true fractional monitor scaling, real hardware GPU variations, full
-screen-reader/high-contrast/IME coverage and audible narration acceptance remain
-unverified. Native renderer formats and desktop UI checks above do not establish
-those separate capabilities.
+At the original remediation revision, Windows native execution, Wayland,
+true fractional monitor scaling, hardware GPU variations and complete assistive
+technology/IME/audio acceptance were unverified. The current environment
+investigation and additional qualification above supersede that earlier scope.
+Portable C++ and widget tests never establish Win32/WebView2 acceptance.
 
-## Material component changes
+## Historical remediation components
 
 - `lib/src/book_workspace/`: retained workspace, common header, book context
   actions, location control and typed persistent sidebar controller.
@@ -241,8 +532,8 @@ flutter analyze
 dart format --output=none --set-exit-if-changed lib test tools
 flutter test --concurrency=2 --reporter=expanded
 flutter build linux --release
-DISPLAY=:108 G_DEBUG=fatal-criticals bash tools/probe_linux_input.sh
-bash tools/probe_linux_formats.sh
+xvfb-run -a dbus-run-session -- env G_DEBUG=fatal-criticals bash tools/probe_linux_input.sh
+xvfb-run -a dbus-run-session -- bash tools/probe_linux_formats.sh
 ```
 
 For desktop captures, prepare an empty absolute disposable directory with

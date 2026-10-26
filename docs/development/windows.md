@@ -1,5 +1,35 @@
 # Windows build and native acceptance
 
+## Local qualification environment (2026-10-25)
+
+The Linux host has VirtualBox 7.1.8r168469 and an existing Windows 11 VM,
+`474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3`. It is saved, with 8 virtual CPUs,
+4 GiB RAM, an 80 GiB dynamic VDI on SATA, VBoxSVGA/128 MiB VRAM and 3D
+acceleration disabled. Cached guest
+properties identify Windows 11 x64 build 26100 and Guest Additions 7.1.8 with
+one logged-in user; these are historical properties, not a verified current
+interactive desktop or development-tool inventory.
+
+An actual `VBoxManage startvm 'Windows 11' --type headless` attempt fails with
+`NS_ERROR_FAILURE (0x80004005)`: the host has no `vboxdrv` module/device for
+kernel `7.0.0-38-generic`. `modinfo vboxdrv` fails and noninteractive privileged
+module loading requires administrator authentication. The installed VirtualBox
+tool recommends its official `/sbin/vboxconfig` installation step. Restoring
+the official host driver is the current prerequisite for resuming qualification;
+the saved guest state, snapshots, authentication and VM settings must be kept.
+
+Guest execution, source transfer, installed Windows tools, release compilation,
+Win32 menus and WebView2 acceptance remain **not verified** until the VM can
+resume. Do not substitute portable Linux C++ tests for those gates. The current
+logs and qualification disposition are indexed by
+[professional-workspace-results.json](professional-workspace-results.json).
+After access is restored, follow the existing Windows CI commands and the
+native workflow checks below; keep source/artifacts in a new task-owned guest
+directory and restore the original saved power state without discarding work.
+No passwords belong in commands, logs, scripts or Git history.
+
+## Required build environment
+
 Use an actual x64 Windows 10/11 desktop, Visual Studio 2022 or newer with Desktop
 Development with C++, and official Flutter 3.47.5 stable. The runner extends the
 official Flutter template with a WebView2 child content surface, SAPI speech,
@@ -75,9 +105,10 @@ opening; BusyBooks does not claim generic `.zip` or `.rar` associations.
 
 ## Evidence boundary
 
-No Windows host/VM is accessible in this session. The corrected Windows runner
-has **not** been compiled or executed. Linux Dart tests, Windows path-helper
-checks and CI configuration do not establish Windows acceptance.
+The existing Windows 11 guest could not be resumed because its official host
+driver is missing, as recorded above. The corrected Windows runner has **not**
+been compiled or executed. Linux Dart tests, Windows path-helper checks and CI
+configuration do not establish Windows acceptance.
 
 Historical [run 39312939311](https://github.com/albert-gee/busybooks/actions/runs/39312939311/job/118266965365)
 was for `fd1aa90a1aa6a3a4e6138b344f40a8f3451790ad`, before this architecture
