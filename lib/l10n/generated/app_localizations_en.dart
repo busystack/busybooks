@@ -1135,7 +1135,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Open Reading to search the publication or load page previews.';
 
   @override
-  String get enterSearch => 'Enter a search query';
+  String get enterSearch => 'Enter text to search.';
 
   @override
   String get noResults => 'No results';
@@ -1233,4 +1233,58 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get regionPreviewLoading => 'Loading region preview';
+
+  @override
+  String get searchBooks => 'Search Books';
+
+  @override
+  String get searchRecent => 'Search Recent';
+
+  @override
+  String get searchBookmarks => 'Search Bookmarks';
+
+  @override
+  String get searchChapters => 'Search Chapters';
+
+  @override
+  String get searchBookText => 'Search Book Text';
+
+  @override
+  String get thisBook => 'This Book';
+
+  @override
+  String get currentCollection => 'Current Collection';
+
+  @override
+  String get allSavedBooks => 'All Saved Books';
+
+  @override
+  String get searchScope => 'Search scope';
+
+  @override
+  String get showMoreResults => 'Show more results';
+
+  @override
+  String get searchUnavailable => 'Search source is unavailable';
+
+  @override
+  String get searchIncomplete => 'Results are incomplete';
+
+  @override
+  String get searchDisabled => 'Unavailable in this context';
+
+  @override
+  String get searchContext => 'Search:';
+
+  @override
+  String searchLoadedResults(int count) {
+    return '$count results shown';
+  }
+
+  @override
+  String get searchMoreAvailable => 'More results are available.';
+
+  @override
+  String get searchEarlierResults =>
+      'Earlier results are outside this window. Search again to return to the beginning.';
 }

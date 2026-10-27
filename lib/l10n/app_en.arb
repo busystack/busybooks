@@ -357,7 +357,7 @@
   "searchCategory": "Search category",
   "closeSearch": "Close Search",
   "searchNeedsReading": "Open Reading to search the publication or load page previews.",
-  "enterSearch": "Enter a search query",
+  "enterSearch": "Enter text to search.",
   "noResults": "No results",
   "allTypes": "All types",
   "bookOrder": "Book Order",
@@ -393,5 +393,29 @@
   "anyNotes": "Any notes",
   "dateUnavailable": "Date unavailable",
   "regionPreviewUnavailable": "Region preview unavailable. The private note is still accessible.",
-  "regionPreviewLoading": "Loading region preview"
+  "regionPreviewLoading": "Loading region preview",
+  "searchBooks": "Search Books",
+  "searchRecent": "Search Recent",
+  "searchBookmarks": "Search Bookmarks",
+  "searchChapters": "Search Chapters",
+  "searchBookText": "Search Book Text",
+  "thisBook": "This Book",
+  "currentCollection": "Current Collection",
+  "allSavedBooks": "All Saved Books",
+  "searchScope": "Search scope",
+  "showMoreResults": "Show more results",
+  "searchUnavailable": "Search source is unavailable",
+  "searchIncomplete": "Results are incomplete",
+  "searchDisabled": "Unavailable in this context",
+  "searchContext": "Search:",
+  "searchLoadedResults": "{count} results shown",
+  "@searchLoadedResults": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchMoreAvailable": "More results are available.",
+  "searchEarlierResults": "Earlier results are outside this window. Search again to return to the beginning."
 }

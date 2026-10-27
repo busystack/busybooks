@@ -15,6 +15,7 @@ import 'package:busybooks/src/notebook/application/notebook_controller.dart';
 import 'package:busybooks/src/notebook/presentation/book_view_selector.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
 import 'package:busybooks/src/search/book_search_widgets.dart';
+import 'package:busybooks/src/search/book_search_session.dart';
 import 'package:busybooks/src/workspace/workspace_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -182,11 +183,18 @@ void main() {
           (w) => w is TextField && w.decoration?.hintText == 'Notebook',
         );
         await tester.enterText(search, 'personal');
+        await tester.runAsync(
+          () => container.read(bookSearchSessionProvider.notifier).submit(),
+        );
         await tester.pumpAndSettle();
         expect(
           find.descendant(
             of: find.byType(BookSearchSidebar),
-            matching: find.text('Saved quotation'),
+            matching: find.byWidgetPredicate(
+              (w) =>
+                  w is Text &&
+                  w.textSpan?.toPlainText().contains('Saved quotation') == true,
+            ),
           ),
           findsOneWidget,
         );

@@ -1,5 +1,7 @@
 // BusyBooks content adapter. Application UI, persistence and commands stay in Flutter.
 import './vendor/foliate/view.js'
+import { textWalker } from './vendor/foliate/text-walker.js'
+import { literalRanges, literalTextMatches, excerptParts } from './literal_search.mjs'
 import { fitScale, validPage, cssColor, tabTarget } from './reading_geometry.mjs'
 import { noTypography, reflowableTypography, createLocalFont, prepareLocalFont, installLocalFont, typographyCSS, protectSpecializedFonts, applyFontFamily, validateTypographyUpdate, TypographyWork } from './typography.mjs'
 import * as CFI from './vendor/foliate/epubcfi.js'
@@ -941,25 +943,6 @@ function pdfText(items){
     for(const item of items){const str=item.str??'';for(let i=0;i<str.length;i++){text+=str[i];positions.push(offset+i)}offset+=str.length;if(item.hasEOL){text+=' ';positions.push(offset)}}
     positions.push(offset);return {text,positions}
 }
-// Each transformed UTF-16 unit retains its complete original character range.
-// Locale-independent Unicode lowercase keeps search stable across desktops.
-// Expansion (e.g. İ → i + combining dot) cannot shift PDF offsets.
-function pdfSearchRanges(text,query){
-    const lower=text.toLowerCase(),needle=query.toLowerCase(),starts=[],ends=[]
-    if(!needle)return []
-    let original=0
-    for(const character of text){
-        const length=character.toLowerCase().length
-        for(let i=0;i<length;i++){starts.push(original);ends.push(original+character.length)}
-        original+=character.length
-    }
-    const matches=[]
-    for(let at=lower.indexOf(needle);at>=0;at=lower.indexOf(needle,at+needle.length)){
-        const start=starts[at],end=ends[at+needle.length-1]
-        if(Number.isFinite(start)&&Number.isFinite(end))matches.push({start,end})
-    }
-    return matches
-}
 function selectPdfText(index,start,length){
     const layer=pages[index]?.element.querySelector('.textLayer');if(!layer)return
     const walker=document.createTreeWalker(layer,NodeFilter.SHOW_TEXT),range=document.createRange();let node,offset=0,found=false
@@ -992,34 +975,73 @@ function paintPdf(){
             Object.assign(mark.style,{left:`${Math.min(x1,x2)}px`,top:`${Math.min(y1,y2)}px`,width:`${Math.abs(x2-x1)}px`,height:`${Math.abs(y2-y1)}px`});p.element.append(mark)}
     }
 }
-let searchTail=Promise.resolve()
-function requestSearch(query,queryId){
+let searchTail=Promise.resolve(),searchCommandRevision=-1,searchStartedRevision=-1
+function acceptSearchCommand(queryId,starting){
+    // Native method replies/evaluations can settle late after a focus handoff.
+    // A cancel sent before its same-revision search cannot cancel that search
+    // if delivery is delayed; closing uses a newer revision from Flutter.
+    if(queryId==null)return true
+    if(!Number.isSafeInteger(queryId)||queryId<0||queryId<searchCommandRevision||
+        !starting&&queryId<=searchStartedRevision)return false
+    searchCommandRevision=queryId
+    if(starting)searchStartedRevision=queryId
+    return true
+}
+function requestSearch(query,queryId,offset=0,limit=200){
+    if(!acceptSearchCommand(queryId,true))return Promise.resolve()
     const token=++generation
-    const operation=searchTail.catch(()=>{}).then(()=>token===generation?search(query,queryId,token):null)
+    const operation=searchTail.catch(()=>{}).then(()=>token===generation?search(query,queryId,token,offset,limit):null)
     searchTail=operation;return operation
 }
-async function search(query,queryId,token){
-    emit('searchStart',{queryId})
-    const result=(type,data={})=>{if(token===generation)emit(type,{queryId,...data})}
-    let batch=[]
+async function search(query,queryId,token,offset=0,limit=200){
+    const sourceView=view,sourcePdf=pdf
+    offset=Number.isSafeInteger(offset)&&offset>=0?offset:0
+    limit=Number.isSafeInteger(limit)&&limit>0?Math.min(limit,500):200
+    const current=()=>token===generation&&sourceView===view&&sourcePdf===pdf
+    const result=(type,data={})=>{if(current())emit(type,{queryId,...data})}
+    result('searchStart',{offset,limit})
+    let batch=[],total=0
     const flush=()=>{if(batch.length){result('matches',{items:batch});batch=[]}}
-    const match=value=>{batch.push(value);if(batch.length>=100)flush()}
+    // Count every occurrence, but only materialize/transfer a bounded window.
+    const match=make=>{const index=total++;if(index>=offset&&index<offset+limit){batch.push({...make(),index});if(batch.length>=100)flush()}}
+    const excerpt=parts=>({excerpt:parts.pre+parts.match+parts.post,excerptParts:parts})
     try{
         if(isComic())throw Error('This image publication has no searchable text')
-        if(!query){result('searchDone');return}
-        if(view){for await(const item of view.search({query,drawOptions:{color:cssColor(chrome.accent??0xff3584e4)}})){
-            if(token!==generation)return
-            if(item.subitems)for(const x of item.subitems)match({anchor:textAnchor(x.cfi),excerpt:typeof x.excerpt==='string'?x.excerpt:[x.excerpt?.pre,x.excerpt?.match,x.excerpt?.post].filter(Boolean).join(''),reference:item.label})
-            flush();if(item.progress)result('searchProgress',{progress:item.progress});await nextFrame()
-        }}else for(let i=0;i<pdf.numPages;i++){
-            if(token!==generation)return
-            const page=await pdf.getPage(i+1),data=pdfText((await page.getTextContent()).items)
-            if(token!==generation)return
-            for(const range of pdfSearchRanges(data.text,query))match({anchor:{page:i,textOffset:data.positions[range.start],textLength:data.positions[range.end]-data.positions[range.start]},excerpt:data.text.slice(Math.max(0,range.start-60),range.end+100),reference:pdfReference(i)})
-            flush();result('searchProgress',{progress:(i+1)/pdf.numPages});await nextFrame()
-        }
-        flush();result('searchDone')
-    }catch(error){result('searchError',{message:String(error)})}finally{if(token!==generation)view?.clearSearch()}
+        if(!query){result('searchDone',{total:0,offset,limit});return}
+        if(sourceView){
+            // Supported publication and CFI APIs keep the application matcher
+            // independent of the inherited locally patched Foliate search.js.
+            const sections=sourceView.book.sections
+            for(let index=0;index<sections.length;index++){
+                if(!current())return
+                const section=sections[index]
+                if(section.createDocument){
+                    const doc=await section.createDocument()
+                    if(!current())return
+                    let count=0
+                    const matcher=(strings,makeRange)=>literalTextMatches(strings,query,makeRange)
+                    for(const item of textWalker(doc,matcher)){
+                        if(!current())return
+                        match(()=>({anchor:textAnchor(sourceView.getCFI(index,item.range),index),...excerpt(item.excerptParts),reference:sourceView.getProgressOf(index,item.range).tocItem?.label??''}))
+                        // A dense chapter must still yield for request cancellation.
+                        if(++count%1000===0){flush();await nextFrame();if(!current())return}
+                    }
+                }
+                flush();result('searchProgress',{progress:(index+1)/sections.length});await nextFrame()
+            }
+        }else if(sourcePdf)for(let i=0;i<sourcePdf.numPages;i++){
+            if(!current())return
+            const page=await sourcePdf.getPage(i+1),data=pdfText((await page.getTextContent()).items)
+            if(!current())return
+            let count=0
+            for(const range of literalRanges(data.text,query)){
+                match(()=>({anchor:{page:i,textOffset:data.positions[range.start],textLength:data.positions[range.end]-data.positions[range.start]},...excerpt(excerptParts(data.text,range)),reference:pdfReference(i)}))
+                if(++count%1000===0){flush();await nextFrame();if(!current())return}
+            }
+            flush();result('searchProgress',{progress:(i+1)/sourcePdf.numPages});await nextFrame()
+        }else throw Error('The publication reader is not ready')
+        flush();result('searchDone',{total,offset,limit})
+    }catch(error){flush();result('searchError',{message:String(error),total,offset,limit,incomplete:true})}
 }
 function keys(e){
     if(regionSelection&&regionKey(e))return
@@ -1120,8 +1142,8 @@ async function dispatchCommand(c){
     case 'goto':{const owner=session;remember();if(view){await gotoEpub(c.anchor);if(isComic())remember();}else {const usable=await gotoPdf(c.anchor);if(usable===false)throw Error(strings.navigationInterrupted);remember()}if(c.request!=null&&owner===session)emit('navigationResult',{request:c.request});break}
     case 'back':if(isComic()){if(historyIndex>0){historyIndex--;await gotoEpub(history[historyIndex])}}else if(view)view.history.back();else if(historyIndex>0){historyIndex--;await gotoPdf(history[historyIndex])}break
     case 'forward':if(isComic()){if(historyIndex<history.length-1){historyIndex++;await gotoEpub(history[historyIndex])}}else if(view)view.history.forward();else if(historyIndex<history.length-1){historyIndex++;await gotoPdf(history[historyIndex])}break
-    case 'search':await requestSearch(c.query,c.queryId);break
-    case 'cancelSearch':generation++;view?.clearSearch();break
+    case 'search':await requestSearch(c.query,c.queryId,c.offset,c.limit);break
+    case 'cancelSearch':if(acceptSearchCommand(c.queryId,false)){generation++;view?.clearSearch()}break
     case 'annotations':await receiveAnnotations(c);break
     case 'passage':emitPassage(c.request);break
     case 'advanceSpeech':if(view){if(view.isFixedLayout)await view.goTo((location.anchor?.index??0)+1);else await view.next();}else await gotoPdf({page:(location.anchor?.page??0)+1});emitPassage(c.request,true);break

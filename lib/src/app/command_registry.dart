@@ -441,6 +441,12 @@ abstract final class BusyBooksCommandIds {
   static const welcome = 'app.welcome';
   static const search = 'reader.search';
   static const searchCollection = 'workspace.search';
+  static const searchBookText = 'search.bookText';
+  static const searchNotebook = 'search.notebook';
+  static const searchBookmarks = 'search.bookmarks';
+  static const searchChapters = 'search.chapters';
+  static const searchBooks = 'search.books';
+  static const searchRecent = 'search.recent';
   static const sidebar = 'reader.sidebar';
   static const goTo = 'reader.goTo';
   static const backToCollection = 'book.backToCollection';
@@ -502,6 +508,10 @@ abstract final class BusyBooksCommandCatalog {
         scope: reader
             ? BusyBooksCommandScope.documentView
             : BusyBooksCommandScope.application,
+        defaultYieldsToOverrides: const {
+          BusyBooksCommandIds.searchBooks,
+          BusyBooksCommandIds.searchRecent,
+        }.contains(id),
         shortcut: BusyBooksShortcutDefinition(
           label: binding.label,
           activator: binding.activator,
@@ -559,6 +569,46 @@ abstract final class BusyBooksCommandCatalog {
         control: true,
         reader: false,
       ),
+      for (final (id, label, key) in [
+        (
+          BusyBooksCommandIds.searchBooks,
+          (BuildContext c) => c.l10n.searchBooks,
+          LogicalKeyboardKey.keyD,
+        ),
+        (
+          BusyBooksCommandIds.searchRecent,
+          (BuildContext c) => c.l10n.searchRecent,
+          LogicalKeyboardKey.keyR,
+        ),
+      ])
+        command(id, label, key, control: true, shift: true, reader: false),
+      for (final (id, label) in [
+        (
+          BusyBooksCommandIds.searchBookText,
+          (BuildContext c) => c.l10n.searchBookText,
+        ),
+        (
+          BusyBooksCommandIds.searchNotebook,
+          (BuildContext c) => c.l10n.searchNotebook,
+        ),
+        (
+          BusyBooksCommandIds.searchBookmarks,
+          (BuildContext c) => c.l10n.searchBookmarks,
+        ),
+        (
+          BusyBooksCommandIds.searchChapters,
+          (BuildContext c) => c.l10n.searchChapters,
+        ),
+      ])
+        BusyBooksCommand(
+          id: id,
+          label: labels[id] ?? label,
+          category: (c) => c.l10n.search,
+          scope: BusyBooksCommandScope.application,
+          execute: executions[id],
+          enabled: enabled[id] ?? () => true,
+          visible: visible[id] ?? () => true,
+        ),
       command(
         BusyBooksCommandIds.sidebar,
         (c) => c.l10n.sidebar,

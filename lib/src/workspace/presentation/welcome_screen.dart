@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
 import '../../app/busybooks_main_menu.dart';
+import '../../app/command_registry.dart';
 import '../../app/linux/linux_header_style.dart';
 import '../../app/linux/linux_page_frame.dart';
 import '../../app/localization.dart';
@@ -26,7 +27,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(workspaceControllerProvider), l = context.l10n;
-    final search = ref.watch(bookSearchProvider(applicationSearchId));
+    final search = ref.watch(bookSearchSessionProvider);
     final narrow =
         MediaQuery.sizeOf(context).width <
         BusyBooksSizes.workspaceSidebarBreakpoint;
@@ -37,14 +38,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         sidebarOverlay: narrow,
         onSidebarDismiss: () {
           if (search.active) {
-            ref.read(bookSearchProvider(applicationSearchId).notifier).close();
+            ref.read(bookSearchSessionProvider.notifier).close();
           } else {
             setState(() => _sidebarOpen = false);
           }
         },
         sidebarHeader: const BusyBooksLinuxBrandHeader(),
         sidebarBody: BookSearchSidebarHost(
-          bookId: applicationSearchId,
           child: BusyBooksSidebarNavigation(
             children: [
               Padding(
@@ -148,11 +148,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                   selected: _sidebarOpen || search.active,
                   onPressed: () {
                     if (search.active) {
-                      ref
-                          .read(
-                            bookSearchProvider(applicationSearchId).notifier,
-                          )
-                          .close();
+                      ref.read(bookSearchSessionProvider.notifier).close();
                     } else {
                       setState(() => _sidebarOpen = !_sidebarOpen);
                     }
@@ -169,9 +165,26 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               ? BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls
               : BusyBooksLinuxHeaderCenterAllocation.centeredBetweenControls,
           title: search.active
-              ? const BookSearchHeaderField(bookId: applicationSearchId)
+              ? const BookSearchHeaderField()
               : BusyBooksLinuxHeaderTitle(l.appTitle),
-          trailing: const BusyBooksMainMenuButton(),
+          trailing: BusyBooksLinuxHeaderControlGroup(
+            children: [
+              BusyBooksHeaderIconButton(
+                tooltip: l.search,
+                icon: BusyBooksGlyphs.search,
+                selected: search.active,
+                onPressed: () => ref
+                    .read(bookSearchSessionProvider.notifier)
+                    .toggle(
+                      actions: bookSearchActions(
+                        context,
+                        BusyBooksCommandRegistryScope.maybeOf(context)!,
+                      ),
+                    ),
+              ),
+              const BusyBooksMainMenuButton(),
+            ],
+          ),
         ),
         body: ColoredBox(
           color: BusyBooksSurfaceColors.of(context).view,

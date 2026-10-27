@@ -11,6 +11,9 @@ Features:
 - **Recent** contains books and collections by stable identity.
 - **Notebook** reviews and edits a book's saved passages, bookmarks and private
   notes, including comic page/region notes and while the original is unavailable.
+- **Search** uses one header query and temporary results sidebar for Book Text,
+  Notebook, Bookmarks, Chapters, Books, Recent and Actions. Saved-book scopes use
+  the database, including unopened books, protected note drafts and missing originals.
 - **Move Book** moves the selected original with a recoverable journal;
   **Locate Book** reconnects matching content without moving it.
 - **Backup & Restore Reading Data** includes collections and application-owned

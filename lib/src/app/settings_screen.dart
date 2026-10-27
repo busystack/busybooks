@@ -59,7 +59,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         settings = ref.watch(appSettingsControllerProvider),
         controller = ref.read(appSettingsControllerProvider.notifier),
         colors = BusyBooksSurfaceColors.of(context),
-        search = ref.watch(bookSearchProvider(applicationSearchId));
+        search = ref.watch(bookSearchSessionProvider);
     final wide =
         MediaQuery.sizeOf(context).width >=
         BusyBooksSizes.settingsSidebarBreakpoint;
@@ -192,13 +192,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           sidebarExpanded: true,
           sidebarOverlay: !wide,
           onSidebarDismiss: search.active
-              ? () => ref
-                    .read(bookSearchProvider(applicationSearchId).notifier)
-                    .close()
+              ? () => ref.read(bookSearchSessionProvider.notifier).close()
               : null,
           sidebarHeader: const BusyBooksLinuxBrandHeader(),
           sidebarBody: BookSearchSidebarHost(
-            bookId: applicationSearchId,
             child: BusyBooksSidebarNavigation(
               children: [
                 for (final page in SettingsPage.values)
@@ -221,7 +218,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ? BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls
                 : BusyBooksLinuxHeaderCenterAllocation.centeredBetweenControls,
             title: search.active
-                ? const BookSearchHeaderField(bookId: applicationSearchId)
+                ? const BookSearchHeaderField()
                 : BusyBooksLinuxHeaderTitle(settingsPageLabel(context, _page)),
             trailing: const BusyBooksMainMenuButton(),
           ),

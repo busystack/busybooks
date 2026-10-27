@@ -25,7 +25,7 @@ Run Dart tools with `dart run tools/NAME.dart`, Python tools with `python3 tools
 The JavaScript entry imports `fixed_layout_probe.mjs`, `reader_startup_probe.mjs`,
 `reader_defects_probe.mjs`, `reader_review_regressions.mjs`,
 `reader_sidebar_probe.mjs`, `typography_probe.mjs` and
-`comic_interaction_probe.mjs`. These execute actual adapter/renderer logic with
+`comic_interaction_probe.mjs` and `literal_search_probe.mjs`. These execute actual adapter/renderer logic with
 controlled APIs; they do not establish native layout, selection or focus.
 
 Build the application first for the bundled RAR decoder. Set

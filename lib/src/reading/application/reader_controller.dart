@@ -77,6 +77,9 @@ class ReaderState {
     this.query = '',
     this.searchStatus = 'idle',
     this.currentMatch = -1,
+    this.searchTotal = 0,
+    this.searchOffset = 0,
+    this.searchLimit = 200,
     this.fixed = false,
     this.typography = TypographyCapabilities.none,
     this.pages = 0,
@@ -101,7 +104,7 @@ class ReaderState {
   bool get canPrevious => ready && navigation['previous'] == true;
   final List<Map<String, dynamic>> toc, matches;
   final String query, searchStatus;
-  final int currentMatch;
+  final int currentMatch, searchTotal, searchOffset, searchLimit;
   final double searchProgress;
   final List<String> labels;
   final Map<int, PagePreview> thumbnails;
@@ -131,6 +134,9 @@ class ReaderState {
     String? query,
     String? searchStatus,
     int? currentMatch,
+    int? searchTotal,
+    int? searchOffset,
+    int? searchLimit,
     bool? fixed,
     TypographyCapabilities? typography,
     int? pages,
@@ -159,6 +165,9 @@ class ReaderState {
     query: query ?? this.query,
     searchStatus: searchStatus ?? this.searchStatus,
     currentMatch: currentMatch ?? this.currentMatch,
+    searchTotal: searchTotal ?? this.searchTotal,
+    searchOffset: searchOffset ?? this.searchOffset,
+    searchLimit: searchLimit ?? this.searchLimit,
     fixed: fixed ?? this.fixed,
     typography: typography ?? this.typography,
     pages: pages ?? this.pages,
@@ -175,6 +184,15 @@ class ReaderController extends Notifier<ReaderState> {
   final events = StreamController<Map<String, dynamic>>.broadcast();
   Timer? _saveTimer, _startupTimer;
   int _searchRevision = 0, _presentation = 0;
+  final _searchWaiters = <Completer<bool>>[];
+
+  void _finishSearchWaiters(bool complete) {
+    for (final waiter in _searchWaiters) {
+      if (!waiter.isCompleted) waiter.complete(complete);
+    }
+    _searchWaiters.clear();
+  }
+
   Rect viewport = Rect.zero;
   Map<String, dynamic> _chrome = {};
   Map<String, dynamic>? _popoverSelection;
@@ -194,14 +212,15 @@ class ReaderController extends Notifier<ReaderState> {
     _lookupTerm = null;
   }
 
-  ReaderSelectionTarget? captureSelection() {
+  ReaderSelectionTarget? captureSelection({bool preserveWhitespace = false}) {
     if (!state.ready || !_routeVisible || _suspended || state.bookId == null) {
       return null;
     }
     final passage = _popoverActive && _popoverKind == 'selection'
         ? _popoverSelection
         : state.selection;
-    final text = (passage?['text'] as String?)?.trim() ?? '';
+    final rawText = passage?['text'] as String? ?? '';
+    final text = preserveWhitespace ? rawText : rawText.trim();
     if (text.isEmpty) return null;
     return ReaderSelectionTarget(
       state.bookId!,
@@ -222,7 +241,7 @@ class ReaderController extends Notifier<ReaderState> {
       target.presentation == _presentation;
 
   Future<void> searchSelection() async {
-    final target = captureSelection();
+    final target = captureSelection(preserveWhitespace: true);
     if (target == null) {
       events.add({'type': 'feedback', 'message': _labels.selectText});
       return;
@@ -575,6 +594,7 @@ class ReaderController extends Notifier<ReaderState> {
       }
     });
     ref.onDispose(() {
+      _finishSearchWaiters(false);
       _invalidateLookup();
       for (final pending in _appearanceResults.values) {
         if (!pending.isCompleted) pending.complete();
@@ -726,6 +746,7 @@ class ReaderController extends Notifier<ReaderState> {
       _filePoll?.cancel();
       _filePoll = null;
       await ref.read(narrationControllerProvider.notifier).stop();
+      _finishSearchWaiters(false);
       _searchRevision++;
       _revealOnLocation = false;
       _outlineRevision = null;
@@ -1239,6 +1260,9 @@ class ReaderController extends Notifier<ReaderState> {
           matches: [],
           searchProgress: 0,
           searchStatus: 'searching',
+          searchTotal: 0,
+          searchOffset: event['offset'] as int? ?? state.searchOffset,
+          searchLimit: event['limit'] as int? ?? state.searchLimit,
         );
       case 'searchProgress':
         state = state.copy(
@@ -1249,9 +1273,12 @@ class ReaderController extends Notifier<ReaderState> {
           searching: false,
           searchProgress: 1,
           searchStatus: 'done',
+          searchTotal: event['total'] as int? ?? state.matches.length,
         );
+        _finishSearchWaiters(true);
       case 'searchError':
         state = state.copy(searching: false, searchStatus: 'error');
+        _finishSearchWaiters(false);
       case 'thumbnailError':
         final page = event['page'];
         if (event['request'] != _thumbnailRevision ||
@@ -1325,6 +1352,7 @@ class ReaderController extends Notifier<ReaderState> {
           'BusyBooks reader diagnostic [${state.bookId}/$_session/${event['stage']}]: ${event['message']}',
         );
       case 'error':
+        _finishSearchWaiters(false);
         if (event['cacheFailure'] == true &&
             book?.format != 'pdf' &&
             !_cacheRecoveryAttempted) {
@@ -1530,11 +1558,22 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> navigateFromSidebar(
     Map<String, dynamic> anchor, {
     required String bookId,
+    Future<bool> Function()? validateNavigation,
   }) async {
     if (state.bookId != bookId || !interactive) return;
     final session = _session;
-    if (!await _dismissForSidebar()) return;
+    if (!await _dismissForSidebar() || !ref.mounted) return;
+    if (ref.read(narrationControllerProvider).active) {
+      await ref.read(narrationControllerProvider.notifier).stop();
+    }
     if (session != _session || state.bookId != bookId) return;
+    if (validateNavigation != null && !await validateNavigation()) return;
+    if (!ref.mounted ||
+        session != _session ||
+        state.bookId != bookId ||
+        !interactive) {
+      return;
+    }
     if (!state.ready) {
       events.add({
         'type': 'feedback',
@@ -1547,26 +1586,77 @@ class ReaderController extends Notifier<ReaderState> {
     await send('goto', {'anchor': anchor});
   }
 
-  void search(String query) {
+  void search(String query, {int offset = 0, int limit = 200}) {
     if (regionNotes || !canSearch) return;
+    _finishSearchWaiters(false);
     final revision = ++_searchRevision;
+    offset = max(0, offset);
+    limit = limit.clamp(1, 500);
     if (state.ready) unawaited(send('cancelSearch', {'queryId': revision}));
     state = state.copy(
       query: query,
       matches: [],
       currentMatch: -1,
       searchProgress: 0,
-      searching: state.ready && query.trim().isNotEmpty,
-      searchStatus: !state.ready || query.trim().isEmpty ? 'idle' : 'searching',
+      searchTotal: 0,
+      searchOffset: offset,
+      searchLimit: limit,
+      searching: state.ready && query.isNotEmpty,
+      searchStatus: !state.ready || query.isEmpty ? 'idle' : 'searching',
     );
-    if (!state.ready || query.trim().isEmpty) return;
-    void run() =>
-        unawaited(send('search', {'query': query.trim(), 'queryId': revision}));
-    run();
+    if (!state.ready || query.isEmpty) return;
+    unawaited(
+      send('search', {
+        'query': query,
+        'queryId': revision,
+        'offset': offset,
+        'limit': limit,
+      }),
+    );
+  }
+
+  /// Resolves only for this query revision and renderer session. A cancelled
+  /// search must never be mistaken for a completed empty result set.
+  Future<bool> waitForSearch() async {
+    final session = _session, revision = _searchRevision;
+    bool current() =>
+        ref.mounted && session == _session && revision == _searchRevision;
+    if (!current() || state.searchStatus != 'searching') {
+      return current() && state.searchStatus == 'done';
+    }
+    final waiter = Completer<bool>();
+    _searchWaiters.add(waiter);
+    try {
+      if (!await waiter.future.timeout(const Duration(seconds: 60))) {
+        return false;
+      }
+    } on TimeoutException {
+      return false;
+    } finally {
+      _searchWaiters.remove(waiter);
+    }
+    return current() && state.searchStatus == 'done';
+  }
+
+  /// Navigation can request an occurrence beyond the displayed window. The
+  /// bounded rescan counts the publication again without retaining every CFI.
+  Future<bool> loadSearchWindow(int absoluteIndex) async {
+    if (!canSearch || absoluteIndex < 0 || state.query.isEmpty) return false;
+    if (absoluteIndex >= state.searchOffset &&
+        absoluteIndex < state.searchOffset + state.matches.length) {
+      return true;
+    }
+    final query = state.query;
+    final limit = state.searchLimit;
+    search(query, offset: absoluteIndex ~/ limit * limit, limit: limit);
+    return await waitForSearch() &&
+        state.query == query &&
+        absoluteIndex < state.searchOffset + state.matches.length;
   }
 
   Future<void> cancelSearch() async {
     if (!ref.mounted) return;
+    _finishSearchWaiters(false);
     final session = _session, revision = ++_searchRevision;
     if (state.ready) await send('cancelSearch', {'queryId': revision});
     if (!ref.mounted || session != _session || revision != _searchRevision) {
@@ -1580,8 +1670,22 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> selectMatch(int index) async {
     if (!interactive || index < 0 || index >= state.matches.length) return;
+    final session = _session, revision = _searchRevision;
+    final match = state.matches[index];
+    if (!await _dismissForSidebar() || !ref.mounted) return;
+    if (ref.read(narrationControllerProvider).active) {
+      await ref.read(narrationControllerProvider.notifier).stop();
+    }
+    if (!ref.mounted ||
+        !interactive ||
+        session != _session ||
+        revision != _searchRevision ||
+        index >= state.matches.length ||
+        !identical(match, state.matches[index])) {
+      return;
+    }
     state = state.copy(currentMatch: index);
-    await send('goto', {'anchor': state.matches[index]['anchor']});
+    await send('goto', {'anchor': match['anchor']});
   }
 
   int _thumbnailRevision = 0;
@@ -2273,6 +2377,7 @@ class ReaderController extends Notifier<ReaderState> {
       await _applyVisibility();
       rethrow;
     }
+    _finishSearchWaiters(false);
     _searchRevision++;
     if (revision != _openRevision) return;
     _fileCheck?.cancel();

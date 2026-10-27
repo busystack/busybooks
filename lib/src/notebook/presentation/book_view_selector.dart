@@ -21,7 +21,7 @@ Future<void> _dismissBookOverlay(
   bool narrow,
 ) async {
   if (!narrow) return;
-  container.read(bookSearchProvider(id).notifier).close(restoreFocus: false);
+  container.read(bookSearchSessionProvider.notifier).dismissForActivation();
   await container.read(bookSidebarProvider(id).notifier).setOpen(false);
 }
 
@@ -31,6 +31,7 @@ Future<void> openNotebook(
   String id, {
   String? annotationId,
   bool Function()? canActivate,
+  Future<bool> Function()? validateActivation,
 }) async {
   final narrow =
       MediaQuery.sizeOf(context).width <
@@ -41,6 +42,10 @@ Future<void> openNotebook(
   if (origin.path == '/notebook/$id' && annotationId == null) return;
   bool sameRoute() => router.routeInformationProvider.value.uri == origin;
   bool current() => sameRoute() && (canActivate?.call() ?? true);
+  Future<bool> valid() async =>
+      current() &&
+      (validateActivation == null || await validateActivation()) &&
+      current();
   bool annotationAvailable() =>
       annotationId == null ||
       container
@@ -58,7 +63,7 @@ Future<void> openNotebook(
           .read(workspaceControllerProvider.notifier)
           .loadBook(id, activate: true, isCurrent: current);
     }
-    if (!current() || !annotationAvailable()) return;
+    if (!await valid() || !annotationAvailable()) return;
     if (origin.path != '/read/$id' && origin.path != '/notebook/$id') {
       await container
           .read(workspaceControllerProvider.notifier)
@@ -66,13 +71,14 @@ Future<void> openNotebook(
       if (!current()) return;
     }
     await container.read(readerControllerProvider.notifier).suspend();
-    if (!current() || !annotationAvailable()) return;
+    if (!await valid() || !annotationAvailable()) return;
     if (annotationId != null) {
       await _dismissBookOverlay(container, id, narrow);
       // A narrow handoff deliberately closes its search session. Validate the
       // route and actual record again without rejecting that owned dismissal.
-      if (!sameRoute() ||
-          (!narrow && !(canActivate?.call() ?? true)) ||
+      if (!await valid() ||
+          !sameRoute() ||
+          !(canActivate?.call() ?? true) ||
           !annotationAvailable()) {
         return;
       }
@@ -91,6 +97,7 @@ Future<void> openReading(
   Map<String, dynamic>? anchor,
   String? annotationId,
   bool Function()? canActivate,
+  Future<bool> Function()? validateActivation,
 }) async {
   final narrow =
       MediaQuery.sizeOf(context).width <
@@ -101,6 +108,10 @@ Future<void> openReading(
   if (origin.path == '/read/$id' && anchor == null) return;
   bool sameRoute() => router.routeInformationProvider.value.uri == origin;
   bool current() => sameRoute() && (canActivate?.call() ?? true);
+  Future<bool> valid() async =>
+      current() &&
+      (validateActivation == null || await validateActivation()) &&
+      current();
   bool annotationAvailable() =>
       annotationId == null ||
       container
@@ -118,12 +129,14 @@ Future<void> openReading(
           .read(workspaceControllerProvider.notifier)
           .loadBook(id, activate: true, isCurrent: current);
     }
-    if (!current() || !annotationAvailable()) return;
+    if (!await valid() || !annotationAvailable()) return;
     final reader = container.read(readerControllerProvider.notifier);
     if (anchor != null) {
+      if (!await valid()) return;
       await _dismissBookOverlay(container, id, narrow);
-      if (!sameRoute() ||
-          (!narrow && !(canActivate?.call() ?? true)) ||
+      if (!await valid() ||
+          !sameRoute() ||
+          !(canActivate?.call() ?? true) ||
           !annotationAvailable()) {
         return;
       }
@@ -131,13 +144,15 @@ Future<void> openReading(
           reader.stateBookId == id &&
           !reader.suspended) {
         await reader.setWorkspaceVisible(true);
-        if (!sameRoute() ||
-            (!narrow && !(canActivate?.call() ?? true)) ||
-            !annotationAvailable()) {
+        if (!sameRoute() || !await valid() || !annotationAvailable()) {
           return;
         }
         if (reader.interactive) {
-          await reader.navigateFromSidebar(anchor, bookId: id);
+          await reader.navigateFromSidebar(
+            anchor,
+            bookId: id,
+            validateNavigation: validateActivation,
+          );
           return;
         }
       }

@@ -18,6 +18,10 @@ class AnnotationStoreGate implements ReadingDataStore {
   @override
   Stream<Map<String, dynamic>> get progress => inner.progress;
   @override
+  Stream<int> get changes => inner.changes;
+  @override
+  int get searchRevision => inner.searchRevision;
+  @override
   Future<dynamic> call(String action, [Object? argument]) async {
     calls.add(action);
     if (action == 'updateBook' &&
