@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:busybooks/src/app/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,29 @@ class _Store implements LocalSettingsStore {
 }
 
 void main() {
+  test(
+    'queued preference writes finish in order after their provider is disposed',
+    () async {
+      final store = _Store();
+      final container = ProviderContainer(
+        overrides: [
+          startupAppSettingsProvider.overrideWithValue(
+            StartupAppSettings(AppSettings(), store),
+          ),
+        ],
+      );
+      final controller = container.read(appSettingsControllerProvider.notifier);
+      final one = controller.update({'theme': 'dark'}),
+          two = controller.update({'readerSidebar': true});
+      await Future<void>.delayed(Duration.zero);
+      container.dispose();
+      store.gate.complete();
+      await Future.wait([one, two]);
+      expect(store.values, hasLength(2));
+      expect(store.values.last['readerSidebar'], true);
+      expect(store.values.last['theme'], 'dark');
+    },
+  );
   test(
     'reading defaults save failures revert only their own optimistic revision',
     () async {

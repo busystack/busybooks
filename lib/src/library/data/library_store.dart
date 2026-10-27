@@ -23,6 +23,7 @@ import '../../workspace/workspace_model.dart';
 import 'cover_image.dart';
 import 'reading_backup.dart';
 import 'publication_cache.dart';
+import 'region_preview.dart';
 import '../domain/book_format.dart';
 
 class ReadingDataStore {
@@ -770,6 +771,18 @@ class _ReadingWorker {
         return value;
       case 'annotations':
         return annotations(args as String);
+      case 'regionPreview':
+        final owner = book(args['bookId'] as String);
+        if (owner == null || !isComicFormat(owner['format'] as String?)) {
+          return null;
+        }
+        final anchor = (args['anchor'] as Map).cast<String, dynamic>();
+        return cachedRegionPreview(
+          root,
+          owner['id'] as String,
+          owner['format'] as String,
+          anchor,
+        );
       case 'book':
         return accessibleBook(args as String);
       case 'availability':

@@ -35,6 +35,28 @@ windows.listeners.unhandledrejection({reason: new Error('Worker stopped')})
 assert.equal(windows.events[0].message, 'Worker stopped')
 assert.equal(windows.events[0].session, '123')
 
+const resizeNotification = {isTrusted: true, error: null, filename: '', lineno: 0, colno: 0,
+  message: 'ResizeObserver loop completed with undelivered notifications.'}
+for (const platform of ['linux', 'windows']) {
+  const reader = boot(platform, () => Promise.resolve())
+  reader.listeners.error(resizeNotification)
+  assert.deepEqual(reader.events, [{type: 'diagnostic', session: '123', stage: 'resize-observer', message: resizeNotification.message}])
+  // WebView2 attributes this browser notification to the current document.
+  reader.listeners.error({...resizeNotification, filename: 'https://busybooks.local/index.html?session=123&loading=Loading+book'})
+  assert.equal(reader.events[1].type, 'diagnostic')
+  reader.listeners.error({error: new Error('Real script failure'), message: 'Real script failure'})
+  assert.equal(reader.events[2].type, 'error', 'a diagnostic must not disable subsequent failure reporting')
+  assert.equal(reader.events[2].message, 'Real script failure')
+  for (const changed of [{isTrusted: false}, {error: new Error(resizeNotification.message)}, {filename: 'reader.js'}, {lineno: 1}, {colno: 1}]) {
+    const broken = boot(platform, () => Promise.resolve())
+    broken.listeners.error({...resizeNotification, ...changed})
+    assert.equal(broken.events[0].type, 'error', 'do not hide exceptions or authored events with the same message')
+  }
+  const rejected = boot(platform, () => Promise.resolve())
+  rejected.listeners.unhandledrejection({reason: resizeNotification.message})
+  assert.equal(rejected.events[0].type, 'error')
+}
+
 const events = [], frames = [], timers = [], firstPages = []
 let resolveMetadata, rejectOutline
 const metadata = new Promise(resolve => resolveMetadata = resolve)
@@ -86,4 +108,4 @@ await vm.runInContext('enrichPdf({pages: 322, labels: [], fixed: true}, true)', 
 assert.equal(events.some(event => event.type === 'diagnostic' && event.stage === 'cover'), true)
 assert.equal(events.some(event => event.type === 'error'), false)
 assert.equal(firstPages.length, 1, 'optional metadata must not navigate away from the saved passage')
-console.log(JSON.stringify({status: 'passed', scope: 'reader dependency failure, Linux/Windows bridge reporting, localized startup text, first page before optional PDF metadata, optional outline/cover failures; controlled APIs, no native rendering assertion'}))
+console.log(JSON.stringify({status: 'passed', scope: 'reader dependency failure, Linux/Windows bridge reporting, trusted resize diagnostics without suppressing exceptions, localized startup text, first page before optional PDF metadata, optional outline/cover failures; controlled APIs, no native rendering assertion'}))

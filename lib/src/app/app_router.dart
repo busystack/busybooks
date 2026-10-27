@@ -1,13 +1,16 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../book_workspace/presentation/book_workspace_screen.dart';
 import '../library/presentation/collection_screen.dart';
-import '../workspace/presentation/welcome_screen.dart';
-import '../reading/presentation/reader_screen.dart';
+import '../notebook/presentation/book_view_selector.dart';
 import '../reading/application/reader_controller.dart';
+import '../workspace/presentation/welcome_screen.dart';
+import 'settings_page.dart';
 import 'settings_screen.dart';
-import '../notebook/presentation/notebook_screen.dart';
 
 /// Only existing internal surfaces can be Settings return destinations.
 String safeSettingsReturnTarget(String? target) =>
@@ -59,19 +62,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/read/:id',
         pageBuilder: (c, s) => NoTransitionPage<void>(
-          key: s.pageKey,
+          key: const ValueKey('book-workspace'),
           name: 'reader',
-          child: ReaderScreen(id: s.pathParameters['id']!),
+          child: BookWorkspaceScreen(
+            id: s.pathParameters['id']!,
+            view: BookView.reading,
+          ),
         ),
       ),
       GoRoute(
         path: '/notebook/:id',
         pageBuilder: (c, s) => NoTransitionPage<void>(
-          key: s.pageKey,
+          key: const ValueKey('book-workspace'),
           name: 'notebook',
-          child: NotebookScreen(
-            key: ValueKey(s.pathParameters['id']),
+          child: BookWorkspaceScreen(
             id: s.pathParameters['id']!,
+            view: BookView.notebook,
           ),
         ),
       ),
@@ -80,7 +86,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (c, s) => NoTransitionPage<void>(
           key: s.pageKey,
           name: 'settings',
-          child: const SettingsScreen(),
+          child: SettingsScreen(
+            bookPreferences: s.uri.queryParameters['scope'] == 'book',
+            initialPage:
+                SettingsPage.values
+                    .where((page) => page.name == s.uri.queryParameters['page'])
+                    .firstOrNull ??
+                SettingsPage.general,
+          ),
         ),
       ),
     ],

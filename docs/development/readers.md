@@ -1,4 +1,4 @@
-# Reader implementation and proof boundary
+# Reader architecture and supported formats
 
 EPUB uses [Foliate.js](https://github.com/johnfactotum/foliate-js) pinned to
 `78914aef4466eb960965702401634c2cb348e9b1` (MIT). Its EPUB loader,
@@ -17,19 +17,75 @@ fallback scripts, ICC resources and their licenses are local assets. The adapter
 uses actual PDF pages, text layers, page labels, outline, destinations and
 PDF-coordinate highlight rectangles. Canvas rendering is for PDF pages only.
 
-These are existing rendering implementations, not a new parser/layout engine.
-Their browser interfaces permit both native hosts. Linux CI run
-[39312939311](https://github.com/albert-gee/busybooks/actions/runs/39312939311)
-at `fd1aa90a1aa6a3a4e6138b344f40a8f3451790ad` executed three real WebKitGTK
-surfaces under Xvfb: reflowable EPUB, fixed-layout EPUB and text PDF each reported
-`opened=1 location=1 search=1`. This is smoke evidence only. It does not establish
-selection, rendered annotation attachment, accessibility, image-only PDF or the
-full application workflows. Windows tests failed before compilation in that
-run; WebView2 execution remains unverified. Current Linux format acceptance and
-the exact remaining Windows/Snap gates are recorded in
-[format-verification.md](format-verification.md).
-The five subsequent review corrections and their fresh native evidence are in
-[format-review-verification.md](format-review-verification.md).
+Both engines run in the native desktop hosts described below. Controlled
+adapter tests, native engine probes and full application acceptance have
+different scopes; see [development tools](../../tools/README.md) and
+[known issues](known-issues.md).
+
+## Supported inputs
+
+| Input | Reader and durable identity |
+| --- | --- |
+| PDF | PDF.js; SHA-256 of original bytes; PDF page/text geometry |
+| EPUB 2/3, DRM-free `.kepub.epub` | Foliate EPUB loader; original bytes and EPUB CFIs |
+| `.fb2` | FictionBook XML; semantic `fb2`; original XML bytes |
+| `.fb2.zip`, `.fbz` | Exactly one eligible FB2 document; semantic `fb2`; complete original ZIP bytes |
+| `.cbz` | Shared image-comic reader; complete original ZIP bytes |
+| `.cbr` | Shared image-comic reader with bundled UnRAR; complete original RAR bytes |
+
+Suffix recognition is case insensitive and checks `.fb2.zip` first; content
+validation follows suffix recognition. Generic ZIP/RAR/XML, standalone `.kepub`,
+DTBook/DAISY, audio and protected content are outside the input profile. Kobo
+accounts and publication conversion are not part of reading.
+
+Comic pages support static baseline/progressive JPEG, RGB/RGBA/grayscale PNG
+and lossy/lossless WebP. Animated pages and other encodings, including GIF, BMP,
+TIFF, AVIF and SVG, fail explicitly without dropping or renumbering pages.
+Corrupt headers fail preparation; later decode errors fail the page operation.
+Opening requires a decoded, laid-out initial page. Optional ComicInfo supplies
+title, creator roles, series, language, cover, direction, wide-page and bookmark
+metadata; enumerated images determine page count. Resource budgets are in
+[storage.md](storage.md#publication-resource-budgets).
+
+## RAR decoding
+
+The bundled UnRAR 7.21 worker supports RAR4/RAR5 stored, compressed and solid
+archives. CRC/data corruption, unsafe or duplicate paths, links, encryption and
+multipart input are rejected. RAR4 non-ASCII filenames need an unambiguous
+Unicode field; the application does not guess an OEM codepage. SFX, other RAR
+generations, dictionaries above 256 MiB, unsupported decoder features, passwords
+and volume acquisition are outside the supported profile.
+
+The decoder runs in a separate killable process with a 768 MiB memory limit,
+three-minute deadline and 25 ms cancellation polling. Header preflight checks
+retained/discarded budgets and free space before extraction; a second pass
+streams and verifies data/CRC. Numeric staging paths prevent archive-controlled
+extraction paths. Cancellation kills an active solid decoder and removes staging.
+
+The unmodified source archive, checksum and redistribution terms are documented
+in [UnRAR provenance](../../native/vendor/unrar/README.md). Complete licenses and
+acknowledgements ship under `share/licenses/unrar`. UnRAR permits RAR handling
+and redistribution but prohibits developing a RAR-compatible archiver or
+recreating the proprietary compression algorithm. BusyBooks' own code remains
+Apache-2.0. Libarchive was rejected as the backend because its
+RAR4 solid handling failed the representative fixture.
+
+## Local vendor modifications
+
+The pinned Foliate revision has four locally modified files. Their current
+hashes and the upstream revision are recorded in
+[`tools/vendor-manifest.json`](../../tools/vendor-manifest.json).
+
+| Vendored file | Maintained local changes |
+| --- | --- |
+| `epub.js` | EPUB 2 manifest fallbacks, DTBook, MIME aliases and styled XML islands; separate spine/content and embedded-resource fallback endpoints preserving original CFIs; canonical encoded paths with separate fragments and a single archive-path decode; SVG `image`/`use`/`feImage` href and xlink resource rewriting; propagation of required load failures and isolation of invalid optional NAV/NCX destinations |
+| `fixed-layout.js` | Explicit single-page preference, active-side navigation/focus and resolved text anchors; centered-page spread boundaries, direction rebuilding and safe failed navigation; auto-margin centering with reachable overflow edges in both reading directions |
+| `paginator.js` | Cleanup tolerates an uninitialized view after first-document failure, preserving the original opening error |
+| `search.js` | Node-indexed excerpts and intermediate/equal endpoint text; exact-end and overlapping matches; empty-query handling; word/grapheme boundaries across markup and normalized Unicode offsets |
+
+All other Foliate files remain at the pinned revision. PDF.js resources and the
+UnRAR archive are unmodified. Source comments and accompanying upstream licenses
+remain intact. Fixture/probe code is separate from distributed reader assets.
 
 ## Host and locations
 
@@ -53,12 +109,10 @@ retain the active side on same-spread jumps, and honor resolved text ranges for
 selection, scroll and resume at zoom. `tools/fixed_layout_probe.mjs` exercises
 these navigation paths against the actual renderer with a controlled DOM; it
 does not establish native selection or layout acceptance.
-The two modified vendor files are `epub.js` (manifest fallbacks, DTBook, EPUB 2
-MIME aliases, styled XML islands and distinct spine/resource fallback endpoints)
-and `fixed-layout.js` (these existing fixes, safe failed navigation, direction
-rebuilding and overflow-safe spread centering). Auto margins center fitting
+Auto margins center fitting
 pages; overflowing pages retain a reachable physical starting edge in both
-reading directions. All other Foliate files remain at the recorded revision.
+reading directions. The complete patch inventory is under
+[Local vendor modifications](#local-vendor-modifications).
 
 EPUB 2 inspection accepts an OPF 2 package and reuses NCX, nested navigation,
 page lists, guide references and older metadata/cover handling. Image covers and
@@ -72,13 +126,14 @@ EPUB-contained `text/x-oeb1-document`/`text/x-oeb1-css` aliases are normalized;
 `fallback-style` XML islands retain their namespaces and IDs in a deterministic
 XHTML shell using the manifest stylesheet. This same tree drives search and CFI
 resolution. Normative fixture/schema checks and EPUBCheck profile exceptions
-are documented in [format-verification.md](format-verification.md).
+are documented in [fixture provenance](../../test/fixtures/formats/PROVENANCE.md#epub-2-validation).
 Spine resolution continues through intermediate raster images to a content
 document; embedded-resource resolution can still stop at those images. The
 PDF → PNG → XHTML fixture checks original spine CFIs and navigation aliases.
 
 FB2 inspection/preparation validates FictionBook's namespace and decodes UTF-8,
-UTF-16 or Windows-1251. ZIP wrappers must contain exactly one eligible FB2 file.
+UTF-16 or Windows-1251. ZIP wrappers must contain exactly one eligible FB2 file;
+recognized filesystem sidecars are excluded after archive integrity validation.
 `fb2_book.dart` creates a bounded, sanitized, deterministic section tree once.
 `prepared_book.mjs` uses that exact tree for rendering, search, selection,
 narration and range resolution. The semantic format remains FB2. All emission
@@ -88,13 +143,16 @@ loader, including embedded images, backlinks and restoration of note annotations
 Sections without source IDs receive deterministic, collision-free IDs in both
 the canonical XHTML and contents tree. This adds attributes without changing
 the element/text structure, so existing version-1 CFIs remain valid.
+Validation follows the [CFI grammar](https://w3c.github.io/epub-specs/epub33/epubcfi/),
+including valid empty/offset-only relative endpoints and virtual step 0, while
+checking bounds, escaped assertions, required root paths and format/index identity.
 
 CBZ and CBR share `comic_book.mjs` and Foliate's fixed-layout renderer. Only
 archive decoding differs. ZIP streams entries to owned files; a bundled UnRAR
 7.21 worker decodes RAR4/RAR5, including common solid archives. It is a separate,
 killable process with bounded memory/output and no archive-controlled extraction
-paths. License, unsupported profiles, measured limits and cancellation evidence
-are in [format-verification.md](format-verification.md). No external executable
+paths. License and unsupported profiles are described under
+[RAR decoding](#rar-decoding). No external executable
 is searched on PATH, and no decoder is downloaded at runtime.
 
 Comic page identity is the SHA-256 of its original logical archive path, ordered
@@ -174,8 +232,7 @@ The worker validates the original before every prepare, and cache preparation
 checks the original bytes against the expected identity. A cache cannot replace
 a missing original. File changes trigger fingerprint revalidation; missing or
 changed originals hide the surface and preserve reading data for Locate/Retry.
-The old metadata-only import-validation path has been removed. Engine metadata
-is collected as part of normal direct reading.
+Engine metadata is collected as part of normal direct reading.
 
 ## Reading workspace integration
 
@@ -189,20 +246,20 @@ permission. PDF fits use each page's intrinsic geometry/rotation.
 `test/fixtures/mixed-pages.pdf` adds eight deterministic pages with different
 sizes, orientations and intrinsic rotation (4,593 bytes). Use it alongside
 text.pdf and image-only.pdf for fit/zoom/rotation checks. Executable pure geometry
-checks do not establish native text/canvas alignment. Native acceptance remains
-listed separately in [format-verification.md](format-verification.md).
+checks do not establish native text/canvas alignment. Native checks are described
+in [development tools](../../tools/README.md).
 
 ## Selection search and online lookup
 
 Search in This Book captures the complete trimmed selection and its book/session
 before the protected popover handoff. It explicitly reveals the existing header
-search and Search Results sidebar, synchronizes the editable field, and starts an
-immediate search revision. It does not submit or navigate an existing result.
+search and temporary Book Text sidebar session, synchronizes the editable field,
+and starts an immediate search revision. It does not submit or navigate an existing result.
 Selection in reflowable EPUB, text PDF and an EPUB footnote uses the same captured
 passage. Results, cancellation, navigation history, Return, positions and
 completion remain owned by the existing engines/controller.
 
-Look Up from the selection and Dictionary from Main Menu use the same consent
+Look Up from the selection and Dictionary from Book Actions use the same consent
 and lookup path. Selection alone makes no request. The primary application makes
 a bounded HTTPS request to English Wiktionary's
 `GET /api/rest_v1/page/definition/{term}?redirect=false`; the whole word or phrase
@@ -215,13 +272,12 @@ lookup. Results update the existing presentation without reopening or focusing i
 Keyboard Escape/Close uses the existing focus return. Draft capture must succeed
 before selection actions can replace or dismiss an editor.
 
-The [official REST documentation](https://www.mediawiki.org/wiki/Wikimedia_REST_API)
-links the experimental definition endpoint on English Wiktionary. Its
-[live OpenAPI description](https://en.wiktionary.org/api/rest_v1/?spec) currently
-contains an older `usages` schema. Public requests on 2026-10-22 verified the
-actual `definition/0.8.1` JSON: language keys map to lists of sections with
-`language`, `partOfSpeech`, and `definitions[].definition` HTML fragments.
-`cat`, `café`, and `ice cream` succeeded; a fabricated missing term returned 404.
+The adapter consumes English Wiktionary's experimental `definition/0.8.1`
+response: language keys map to lists of sections with `language`,
+`partOfSpeech`, and `definitions[].definition` HTML fragments. The
+[REST documentation](https://www.mediawiki.org/wiki/Wikimedia_REST_API) and
+[OpenAPI description](https://en.wiktionary.org/api/rest_v1/?spec) describe the
+service; unsupported response shapes receive explicit feedback.
 Empty senses occur. The `en` key can include Translingual material; `other` can
 include named languages. The UI uses actual section labels, never assumes the
 book's language, and identifies English Wiktionary as the source.

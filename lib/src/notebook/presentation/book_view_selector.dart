@@ -1,34 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../app/app_router.dart';
-import '../../app/product_actions.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
 import '../../app/command_registry.dart';
 import '../../app/localization.dart';
+import '../../app/product_actions.dart';
+import '../../book_workspace/application/book_sidebar_controller.dart';
+import '../../reading/application/reader_controller.dart';
+import '../../search/book_search_session.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/notebook_controller.dart';
-import '../../reading/application/reader_controller.dart';
 
 enum BookView { reading, notebook }
+
+Future<void> _dismissBookOverlay(
+  ProviderContainer container,
+  String id,
+  bool narrow,
+) async {
+  if (!narrow) return;
+  container.read(bookSearchProvider(id).notifier).close(restoreFocus: false);
+  await container.read(bookSidebarProvider(id).notifier).setOpen(false);
+}
 
 Future<void> openNotebook(
   BuildContext context,
   WidgetRef ref,
   String id, {
   String? annotationId,
+  bool Function()? canActivate,
 }) async {
+  final narrow =
+      MediaQuery.sizeOf(context).width <
+      BusyBooksSizes.workspaceSidebarBreakpoint;
   final container = ProviderScope.containerOf(context, listen: false);
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
   if (origin.path == '/notebook/$id' && annotationId == null) return;
-  bool current() => router.routeInformationProvider.value.uri == origin;
+  bool sameRoute() => router.routeInformationProvider.value.uri == origin;
+  bool current() => sameRoute() && (canActivate?.call() ?? true);
+  bool annotationAvailable() =>
+      annotationId == null ||
+      container
+              .read(notebookControllerProvider)
+              .findAnnotation(
+                id,
+                annotationId,
+                container.read(workspaceControllerProvider).annotations,
+              ) !=
+          null;
   await container.read(workspaceControllerProvider.notifier).navigate(() async {
     if (!current()) return;
-    await container
-        .read(workspaceControllerProvider.notifier)
-        .loadBook(id, activate: true, isCurrent: current);
-    if (!current()) return;
+    if (container.read(workspaceControllerProvider).openedBook?.id != id) {
+      await container
+          .read(workspaceControllerProvider.notifier)
+          .loadBook(id, activate: true, isCurrent: current);
+    }
+    if (!current() || !annotationAvailable()) return;
     if (origin.path != '/read/$id' && origin.path != '/notebook/$id') {
       await container
           .read(workspaceControllerProvider.notifier)
@@ -36,8 +66,16 @@ Future<void> openNotebook(
       if (!current()) return;
     }
     await container.read(readerControllerProvider.notifier).suspend();
-    if (!current()) return;
+    if (!current() || !annotationAvailable()) return;
     if (annotationId != null) {
+      await _dismissBookOverlay(container, id, narrow);
+      // A narrow handoff deliberately closes its search session. Validate the
+      // route and actual record again without rejecting that owned dismissal.
+      if (!sameRoute() ||
+          (!narrow && !(canActivate?.call() ?? true)) ||
+          !annotationAvailable()) {
+        return;
+      }
       container
           .read(notebookControllerProvider.notifier)
           .revealAnnotation(id, annotationId);
@@ -51,19 +89,60 @@ Future<void> openReading(
   WidgetRef ref,
   String id, {
   Map<String, dynamic>? anchor,
+  String? annotationId,
+  bool Function()? canActivate,
 }) async {
+  final narrow =
+      MediaQuery.sizeOf(context).width <
+      BusyBooksSizes.workspaceSidebarBreakpoint;
   final container = ProviderScope.containerOf(context, listen: false);
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
   if (origin.path == '/read/$id' && anchor == null) return;
-  bool current() => router.routeInformationProvider.value.uri == origin;
+  bool sameRoute() => router.routeInformationProvider.value.uri == origin;
+  bool current() => sameRoute() && (canActivate?.call() ?? true);
+  bool annotationAvailable() =>
+      annotationId == null ||
+      container
+              .read(notebookControllerProvider)
+              .findAnnotation(
+                id,
+                annotationId,
+                container.read(workspaceControllerProvider).annotations,
+              ) !=
+          null;
   await container.read(workspaceControllerProvider.notifier).navigate(() async {
     if (!current()) return;
-    await container
-        .read(workspaceControllerProvider.notifier)
-        .loadBook(id, activate: true, isCurrent: current);
-    if (!current()) return;
-    container.read(readerControllerProvider.notifier).pendingJump = anchor;
+    if (container.read(workspaceControllerProvider).openedBook?.id != id) {
+      await container
+          .read(workspaceControllerProvider.notifier)
+          .loadBook(id, activate: true, isCurrent: current);
+    }
+    if (!current() || !annotationAvailable()) return;
+    final reader = container.read(readerControllerProvider.notifier);
+    if (anchor != null) {
+      await _dismissBookOverlay(container, id, narrow);
+      if (!sameRoute() ||
+          (!narrow && !(canActivate?.call() ?? true)) ||
+          !annotationAvailable()) {
+        return;
+      }
+      if (origin.path == '/read/$id' &&
+          reader.stateBookId == id &&
+          !reader.suspended) {
+        await reader.setWorkspaceVisible(true);
+        if (!sameRoute() ||
+            (!narrow && !(canActivate?.call() ?? true)) ||
+            !annotationAvailable()) {
+          return;
+        }
+        if (reader.interactive) {
+          await reader.navigateFromSidebar(anchor, bookId: id);
+          return;
+        }
+      }
+    }
+    reader.pendingJump = anchor;
     router.go('/read/$id');
   });
 }

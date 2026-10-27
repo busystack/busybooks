@@ -140,13 +140,19 @@ class BusyBooksLinuxHeaderIconButton extends StatelessWidget {
 }
 
 class BusyBooksLinuxHeaderControlGroup extends StatelessWidget {
-  const BusyBooksLinuxHeaderControlGroup({super.key, required this.children});
+  const BusyBooksLinuxHeaderControlGroup({
+    super.key,
+    required this.children,
+    this.tooltipPositionDelegate,
+  });
 
   final List<Widget> children;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   @override
   Widget build(BuildContext context) {
     return BusyBooksHeaderControlStyleScope(
+      tooltipPositionDelegate: tooltipPositionDelegate,
       foregroundColor: busyBooksLinuxHeaderForeground(context),
       disabledForegroundColor: busyBooksLinuxHeaderForeground(
         context,

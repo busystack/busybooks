@@ -1,7 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:archive/archive_io.dart';
+import 'package:busybooks/src/annotations/domain/annotation_filter.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/domain/book.dart';
 import 'package:busybooks/src/notebook/application/notebook_controller.dart';
@@ -9,6 +11,7 @@ import 'package:busybooks/src/workspace/workspace_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+
 import '../support/annotation_store_gate.dart';
 
 void main() {
@@ -27,6 +30,7 @@ void main() {
         );
         final save = expectLater(saving, throwsA(isA<FileSystemException>()));
         await Future.wait([deletion, save]);
+        expect(f.container.read(workspaceControllerProvider).error, isNull);
         expect(
           f.container.read(notebookControllerProvider).drafts[f.item.id]!.text,
           'Retained draft',
@@ -38,6 +42,7 @@ void main() {
         f.gate.failDelete = false;
         await f.notebook.flush();
         await f.verify('Retained draft');
+        expect(f.container.read(workspaceControllerProvider).error, isNull);
       } finally {
         await f.close();
       }
@@ -369,8 +374,7 @@ void main() {
         );
         notebook.view(
           id,
-          query: 'draft',
-          filter: 'bookmark',
+          filter: AnnotationTypeFilter.bookmarks,
           withNotes: true,
           scroll: 420,
           selected: item.id,

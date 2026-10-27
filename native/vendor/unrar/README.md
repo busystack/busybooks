@@ -20,7 +20,8 @@ the proprietary compression algorithm. This dependency has its own license;
 BusyBooks' application code remains Apache-2.0. The wrapper retains the required
 license paragraph in source comments as well.
 
-Qualification and unsupported profiles are documented in
-`docs/development/format-verification.md`. In particular, libarchive 3.8.10 was
-tested first and rejected because a representative RAR4 solid fixture failed;
-the selected UnRAR backend decodes all six qualified profiles.
+Supported RAR4/RAR5 stored, compressed and solid profiles, rejection limits and
+the backend selection rationale are documented in
+[reader architecture](../../../docs/development/readers.md#rar-decoding).
+`tools/qualify_rar.py` checks the bundled helper against exact fixture bytes and
+negative cases; no compressor is needed to run those checks.

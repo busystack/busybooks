@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'busybooks_shortcuts.dart';
+import 'localization.dart';
 import 'shortcut_binding.dart';
 import 'shortcut_capture.dart';
-import 'localization.dart';
 
 typedef BusyBooksCommandCallback = FutureOr<void> Function();
 typedef BusyBooksCommandPredicate = bool Function();
@@ -369,6 +369,7 @@ class BusyBooksCommandRegistry {
     return {
       for (final command in commands)
         if (scopes.contains(command.scope) &&
+            command.visible() &&
             command.shortcut != null &&
             !excludedIds.contains(command.id))
           for (final activator in activators(command.id))
@@ -466,6 +467,7 @@ abstract final class BusyBooksCommandIds {
   static const export = 'book.exportAnnotations';
   static const viewReading = 'book.viewReading';
   static const viewNotebook = 'book.viewNotebook';
+  static const bookProperties = 'book.properties';
   static const moveBook = 'book.move';
   static const locateBook = 'book.locate';
 }
@@ -524,6 +526,17 @@ abstract final class BusyBooksCommandCatalog {
         LogicalKeyboardKey.digit2,
         control: true,
         alt: true,
+      ),
+      BusyBooksCommand(
+        id: BusyBooksCommandIds.bookProperties,
+        label:
+            labels[BusyBooksCommandIds.bookProperties] ??
+            (c) => c.l10n.properties,
+        category: (c) => c.l10n.book,
+        scope: BusyBooksCommandScope.documentView,
+        execute: executions[BusyBooksCommandIds.bookProperties],
+        enabled: enabled[BusyBooksCommandIds.bookProperties] ?? () => true,
+        visible: visible[BusyBooksCommandIds.bookProperties] ?? () => true,
       ),
       command(
         BusyBooksCommandIds.moveBook,
@@ -678,7 +691,7 @@ abstract final class BusyBooksCommandCatalog {
         ),
       command(
         BusyBooksCommandIds.annotations,
-        (c) => c.l10n.annotations,
+        (c) => c.l10n.marks,
         LogicalKeyboardKey.keyH,
         control: true,
         shift: true,

@@ -10,11 +10,18 @@ import '../reading/application/narration_controller.dart';
 
 const _channel = MethodChannel('io.busystack.busybooks/speech');
 
+class SpeechServiceFailure implements Exception {
+  const SpeechServiceFailure(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 class SpeechService {
   SpeechService() {
     if (Platform.isWindows) {
       _channel.setMethodCallHandler((call) async {
-        if (call.method == 'event' && call.arguments is String) {
+        if (!_disposed && call.method == 'event' && call.arguments is String) {
           events.add(call.arguments as String);
         }
       });
@@ -25,6 +32,7 @@ class SpeechService {
   Future<void>? _starting;
   Isolate? _isolate;
   ReceivePort? _replies;
+  Future<void>? _disposal;
   int _serial = 0;
   final _pending = <int, Completer<dynamic>>{};
   final events = StreamController<String>.broadcast();
@@ -32,9 +40,21 @@ class SpeechService {
     String action, [
     Map<String, dynamic> args = const {},
   ]) async {
+    if (_disposed) throw const SpeechServiceFailure('Speech service is closed');
+    return _call(action, args);
+  }
+
+  Future<dynamic> _call(
+    String action, [
+    Map<String, dynamic> args = const {},
+  ]) async {
     if (Platform.isWindows) {
       _windowsUsed = true;
-      return _channel.invokeMethod(action, args);
+      try {
+        return await _channel.invokeMethod(action, args);
+      } on PlatformException catch (error) {
+        throw SpeechServiceFailure(error.message ?? error.code);
+      }
     }
     if (_port == null) {
       _starting ??= _start().whenComplete(() => _starting = null);
@@ -55,19 +75,19 @@ class SpeechService {
         replies.sendPort,
       ]);
       final value = await ready.first;
-      if (value is String) throw StateError(value);
+      if (value is String) throw SpeechServiceFailure(value);
       _port = value as SendPort;
       replies.listen((dynamic message) {
         final m = message as List;
         if (m[0] == 0) {
-          events.add(m[1] as String);
+          if (!_disposed) events.add(m[1] as String);
           return;
         }
         final completer = _pending.remove(m[0]);
         if (m[1] == true) {
           completer?.complete(m[2]);
         } else {
-          completer?.completeError(StateError(m[2].toString()));
+          completer?.completeError(m[2]);
         }
       });
     } catch (_) {
@@ -81,28 +101,42 @@ class SpeechService {
     }
   }
 
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() => _disposal ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
-    if (Platform.isWindows) {
-      if (_windowsUsed) await _channel.invokeMethod<void>('stop', {});
-      _channel.setMethodCallHandler(null);
-    }
-    if (_starting != null) {
-      try {
-        await _starting;
-      } catch (_) {
-        /* Startup already reports its error to the caller. */
+    try {
+      if (_starting != null) {
+        try {
+          await _starting;
+        } on SpeechServiceFailure {
+          // Startup already reports its unavailable service to the caller.
+        }
       }
-    }
-    if (_port != null) {
-      await call('stop');
-      await call('close');
+      if (_port != null || Platform.isWindows && _windowsUsed) {
+        try {
+          await _call('stop');
+        } on SpeechServiceFailure catch (error) {
+          debugPrint('Speech stop during disposal failed: $error');
+        } finally {
+          if (_port != null) await _call('close');
+        }
+      }
+    } finally {
+      if (Platform.isWindows) _channel.setMethodCallHandler(null);
       _port = null;
+      _isolate?.kill();
+      _isolate = null;
+      _replies?.close();
+      _replies = null;
+      for (final pending in _pending.values) {
+        pending.completeError(
+          const SpeechServiceFailure('Speech service is closed'),
+        );
+      }
+      _pending.clear();
+      await events.close();
     }
-    _isolate?.kill();
-    _replies?.close();
-    await events.close();
   }
 }
 
@@ -194,7 +228,9 @@ Future<void> _speechWorker(List<SendPort> ports) async {
         >(symbol)(connection.cast());
     void check(int result) {
       if (result < 0) {
-        throw StateError('Speech Dispatcher rejected the request');
+        throw const SpeechServiceFailure(
+          'Speech Dispatcher rejected the request',
+        );
       }
     }
 
@@ -279,7 +315,7 @@ Future<void> _speechWorker(List<SendPort> ports) async {
         }
         reply.send([id, true, value]);
       } catch (e) {
-        reply.send([id, false, e.toString()]);
+        reply.send([id, false, e]);
       }
     }
   } catch (e) {

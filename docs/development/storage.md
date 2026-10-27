@@ -67,12 +67,11 @@ stable logical paths preserve case-distinct archive names on Windows. Preparatio
 publishes a complete validated directory and writes its index last. FB2-generated
 XHTML is rendering preparation, never an authoritative replacement publication.
 All original bytes, extracted pages, generated HTML, thumbnails and caches remain
-excluded from backup. Source and decompression limits for the new formats are
-listed in [format-verification.md](format-verification.md); EPUB/backup limits
-are unchanged.
+excluded from backup. Source and decompression limits are listed under
+[Publication resource budgets](#publication-resource-budgets).
 
-The v2 cache paths regenerate earlier prepared contents/page lists after the
-[format review corrections](format-review-verification.md). Cache descriptor versions are independent of durable locators. Durable
+The v2 cache paths regenerate earlier prepared contents/page lists. Cache
+descriptor versions are independent of durable locators. Durable
 locator versions remain 1; originals, content hashes and existing text
 CFI paths are unchanged. Startup also cleans interrupted staging in the old
 cache directories.
@@ -104,8 +103,11 @@ current positions and outline destinations in batches of 32 candidate rows,
 preserving identities, text and image geometry. PDF points, invalid geometry,
 other unknown fields and unknown locator versions are unchanged. Incoming
 backups still undergo strict validation and receive no such repair. No schema
-change or historical database/backup importer is introduced. See
-[upgrade verification](comic-locator-upgrade-verification.md).
+change or historical database/backup importer is introduced. Every repaired
+record passes the full validator before writing; unaffected records remain
+byte-identical. A failed write rolls back the entire repair and reopening retries
+it. Previous-version fixtures and regeneration requirements are documented in
+[reading-data provenance](../../test/fixtures/reading-data/PROVENANCE.md).
 
 Notebook ordering and Markdown references use these semantic locations. This metadata remains
 reading data; regenerable page previews are not another persistence authority.
@@ -170,6 +172,36 @@ Incomplete transfers and native bridge-limit errors cannot acknowledge a flush.
 Locations omit passage text; selections and on-demand narration own quotations.
 New PDF segment anchors store `length` instead of duplicating text. Legacy
 text-bearing PDF anchors remain readable and restorable, including from backups.
+
+## Publication resource budgets
+
+These are rejection limits, not total application memory or latency guarantees.
+MiB and GiB use powers of 1024. Original identity validation precedes preparation,
+including warm-cache opens. The single-use inspection token is bound to the
+verified source instance and stat; failed replacement invalidates the old token.
+
+| Resource | Limit |
+| --- | --- |
+| Original publication | EPUB/PDF 256 MiB; comics 1 GiB; FB2/wrappers 64 MiB, subject to the earlier encoding-dependent XML bound |
+| EPUB expansion | 20,000 entries; 1 GiB aggregate |
+| EPUB resources | Text/SVG/OPF 4 MiB; navigation/NCX/CSS 1 MiB; raster images 64 MiB; fonts 32 MiB; other resources 8 MiB |
+| Comic archive | 20,000 entries; 64 MiB per entry; 4 GiB retained pages/ComicInfo; 128 MiB integrity-checked discarded data |
+| Comic images | 1–10,000 pages; 16,000 pixels per side; 32 × 1024 × 1024 decoded pixels per image |
+| Comic metadata/index | One ComicInfo of at most 1 MiB; bounded strings; aggregate logical names 4 Mi UTF-16 units; complete descriptor 16 MiB |
+| ZIP indexing | Central and local metadata 16 MiB each; encoded names 4 MiB aggregate and 32 KiB per name; actual counts checked before allocation; ZIP64 resolved |
+| FB2 XML | 16 Mi UTF-16 units; 100,000 nodes/attributes; depth 128; 256 attributes per element; 64 Ki-unit tags; 1 Mi-unit text tokens, 8 Mi for binary/CDATA; 10,000 sections |
+| Plain FB2 encoding preflight | UTF-8 48 MiB plus BOM allowance; UTF-16 32 MiB plus BOM; Windows-1251 16 MiB |
+| FB2 binaries | 2,048 resources; 8 MiB encoded base64 per resource; 16 MiB encoded aggregate; decoded image dimensions/pixels bounded |
+| FB2 prepared output | 4 MiB per section; 64 MiB aggregate resources; 16 MiB descriptor |
+| Comic full-page retention | Two pages after navigation; old/new spreads may coexist while loading; obsolete Blob URLs revoked and pending reads aborted |
+| Comic thumbnails | Two tasks; window of twelve; 240 × 320 previews; 32 previews / 8 MiB native cache |
+
+The 1 GiB comic source allowance accommodates larger image publications while
+file-backed indexing and streaming avoid retaining the complete decompressed
+archive. ZIP resources undergo actual size and CRC checks with backpressure;
+ambiguous EOCD signatures fail. FB2 streams into one bounded validated tree
+shared by inspection and preparation; wrappers are not buffered or parsed twice.
+Malformed optional images/covers do not discard readable FB2 text.
 
 Publication resource limits apply before cache publication and in the reader's
 streamed response consumer, before hashing or text decoding. Text/SVG is capped

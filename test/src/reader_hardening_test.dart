@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:busybooks/src/app/app_settings.dart';
 import 'package:busybooks/src/import_export/data/archive_guard.dart';
 import 'package:busybooks/src/library/data/cache_resources.dart';
@@ -115,7 +116,7 @@ class _Reader {
                 'message': 'Reader bridge frame limit exceeded',
               });
             }
-            await event('flushed');
+            await event('flushed', {'request': command['request']});
           });
         }
       }
@@ -131,6 +132,8 @@ class _Reader {
   Future<void> usable() async {
     await event('ready');
     await event('opened');
+    await controller.show(true);
+    expect(controller.interactive, isTrue);
   }
 
   Future<void> dispose() async {

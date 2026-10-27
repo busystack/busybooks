@@ -683,7 +683,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get invalidPage =>
-      'Enter a page number in range, or an exact supplied page label.';
+      'Enter a physical page in range or an exact printed label. Use = for a numeric label.';
 
   @override
   String get bookProgress => 'Book progress (%)';
@@ -820,7 +820,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noteSaveFailed =>
-      'Note could not be saved. Your draft is retained; retry Save.';
+      'Note could not be saved. Your draft is retained.';
 
   @override
   String get discard => 'Discard';
@@ -1111,4 +1111,126 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lastPage => 'Last page';
+
+  @override
+  String get home => 'Home';
+
+  @override
+  String get marks => 'Marks';
+
+  @override
+  String get bookText => 'Book Text';
+
+  @override
+  String get chapters => 'Chapters';
+
+  @override
+  String get searchCategory => 'Search category';
+
+  @override
+  String get closeSearch => 'Close Search';
+
+  @override
+  String get searchNeedsReading =>
+      'Open Reading to search the publication or load page previews.';
+
+  @override
+  String get enterSearch => 'Enter a search query';
+
+  @override
+  String get noResults => 'No results';
+
+  @override
+  String get allTypes => 'All types';
+
+  @override
+  String get bookOrder => 'Book Order';
+
+  @override
+  String get type => 'Type';
+
+  @override
+  String get noNotebookResults => 'No items match these filters.';
+
+  @override
+  String get clearFilters => 'Clear Filters';
+
+  @override
+  String get saved => 'Saved';
+
+  @override
+  String get showFullNote => 'Show Full Note';
+
+  @override
+  String get showLess => 'Show Less';
+
+  @override
+  String get bookActions => 'Book Actions';
+
+  @override
+  String get aboutBusyBooks => 'About BusyBooks';
+
+  @override
+  String get data => 'Data';
+
+  @override
+  String get systemControlled => 'Controlled by your system';
+
+  @override
+  String get motionReduced => 'Reduced';
+
+  @override
+  String get motionEnabled => 'Animations enabled';
+
+  @override
+  String get moreReadingSettings => 'More Reading Settings…';
+
+  @override
+  String get pageDestination => 'Page number or printed label';
+
+  @override
+  String get pageDestinationHelp =>
+      'Numbers select physical pages. Use =label for a printed label.';
+
+  @override
+  String bareBookmarks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count bookmarks without notes',
+      one: '1 bookmark without notes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get search => 'Search';
+
+  @override
+  String get actions => 'Actions';
+
+  @override
+  String get sortBy => 'Sort by';
+
+  @override
+  String get readingDefaults => 'Reading defaults';
+
+  @override
+  String get closeCollection => 'Close Collection';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get anyNotes => 'Any notes';
+
+  @override
+  String get dateUnavailable => 'Date unavailable';
+
+  @override
+  String get regionPreviewUnavailable =>
+      'Region preview unavailable. The private note is still accessible.';
+
+  @override
+  String get regionPreviewLoading => 'Loading region preview';
 }

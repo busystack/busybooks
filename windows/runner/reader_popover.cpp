@@ -1,5 +1,4 @@
 #include "reader_popover.h"
-#include "reading_font_channel.h"
 #include "../../native/reader_action_limits.h"
 #include "../../native/reader_popover_events.h"
 #include <flutter/dart_project.h>
@@ -16,7 +15,7 @@ ReaderPopover::~ReaderPopover() {
   *alive_ = false;
   Complete("popover-cancelled");
   if (channel_) channel_->SetMethodCallHandler(nullptr);
-  fonts_.reset(); channel_.reset(); controller_.reset();
+  channel_.reset(); controller_.reset();
   if (window_) DestroyWindow(window_);
 }
 bool ReaderPopover::EnsureView() {
@@ -41,22 +40,12 @@ bool ReaderPopover::EnsureView() {
   HWND child = controller_->view()->GetNativeWindow();
   SetParent(child, window_);
   SetWindowLongPtrW(child, GWL_STYLE, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS);
-  fonts_ = std::make_unique<ReadingFontChannel>(controller_->engine()->messenger());
   channel_ = std::make_unique<flutter::MethodChannel<EncodableValue>>(
       controller_->engine()->messenger(), "io.busystack.busybooks/reader_popover",
       &flutter::StandardMethodCodec::GetInstance());
   const auto engine_generation = ++engine_generation_;
   channel_->SetMethodCallHandler([this, engine_generation](const auto& call, auto result) {
     if (engine_generation != engine_generation_) { result->Error("popover-cancelled", "Reader controls were replaced"); return; }
-    if (call.method_name() == "fontChooser") {
-      if (call.arguments() && requested_ && Matches(*call.arguments())) {
-        const auto* map = std::get_if<EncodableMap>(call.arguments());
-        auto it = map->find(EncodableValue("visible"));
-        const auto* visible = it == map->end() ? nullptr : std::get_if<bool>(&it->second);
-        font_chooser_ = visible && *visible;
-      }
-      result->Success(); return;
-    }
     if (call.method_name() == "ready") {
       ready_ = true; result->Success(); Update(); return;
     }
@@ -84,7 +73,7 @@ void ReaderPopover::Show(const EncodableValue& data, std::unique_ptr<flutter::Me
   Hide();
   if (restart_) {
     if (channel_) channel_->SetMethodCallHandler(nullptr);
-    fonts_.reset(); channel_.reset(); controller_.reset();
+    channel_.reset(); controller_.reset();
     if (window_) { DestroyWindow(window_); window_ = nullptr; }
     ready_ = false; restart_ = false;
   }
@@ -142,7 +131,7 @@ void ReaderPopover::Present(const EncodableValue& value) {
   const auto* map = std::get_if<EncodableMap>(&value);
   const auto* current = std::get_if<EncodableMap>(&data_);
   const auto kind = current->find(EncodableValue("kind"));
-  if (kind != current->end() && (kind->second == EncodableValue("goto") || kind->second == EncodableValue("lookup"))) {
+  if (kind != current->end() && (kind->second == EncodableValue("goto") || kind->second == EncodableValue("lookup") || kind->second == EncodableValue("appearance"))) {
     auto it = map->find(EncodableValue("height"));
     const auto* n = it == map->end() ? nullptr : std::get_if<double>(&it->second);
     if (n && std::isfinite(*n) && *n > 0) {
@@ -182,7 +171,7 @@ void ReaderPopover::Present(const EncodableValue& value) {
 }
 void ReaderPopover::Hide() {
   const bool notify = requested_;
-  requested_ = false; font_chooser_ = false; Complete("popover-cancelled");
+  requested_ = false; Complete("popover-cancelled");
   if (window_) ShowWindow(window_, SW_HIDE);
   const auto* map = std::get_if<EncodableMap>(&data_);
   if (notify && map) {
@@ -212,9 +201,6 @@ LRESULT CALLBACK ReaderPopover::Procedure(HWND hwnd, UINT message, WPARAM wparam
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
   }
   if (self && message == WM_TIMER && wparam == 1) { self->restart_ = !self->ready_; self->Complete("popover-timeout"); self->Hide(); return 0; }
-  if (self && message == WM_KEYDOWN && wparam == VK_ESCAPE && self->font_chooser_ && self->requested_ && self->channel_) {
-    self->channel_->InvokeMethod("escapeFontChooser", std::make_unique<EncodableValue>(self->data_)); return 0;
-  }
   if (self && self->controller_) {
     auto result = self->controller_->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
     if (result) return *result;

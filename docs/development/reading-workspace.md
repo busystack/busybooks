@@ -1,4 +1,4 @@
-# Book views and native lifecycle
+# Book workspace and native lifecycle
 
 BusyBooks uses BusyMark's common Yaru shell, tokens, header controls, menus,
 settings and dialogs. The read-only reference is BusyMark
@@ -8,9 +8,33 @@ adapts `BusyMarkHeaderPopupMenuButton<DocumentViewModePreference>` in
 trailing selection check. BusyBooks offers only Reading and Notebook.
 
 `/` is Home, `/workspace` is the active database collection, `/read/:id` is
-Reading, and `/notebook/:id` is Notebook. Collection overview state is keyed by
-collection ID. Notebook query/filter/selection/scroll and unsaved note drafts
-are application-owned state keyed by book/annotation identity. Routes and
+Reading, and `/notebook/:id` is Notebook. Both book URLs use one retained
+`BookWorkspaceScreen` page/element: common `BookHeader`, persistent sidebar and
+retained Reading/Notebook content. The selector updates content without rebuilding
+the shell or reopening the native publication. Settings return targets recognize
+these same routes; there is no second route adapter.
+
+| Owner | Retained state |
+| --- | --- |
+| `WorkspaceController` | Book identity, stored annotations, collection and availability |
+| `bookSidebarProvider(bookId)` | Typed panel, open state, outline expansion/focus, panel offsets, Marks filter/selection, retained publication metadata |
+| `bookSearchProvider(bookId)` | Active/category/query, generation, stable results/selection, loading/error, focus request/return and previous sidebar presentation |
+| `NotebookController` | Sort/type/notes filters, identity-relative scroll/reveal, selected editor and protected revisioned drafts |
+| `ReaderController` | Native engine/session, positions/history, capabilities, visibility acknowledgements and transient input handoff |
+
+The search and sidebar families auto-dispose. `retainActiveBookSession` holds a
+Riverpod lease only for `WorkspaceState.openedBook`: Reading/Notebook switching
+and a Settings round trip retain the same controllers. Replacing or closing the
+book releases that lease; ordinary widget subscriptions finish disposal. Timers,
+renderer-intent subscriptions and provider listeners then end with the session.
+Publication metadata and search results do not accumulate for previously opened
+books. Reopening reconstructs stored metadata and saved application preferences;
+transient Marks filters, outline expansion and search start a new session.
+Protected Notebook drafts remain owned by `NotebookController`, independently
+of these presentation lifetimes.
+
+Collection overview state is keyed by collection ID. Notebook filter/selection/
+scroll and unsaved note drafts are application-owned state keyed by book/annotation identity. Routes and
 filters may dispose widgets without discarding drafts. Debounced saves preserve
 revision identity, a saved baseline and the owning book identity. A targeted
 repository lookup supplies the baseline for each edit session, including when
@@ -35,8 +59,22 @@ actions and writes. Backup and export flush the renderer before notes so final
 native draft messages are included.
 
 Book data and annotations live in WorkspaceController, independently of native
-renderer readiness. Notebook never opens a native surface. It requests one
-book's annotations and metadata and works when all original paths are missing.
+renderer readiness. Notebook never opens a native surface. The retained Reading presentation is
+excluded from focus/ticking; its native surface is hidden, narration is stopped
+and the renderer is suspended. Stored annotations/outline metadata remain usable
+without the original file or renderer readiness.
+Suspension first drains native input and pending layout while the surface can
+still produce frames. Only then is it hidden. Renderer acknowledgement and
+durable storage remain distinct phases: a failed storage write retains its
+protected draft for Notebook recovery. A sealed, suspended reader contributes
+no new native input, so later backup/close operations flush application-owned
+records without waiting for a hidden rendering frame. Concurrent renderer
+drains share one acknowledgement; request IDs reject delayed or unowned replies.
+Closing an active reader likewise drains its work before hiding the surface.
+Expected speech-service failures remain visible diagnostic state and are logged;
+they release narration ownership and do not prevent safe data flushing. Speech
+disposal closes the connection even if Stop fails, rejects later requests and
+shares its completion across callers. Unexpected programming errors propagate.
 Both annotation surfaces mutate the same records. Markdown export includes
 quotations, personal notes and readable references, with durable anchor comments.
 
@@ -48,12 +86,12 @@ BusyBooks' approved composition. Existing focus/hover/disabled states, spacing,
 and direction-aware Yaru fallbacks remain. Home uses `go-home-symbolic` and the
 existing guarded Home command from Reading, Notebook and collection workspaces;
 it flushes protected input and reading state before returning to Home. Repeated
-Home/close commands share one in-flight action. Back to Collection and reading
-history remain separate menu commands.
+Home/close commands share one in-flight action. Back to Collection and reading history remain separate book-context commands.
 
 The content-sized location trigger displays a printed page label, physical-page
 fallback or genuine EPUB reference/progress without a redundant Page prefix.
-Its tooltip/accessibility description retains the full page/physical position.
+Its tooltip names Go To; its accessibility description retains the full
+page/physical position, also shown in the native Go To surface.
 It uses its current header bounds for Go To and disappears before essential
 controls when space is short. Search hides both step buttons together; Home
 remains available and the retained title/search transition excludes inactive
@@ -64,8 +102,8 @@ Inactive narration reserves no strip.
 The Reading sidebar adapts BusyMark's `_SidebarHeader`, view menu,
 `_SidebarTreeRow` trailing slot and row surface. Outline rows omit decorative
 chapter icons while preserving the disclosure slot and depth indentation. Its compact icon menu selects
-Outline, PDF-only Thumbnails, Annotations, Search Results and, inside a
-collection, Books. Selecting the current panel reveals it; the header sidebar
+Outline, Thumbnails for page-based PDF/comic publications, Marks and, inside a
+collection, Books. Search Results is not a permanent panel. Selecting the current panel reveals it; the header sidebar
 button controls visibility. Reading/Notebook stays a separate header selector.
 Context rows use collection names and book titles, never collection paths.
 
@@ -94,37 +132,68 @@ primary cache retains at most thirty-two previews and eight MiB. Images preserve
 aspect ratio; page selection uses the same location formatting/history as
 Outline and Go To. No EPUB page-preview capability is advertised.
 
-Annotations uses publication order and All/Highlights/Bookmarks/Regions plus With Notes.
-Compact previews use the effective protected draft; complete notes stay in the
-existing store/controllers and Notebook. Context actions share deletion, color
-and edit coordination. Open in Notebook reveals the requested item, then leaves
-later user scrolling alone. Sidebar changes capture transient accepted input
+Marks uses publication order and typed All types/Highlights/Bookmarks/Region Notes
+filters plus Has Notes. Rows distinguish type, passage, effective private-note
+preview, location and selection. Edit Note opens Notebook, reveals that identity
+and focuses its editor.
+Color updates preserve the same record contract. Marks and Notebook call one
+confirmation action inside the existing per-annotation deletion coordination.
+Cancellation/failure retains drafts and in-flight save protections.
+
+Notebook defaults to Recently Added (integer creation time descending, identity
+as deterministic tie-break), with Book Order and Type alternatives. Its compact
+selectors wrap under text scaling. The normal all-types view emphasizes reading
+records and explicitly links the count of bare bookmarks to the Bookmarks filter;
+Marks always retains those bookmarks. Cards use the shared 760px content width,
+show type/date/location/passage and selectable multiline private-note previews,
+and offer explicit full-note expansion. Dates outside Dart's supported calendar
+range display an unavailable label without modifying the valid stored timestamp.
+Annotation `created` values are epoch microseconds, matching both reader creation
+paths. Calendar presentation uses that unit directly; it does not rewrite records.
+
+Notebook editing uses the existing debounced autosave: Saving, Saved only after
+successful persistence, Save failed and Retry. Discard is offered for a pending
+draft; there is no ordinary Save button. The controller's save/flush methods are
+retained for transactions, backup and native contextual creation.
+
+Targeted reveal centers the lazy sliver layout on a stable annotation identity.
+Both sides remain lazily built, including variable-height records. Reveal clears
+conflicting filters and applies once; later manual scrolling is retained relative
+to that identity. It does not iterate estimated offsets or scan rendered rows. Sidebar changes capture transient accepted input
 before changing native geometry. No new notes store or document type is involved.
 
-Reading's ordinary trailing controls are View, Bookmark, Appearance/View Options,
-Search in Book and one Main Menu, in that order. Notebook has View, Search in
-Notebook and one Main Menu; Export/Move/Locate remain in its contextual Main Menu.
-Annotation and Recent row menus have their own descriptive labels. Native GTK
-header artwork reaches the real app through the initialized icon provider's
-inherited notifier scope, including live catalog replacement and Yaru fallbacks.
-Only reader-specific native view/control mappings are requested. Notebook has
-its own `notebookView` Yaru pen glyph and `document-edit-symbolic` GTK mapping;
-Reading keeps `view-paged-symbolic`. Sidebar Annotations retains its independent
-history glyph/mapping. The installed Yaru and Adwaita themes resolve and render
-the two view symbols through the actual native loader at 1×/2× without a display;
-this is resource verification, not desktop menu/visual acceptance.
+Reading's trailing controls are View, Bookmark, compact Appearance, Book Actions,
+Search and Main Menu. Notebook shares the header and omits reading-only controls.
+The actual header layout decision moves secondary reading commands to Book Actions
+when width or search displaces them; its selector visibility is passed to Main
+Menu for the sole View Mode fallback. No independent menu breakpoint exists.
+Home uses Home terminology and all actions retain command IDs and effective
+configurable shortcuts.
 
-Main Menu uses the existing native/nested fallback menu bridge with command
-icons, effective accelerators and contextual groups. The header's one actual
-selector-visibility decision is also passed to Main Menu: its View submenu is
-present only for an active book when the selector is hidden (Reading compact or
-search, Notebook search). The menu does not compute a second width threshold.
-Visible selectors and fallback entries use the same command IDs/shortcuts;
-Reading/Notebook and panel entries have exclusive checks; Full Screen, Sidebar, Search and Bookmark use
-toggle checks. Full Screen follows window-service notifications. Book commands
-remain available to Notebook independently of renderer readiness. Captured
-route/workspace ownership is rechecked before command execution. Menu loading,
-selection and host errors use awaited application-level feedback.
+Main Menu contains Open Book, Open Collection, Create Collection, Full Screen,
+Settings and About, plus that conditional View Mode fallback. Book Properties/Move/Locate/Export,
+reading assistance/history and Return to Collection use Book Actions. Backup and
+Restore use Settings → Data and the unchanged backup engine/format.
+
+Native menu validation allows disabled single-choice entries and still rejects
+multiple selected entries in one contiguous exclusive group. GTK radio actions
+use string state/targets; Win32 preserves disabled/radio/selected flags and the
+same preorder command indices. Activation checks enabled state and owning menu/
+route identity. Recoverable host presentation errors log diagnostics and use the
+existing Flutter menu fallback; invalid contracts remain programming errors.
+Native failures do not open a blocking error dialog.
+
+The Marks fallback glyph is `YaruIcons.rule_and_pen`; GTK uses the installed
+`document-edit-symbolic` mapping. Sidebar-selector tooltips are constrained to
+the unobstructed sidebar bounds because Flutter cannot paint over WebKit's GTK
+overlay. Sidebar tooltip width is bounded under text scaling. Switching search
+presentation dismisses old tooltips and disables tooltip triggers in the retained
+offstage navigation; Close Search uses the same placement. Positioning reads
+layout constraints rather than another render object's size during overlay layout.
+Book-header controls inherit beside-trigger placement within the shared header,
+so their hints remain above native content even with the sidebar closed.
+Native theme/icon and overlay checks use the
+[workspace driver](../../tools/README.md#linux-workspace-and-shutdown-diagnostics).
 
 Windows' native view-mode entries receive bounded alpha masks rasterized from
 the existing Yaru glyphs at the current display scale (16–64 pixels). The Win32
@@ -141,7 +210,7 @@ uses [MENUITEMINFO](https://learn.microsoft.com/en-us/windows/win32/api/winuser/
 Header actions share that command boundary. Appearance retains a live header
 anchor, including Retry after resize; input capture and native session guards
 remain unchanged. Header space accounts for window-control obstructions and
-text scaling. Secondary Reading controls move to Main Menu in narrow layouts;
+text scaling. Secondary Reading controls move to Book Actions in narrow layouts;
 Search, Home and Main Menu remain reachable. Page controls retain their ordering
 when the compact location is hidden.
 
@@ -157,7 +226,11 @@ Go To resolves its current header anchor for pointer, shortcut and menu entry.
 PDF printed labels and physical position remain distinct; reflowable EPUB/FB2 use
 progress/chapter and publisher references without invented screen-page counts.
 Comics use physical page count/references, First/Last and the same Go To surface.
-The form measures its natural height, including feedback and text scaling, and
+PDF's one destination input resolves bare integers as one-based physical pages,
+unique nonnumeric strings as exact printed labels, and `=label` as an explicit
+printed label (including numeric labels). Duplicate labels are rejected. The
+current reference describes both printed and physical positions. There is no
+printed/physical mode selector. The compact surface measures its natural height, including feedback and text scaling, and
 scrolls only inside native screen bounds. Native preparation allocates a frame
 surface without exposing empty interactive controls: GTK maps a transparent,
 nonmodal view; Windows uses the existing first-frame callback and redraw sequence.
@@ -171,8 +244,8 @@ old presentation. A never-ready timed-out engine can be recreated on retry;
 engines that may contain accepted input remain available for protected capture.
 Go To waits for a correlated renderer navigation result before closing; failed or
 cancelled page work keeps the form available. Controlled tests exercise the
-channel/paint protocol; actual GTK/WebView2 first-frame/focus/monitor behavior
-still requires authorized native acceptance.
+channel/paint protocol; actual GTK/WebView2 placement and focus require native
+acceptance as described in [development tools](../../tools/README.md).
 
 Reading retains Foliate.js, PDF.js, the labeled sidebar,
 search, appearance, selection controls, dictionary and narration. Changing views
@@ -267,23 +340,32 @@ note editor with the captured session, book, page and rectangle. Save, failed-sa
 draft retention, Retry and deletion use the existing protected workflow. The
 region is normalized against the oriented intrinsic image and painted/hit-tested
 with one shared transform. Saved region buttons open the same editor and are
-keyboard reachable. Notebook/Annotations offer a Region filter and return to
+keyboard reachable. Notebook/Marks offer a Region filter and return to
 the correct page and region. A page bookmark's optional note remains page-wide;
 independent regions never participate in page-bookmark deduplication. Ordinary
 renderer annotation payloads still omit private note text.
+
+Notebook region cards read optional artwork from the existing sealed comic cache
+through a value-keyed, auto-disposed provider. The worker validates the owning
+book/cache identity, page identity, resource budgets, hashes and oriented dimensions
+before decoding. It samples directly into a bounded 640 × 360 PNG preview without
+opening the original, rebuilding a cache or changing annotation records. Missing
+or invalid artwork has an inline Show in Reading recovery action; the complete
+private note remains available. Returning from Reading retries unavailable
+artwork. This adds no persistence domain or backup field.
 
 ## Selected-text actions
 
 The selection popover includes Search in This Book and Look Up. Search captures
 the entire trimmed passage (including Unicode and footnote selections), opens
-the existing header field and Search Results panel explicitly, and runs the
-existing immediate search. Repeating it starts a new query revision without
+the shared header field and temporary Book Text search session, and starts an
+owned immediate engine search. Repeating it starts a new query revision without
 advancing a result. The publication stays at its passage until a result or result
 navigation command is chosen; Back/Forward and Return keep their existing engine
 history. The header controller receives external query changes only; ordinary
 edits, caret positions and IME composition are not overwritten during rebuilds.
 
-Look Up and Main Menu's Dictionary command share one workflow. After the existing
+Look Up and Book Actions' Dictionary command share one workflow. After the existing
 explicit online-consent dialog, a compact owned native popover shows the full
 term, loading state, selectable plain-text definition excerpts, language/part of
 speech labels, English Wiktionary attribution and Close. Open Full Entry is an
@@ -311,16 +393,75 @@ GTK transient-view construction clears the owning view's current GDK GL context
 before creating the pinned Flutter engine and before explicit realization; this
 avoids the reproduced blank compositor surface without changing the SDK or host.
 A hide notification preceding failed presentation still preserves primary Retry
-feedback. [Selection/lookup verification](selection-lookup-verification.md)
-separates deterministic coverage, public provider checks and native execution.
+feedback. [The selection/lookup contract](readers.md#selection-search-and-online-lookup)
+and [known issues](known-issues.md) describe service limits and remaining
+qualification boundaries. Controlled checks do not establish native acceptance.
 
 ## Local font selection
 
-Appearance and Settings use the same searchable local-family chooser and bounded
-native sample. Candidate movement never saves or repaginates; explicit activation
+Settings → Reading owns the advanced searchable local-family chooser and bounded
+native sample. The compact native reading popover presents only theme, size,
+spacing, width/margins and publisher style, or applicable fit/zoom/rotation/spread
+controls for fixed layouts. More Reading Settings opens the current-book scope
+explicitly; global defaults remain separately selected. Candidate movement never
+saves or repaginates; explicit activation
 uses the existing book/default writer. Publisher mode retains the custom choice;
 unavailable choices retain their identity and show a local fallback explanation.
 Renderer-supplied typography capabilities gate the controls and application path.
 See [typography.md](typography.md) for the shared model, separate-engine cache,
-GTK chooser Escape handoff, native-hide disposal and durable reflow/selection
+Settings chooser Escape/focus and disposal and durable reflow/selection
 ownership. The header/sidebar and Reading/Notebook composition are unchanged.
+
+
+## Shared search and adaptive presentation
+
+The book-scoped search session adapts BusyMark's category and close semantics:
+Book Text, Notebook, Bookmarks, Chapters and Actions, with no All category.
+The header has the only query input. Search temporarily replaces the sidebar
+content while retaining its navigation widgets and state offstage, excluded from
+focus/semantics/ticking. Closing restores the previous panel/open presentation.
+The global command-search shortcut and identity open Actions in this same search
+presentation, including on Home/Collection/Settings; the separate palette is gone.
+
+Requests debounce for 220ms. Query/category/book generations invalidate work;
+local scans yield in bounded batches, and native matches additionally require the
+same renderer session and query revision. Notebook/Bookmarks use stored records
+and protected drafts offline; Chapters uses retained publication outline data.
+Comics and image-only PDF pages do not advertise Book Text. A suspended reader
+shows an explicit Reading recovery action for a retained Book Text session.
+
+Arrows select results, Enter activates, Escape closes and the clear affordance
+retains the session. Close restores the captured usable focus target. Actions
+execute through the current command registry; result navigation rechecks route/
+book ownership. A native publication can search while hidden behind a temporary
+narrow sidebar, but navigation/focus require visible ownership. Activating a
+result dismisses that narrow overlay before navigating or focusing Notebook.
+
+Settings uses typed General/Reading/Accessibility/Keyboard Shortcuts/Data pages,
+a wide sidebar or narrow selector and the semantic main view surface. Reduced
+Motion is explicitly informational system status. Per-book reading controls are
+available only for the Settings return book that owns the retained renderer.
+Collection uses LinuxPageFrame's dismissible narrow overlay without reserving
+sidebar padding. Overlay bodies and retained inactive panels exclude hidden
+focus targets; native visibility uses separate route/modal and workspace gates.
+Opening shared chrome captures transient input, dismisses without restoring native
+publication focus, and explicitly transfers GTK/Win32 ownership to the main view.
+That request carries the renderer session and cannot focus an inactive window or
+an owned native popover. Native Tab traversal uses the same handoff. Flutter focus
+alone does not move GTK/WebView2 keyboard ownership. Restore's confirmation uses
+its own Restore label, rather than the generic Open default.
+
+Queued preferences capture their store before asynchronous serialization, so
+accepted writes can finish after provider disposal without accessing a dead Ref.
+Annotation mutation failures return to the draft or contextual action that owns
+recovery. They do not publish SQL/private-note details into Home's workspace
+failure state. A failed draft remains protected and Retry retains the original
+conditional write/creation contract.
+Shortcut maps include visible commands in the current route, so hidden Collection
+Search cannot shadow Book Search's Ctrl+F in Notebook. Disabled visible commands
+still own their combination and retain the existing text-editing safeguards.
+
+GTK window destruction releases the native reader/popover, chrome hosts and
+channels before GTK disposes the main Flutter view and overlay. Application
+disposal is an idempotent fallback. See [known issues](known-issues.md) for the
+separate intermittent Linux compositor shutdown abort.

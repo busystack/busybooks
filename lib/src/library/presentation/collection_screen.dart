@@ -1,21 +1,25 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../app/app_settings.dart';
-import '../../app/command_registry.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
-import '../../app/busybooks_search_field.dart';
 import '../../app/busybooks_main_menu.dart';
-import '../../app/localization.dart';
-import '../../app/linux/linux_page_frame.dart';
+import '../../app/busybooks_search_field.dart';
+import '../../app/command_registry.dart';
 import '../../app/linux/linux_header_style.dart';
+import '../../app/linux/linux_page_frame.dart';
+import '../../app/localization.dart';
 import '../../app/product_actions.dart';
-import '../../workspace/workspace_controller.dart';
 import '../../notebook/presentation/book_view_selector.dart';
-import '../domain/book.dart';
+import '../../search/book_search_session.dart';
+import '../../search/book_search_widgets.dart';
+import '../../workspace/workspace_controller.dart';
 import '../application/collection_view_controller.dart';
+import '../domain/book.dart';
 
 class CollectionScreen extends ConsumerWidget {
   const CollectionScreen({super.key});
@@ -68,6 +72,10 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
     final data = ref.watch(workspaceControllerProvider),
         settings = ref.watch(appSettingsControllerProvider),
         l = context.l10n;
+    final search = ref.watch(bookSearchProvider(applicationSearchId));
+    final sidebarOpen = ref.watch(
+      collectionViewProvider(widget.path).select((s) => s.sidebarOpen),
+    );
     final presentation = ref.watch(
       collectionViewProvider(widget.path).select(
         (s) => (s.query, s.filter, s.selectedBook, s.focusRequest, s.sort),
@@ -99,63 +107,91 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
       body: LinuxPageFrame(
         sidebarOverlay: narrow,
         sidebarAvailable: true,
-        sidebarExpanded: true,
+        sidebarExpanded: !narrow || sidebarOpen || search.active,
+        onSidebarDismiss: () {
+          if (search.active) {
+            ref.read(bookSearchProvider(applicationSearchId).notifier).close();
+          } else {
+            view.update(sidebarOpen: false);
+          }
+        },
         sidebarHeader: const BusyBooksLinuxBrandHeader(),
-        sidebarBody: Column(
-          children: [
-            if (workspace != null)
-              BusyBooksActionRow(
-                title: workspace.name,
-                subtitle: l.collection,
-                leading: const Icon(BusyBooksGlyphs.folder),
-              ),
-            Expanded(
-              child: BusyBooksSidebarNavigation(
-                children: [
-                  for (final item in [
-                    ('all', l.allBooks, BusyBooksGlyphs.previewView),
-                    ('unread', l.unread, BusyBooksGlyphs.document),
-                    ('reading', l.reading, BusyBooksGlyphs.history),
-                    ('finished', l.finished, BusyBooksGlyphs.check),
-                  ])
-                    BusyBooksSidebarNavigationTile(
-                      selected: filter == item.$1,
-                      leading: Icon(item.$3),
-                      title: Text(item.$2),
-                      onTap: () => view.update(filter: item.$1),
-                    ),
-                  if (workspace?.editable == true)
+        sidebarBody: BookSearchSidebarHost(
+          bookId: applicationSearchId,
+          child: Column(
+            children: [
+              if (workspace != null)
+                BusyBooksActionRow(
+                  title: workspace.name,
+                  subtitle: l.collection,
+                  leading: const Icon(BusyBooksGlyphs.folder),
+                ),
+              Expanded(
+                child: BusyBooksSidebarNavigation(
+                  children: [
+                    for (final item in [
+                      ('all', l.allBooks, BusyBooksGlyphs.previewView),
+                      ('unread', l.unread, BusyBooksGlyphs.document),
+                      ('reading', l.reading, BusyBooksGlyphs.history),
+                      ('finished', l.finished, BusyBooksGlyphs.check),
+                    ])
+                      BusyBooksSidebarNavigationTile(
+                        selected: filter == item.$1,
+                        leading: Icon(item.$3),
+                        title: Text(item.$2),
+                        onTap: () =>
+                            view.update(filter: item.$1, sidebarOpen: false),
+                      ),
+                    if (workspace?.editable == true)
+                      BusyBooksActionRow(
+                        title: l.addExistingBooks,
+                        leading: const Icon(BusyBooksGlyphs.add),
+                        onTap: () => addExistingBooks(context, ref),
+                      ),
                     BusyBooksActionRow(
-                      title: l.addExistingBooks,
-                      leading: const Icon(BusyBooksGlyphs.add),
-                      onTap: () => addExistingBooks(context, ref),
+                      title: l.renameCollection,
+                      leading: const Icon(BusyBooksGlyphs.edit),
+                      onTap: () => renameCollection(context, ref),
                     ),
-                  BusyBooksActionRow(
-                    title: l.renameCollection,
-                    leading: const Icon(BusyBooksGlyphs.edit),
-                    onTap: () => renameCollection(context, ref),
-                  ),
-                  BusyBooksActionRow(
-                    title: l.deleteCollection,
-                    leading: const Icon(BusyBooksGlyphs.delete),
-                    onTap: () => deleteCollection(context, ref),
-                  ),
-                ],
+                    BusyBooksActionRow(
+                      title: l.deleteCollection,
+                      leading: const Icon(BusyBooksGlyphs.delete),
+                      onTap: () => deleteCollection(context, ref),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            BusyBooksActionRow(
-              title: l.settings,
-              leading: const Icon(BusyBooksGlyphs.settings),
-              onTap: () => openSettings(context, ref),
-            ),
-          ],
+              BusyBooksActionRow(
+                title: l.settings,
+                leading: const Icon(BusyBooksGlyphs.settings),
+                onTap: () => openSettings(context, ref),
+              ),
+            ],
+          ),
         ),
         header: BusyBooksLinuxHeaderLayout(
           leading: BusyBooksLinuxHeaderControlGroup(
             children: [
+              if (narrow)
+                BusyBooksHeaderIconButton(
+                  tooltip: l.sidebar,
+                  icon: BusyBooksGlyphs.sidebar,
+                  selected: sidebarOpen || search.active,
+                  onPressed: () {
+                    if (search.active) {
+                      ref
+                          .read(
+                            bookSearchProvider(applicationSearchId).notifier,
+                          )
+                          .close();
+                    } else {
+                      view.update(sidebarOpen: !sidebarOpen);
+                    }
+                  },
+                ),
               BusyBooksHeaderIconButton(
                 key: const ValueKey('collection-home'),
-                tooltip: l.welcome,
+                tooltip: l.home,
                 icon: BusyBooksGlyphs.home,
                 onPressed: () async {
                   final registry = BusyBooksCommandRegistryScope.maybeOf(
@@ -178,19 +214,39 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
           ),
           centerAllocation:
               BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls,
-          title: BusyBooksSearchField(
-            key: const ValueKey('collection-header-search'),
-            controller: _query,
-            focusRequest: presentation.$4,
-            hintText: l.collectionSearchScope,
-            onChanged: (v) => view.update(query: v),
+          title: search.active
+              ? const BookSearchHeaderField(bookId: applicationSearchId)
+              : BusyBooksSearchField(
+                  key: const ValueKey('collection-header-search'),
+                  controller: _query,
+                  focusRequest: presentation.$4,
+                  hintText: l.collectionSearchScope,
+                  onChanged: (v) => view.update(query: v),
+                ),
+          trailing: BusyBooksLinuxHeaderControlGroup(
+            children: [
+              BusyBooksHeaderPopupMenuButton<String>(
+                tooltip: l.collection,
+                icon: BusyBooksGlyphs.menuHorizontal,
+                itemBuilder: (_) => [
+                  BusyBooksPopupMenuItem(
+                    value: BusyBooksCommandIds.refreshWorkspace,
+                    label: l.refresh,
+                  ),
+                  BusyBooksPopupMenuItem(
+                    value: BusyBooksCommandIds.closeWorkspace,
+                    label: l.closeCollection,
+                  ),
+                ],
+                onSelected: (id) =>
+                    BusyBooksCommandRegistryScope.maybeOf(context)?.execute(id),
+              ),
+              const BusyBooksMainMenuButton(),
+            ],
           ),
-          trailing: const BusyBooksMainMenuButton(),
         ),
         body: Padding(
-          padding: EdgeInsetsDirectional.only(
-            start: narrow ? BusyBooksSizes.sidebarWidth : 0,
-          ),
+          padding: EdgeInsetsDirectional.only(start: 0),
           child: ColoredBox(
             color: BusyBooksSurfaceColors.of(context).view,
             child: Column(
@@ -241,8 +297,8 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
                   BusyBooksActionRow(
                     title: l.busy,
                     subtitle: data.progress['name']?.toString(),
-                    trailing: BusyBooksDialogButton(
-                      label: l.cancel,
+                    trailing: BusyBooksPushButton.standard(
+                      child: Text(l.cancel),
                       onPressed: () => ref
                           .read(workspaceControllerProvider.notifier)
                           .cancel(),

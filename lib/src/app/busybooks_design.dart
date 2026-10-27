@@ -1,16 +1,16 @@
 // Adapted from BusyMark (BusyStack, Apache-2.0); modified for BusyBooks.
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yaru/yaru.dart';
 
-import '../platform/native_menu_service.dart';
 import '../platform/gtk_header_icon_service.dart';
+import '../platform/native_menu_service.dart';
 import 'busybooks_glyphs.dart';
 import 'path_label.dart';
 
@@ -417,6 +417,72 @@ abstract final class BusyBooksLinuxPalette {
 /// Keeping the palette and shape here lets each toolkit retain its native
 /// layout, positioning, focus, and motion while presenting the same surface.
 abstract final class BusyBooksTooltipStyle {
+  /// Place book-header hints beside their trigger, within Flutter's header.
+  static Offset insideHeader(
+    BuildContext context,
+    TooltipPositionContext info, {
+    double leftObstruction = 0,
+    double rightObstruction = 0,
+  }) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null ||
+        !box.hasSize ||
+        !box.constraints.hasBoundedWidth ||
+        !box.constraints.hasBoundedHeight) {
+      return info.target;
+    }
+    final origin = box.localToGlobal(Offset.zero),
+        left = origin.dx + leftObstruction + BusyBooksSpacing.sm,
+        right =
+            origin.dx +
+            box.constraints.maxWidth -
+            rightObstruction -
+            BusyBooksSpacing.sm;
+    final after =
+        info.target.dx + info.targetSize.width / 2 + BusyBooksSpacing.sm;
+    final before =
+        info.target.dx -
+        info.targetSize.width / 2 -
+        BusyBooksSpacing.sm -
+        info.tooltipSize.width;
+    return Offset(
+      (after + info.tooltipSize.width <= right ? after : before).clamp(
+        left,
+        math.max(left, right - info.tooltipSize.width),
+      ),
+      origin.dy +
+          math.max(
+            0,
+            (box.constraints.maxHeight - info.tooltipSize.height) / 2,
+          ),
+    );
+  }
+
+  /// Keep sidebar tooltips inside their Flutter surface, above native content.
+  static Offset positionWithin(
+    BuildContext context,
+    TooltipPositionContext info,
+  ) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize || !box.constraints.hasBoundedWidth) {
+      return info.target;
+    }
+    final left = box.localToGlobal(Offset.zero).dx + BusyBooksSpacing.sm;
+    // The tooltip delegate runs during overlay layout; reading an unrelated
+    // RenderBox.size there violates Flutter's layout ownership contract.
+    final right = left + box.constraints.maxWidth - BusyBooksSpacing.sm * 2;
+    return Offset(
+      (info.target.dx - info.tooltipSize.width / 2).clamp(
+        left,
+        math.max(left, right - info.tooltipSize.width),
+      ),
+      (info.target.dy + info.verticalOffset).clamp(
+        0.0,
+        math.max(0.0, info.overlaySize.height - info.tooltipSize.height),
+      ),
+    );
+  }
+
   static final Color background = BusyBooksLinuxPalette.black.withValues(
     alpha: BusyBooksAlpha.tooltipBackground,
   );
@@ -881,6 +947,7 @@ class BusyBooksHeaderControlStyleScope extends InheritedWidget {
     required this.disabledForegroundColor,
     required this.backgroundColor,
     required this.overlayColor,
+    this.tooltipPositionDelegate,
     required super.child,
   });
 
@@ -888,6 +955,7 @@ class BusyBooksHeaderControlStyleScope extends InheritedWidget {
   final Color disabledForegroundColor;
   final WidgetStateProperty<Color?> backgroundColor;
   final WidgetStateProperty<Color?> overlayColor;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   static BusyBooksHeaderControlStyleScope? maybeOf(
     BuildContext context,
@@ -899,7 +967,8 @@ class BusyBooksHeaderControlStyleScope extends InheritedWidget {
       foregroundColor != oldWidget.foregroundColor ||
       disabledForegroundColor != oldWidget.disabledForegroundColor ||
       backgroundColor != oldWidget.backgroundColor ||
-      overlayColor != oldWidget.overlayColor;
+      overlayColor != oldWidget.overlayColor ||
+      tooltipPositionDelegate != oldWidget.tooltipPositionDelegate;
 }
 
 class BusyBooksHeaderIconButton extends StatelessWidget {
@@ -919,6 +988,7 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     this.backgroundColor,
     this.overlayColor,
     this.borderRadius = BusyBooksRadius.headerButton,
+    this.tooltipPositionDelegate,
   });
 
   final String tooltip;
@@ -938,15 +1008,17 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
   final WidgetStateProperty<Color?>? backgroundColor;
   final WidgetStateProperty<Color?>? overlayColor;
   final double borderRadius;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final colors = BusyBooksSurfaceColors.of(context);
-    final inheritedStyle = accented
-        ? null
-        : BusyBooksHeaderControlStyleScope.maybeOf(context);
+    final controlStyle = BusyBooksHeaderControlStyleScope.maybeOf(context),
+        inheritedStyle = accented ? null : controlStyle,
+        tooltipPosition =
+            tooltipPositionDelegate ?? controlStyle?.tooltipPositionDelegate;
     final semanticStyle = busyBooksHeaderIconButtonStyle(
       foregroundColor:
           foregroundColor ??
@@ -991,18 +1063,35 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     ).defaultStyleOf(context);
     final button = IconButton(
       isSelected: selected,
-      tooltip: shortcut == null ? tooltip : '$tooltip ($shortcut)',
-      icon: BusyBooksGtkHeaderIcon(icon, nativeIcon: nativeIcon),
+      // Native accessibility bridges do not consistently expose tooltip
+      // metadata as a name. Keep one explicit name and a separate shortcut
+      // hint; MSAA otherwise announces the label and tooltip twice.
+      icon: Semantics(
+        label: tooltip,
+        hint: shortcut,
+        child: BusyBooksGtkHeaderIcon(icon, nativeIcon: nativeIcon),
+      ),
       padding: EdgeInsets.zero,
       style: style.merge(yaruDefaults),
       onPressed: onPressed,
     );
+    // A stable boundary keeps transient tooltip semantics from being
+    // reparented when workspace controls are replaced during search.
+    final labeledButton = Semantics(
+      container: true,
+      child: Tooltip(
+        message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
+        excludeFromSemantics: true,
+        positionDelegate: tooltipPosition,
+        child: button,
+      ),
+    );
     return YaruTheme.maybeOf(context)?.focusBorders == true
         ? YaruFocusBorder.primary(
             borderRadius: BorderRadius.circular(BusyBooksRadius.pill),
-            child: button,
+            child: labeledButton,
           )
-        : button;
+        : labeledButton;
   }
 }
 
@@ -1048,20 +1137,27 @@ class BusyBooksCompactIconButton extends StatelessWidget {
       iconSize: size,
     ).defaultStyleOf(context);
     final button = IconButton(
-      tooltip: tooltip,
-      icon: Icon(icon, size: glyphSize),
+      icon: Icon(icon, size: glyphSize, semanticLabel: tooltip),
       constraints: BoxConstraints.tightFor(width: size, height: size),
       padding: EdgeInsets.zero,
       style: semanticStyle.merge(yaruDefaults),
       focusNode: focusNode,
       onPressed: onPressed,
     );
+    final labeledButton = Semantics(
+      container: true,
+      child: Tooltip(
+        message: tooltip,
+        excludeFromSemantics: true,
+        child: button,
+      ),
+    );
     return YaruTheme.maybeOf(context)?.focusBorders == true
         ? YaruFocusBorder.primary(
             borderRadius: BorderRadius.circular(BusyBooksRadius.pill),
-            child: button,
+            child: labeledButton,
           )
-        : button;
+        : labeledButton;
   }
 }
 
@@ -1082,6 +1178,7 @@ class BusyBooksHeaderPopupMenuButton<T> extends StatefulWidget {
     this.borderRadius = BusyBooksRadius.headerButton,
     this.highlightWhenOpen = true,
     this.nativeMenuService = const NativeMenuService(),
+    this.tooltipPositionDelegate,
   });
 
   final String tooltip;
@@ -1101,6 +1198,7 @@ class BusyBooksHeaderPopupMenuButton<T> extends StatefulWidget {
   final double borderRadius;
   final bool highlightWhenOpen;
   final NativeMenuService nativeMenuService;
+  final TooltipPositionDelegate? tooltipPositionDelegate;
 
   @override
   State<BusyBooksHeaderPopupMenuButton<T>> createState() =>
@@ -1132,6 +1230,7 @@ class _BusyBooksHeaderPopupMenuButtonState<T>
         expanded: _open,
         child: BusyBooksHeaderIconButton(
           tooltip: widget.tooltip,
+          tooltipPositionDelegate: widget.tooltipPositionDelegate,
           icon: widget.icon,
           shortcut: widget.shortcut,
           selected: widget.highlightWhenOpen && (_loading || _open),
@@ -2216,6 +2315,7 @@ class BusyBooksPopupSelector<T> extends StatelessWidget {
     final fallbackMenuWidth = (fullWidth ? popupMaxWidth : buttonMaxWidth)
         .clamp(popupMinWidth, popupMaxWidth);
     return Align(
+      widthFactor: fullWidth ? null : 1,
       alignment: AlignmentDirectional.centerEnd,
       child: ConstrainedBox(
         constraints: BoxConstraints(

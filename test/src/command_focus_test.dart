@@ -9,6 +9,59 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
+    'visible book Search owns Ctrl+F while Collection Search is hidden',
+    (tester) async {
+      var bookSearches = 0, collectionSearches = 0, bookEnabled = true;
+      final registry = BusyBooksCommandCatalog.create(
+        executions: {
+          BusyBooksCommandIds.search: () => bookSearches++,
+          BusyBooksCommandIds.searchCollection: () => collectionSearches++,
+        },
+        visible: {BusyBooksCommandIds.searchCollection: () => false},
+        enabled: {BusyBooksCommandIds.search: () => bookEnabled},
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BusyBooksCommandShortcuts(
+            shortcuts: registry.shortcutIntents(
+              scopes: const {
+                BusyBooksCommandScope.application,
+                BusyBooksCommandScope.documentView,
+              },
+              intentFor: BusyBooksCommandIntent.new,
+            ),
+            child: Actions(
+              actions: {
+                BusyBooksCommandIntent: CallbackAction<BusyBooksCommandIntent>(
+                  onInvoke: (intent) {
+                    registry.execute(intent.commandId);
+                    return null;
+                  },
+                ),
+              },
+              child: const Focus(autofocus: true, child: SizedBox.expand()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(bookSearches, 1);
+      expect(collectionSearches, 0);
+      bookEnabled = false;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(bookSearches, 1);
+      expect(collectionSearches, 0);
+    },
+  );
+
+  testWidgets(
     'paging keys preserve search editing and button activation while publication focus retains paging',
     (tester) async {
       var pages = 0, activated = 0;

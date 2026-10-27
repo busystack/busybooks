@@ -83,6 +83,13 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       popover_->Hide();
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;if(!map){result->Error("reader-bounds","Invalid bounds");return;}double dpi=GetDpiForWindow(parent_)/96.0;
       bounds_={static_cast<LONG>(number(*map,"x")*dpi),static_cast<LONG>(number(*map,"y")*dpi),static_cast<LONG>((number(*map,"x")+number(*map,"width"))*dpi),static_cast<LONG>((number(*map,"y")+number(*map,"height"))*dpi)};if(controller_)controller_->put_Bounds(bounds_);
+    }else if(name=="focusChrome"){
+      const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
+      const auto* value=map?field(*map,"session"):nullptr;
+      const auto* session=value?std::get_if<std::string>(value):nullptr;
+      if(!session){result->Error("reader-focus","Missing focus owner");return;}
+      HWND owner=GetAncestor(parent_,GA_ROOT);
+      if(*session==session_&&!popover_->IsRequested()&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner)SetFocus(parent_);
     }else if(name=="focus"){
       HWND owner=GetAncestor(parent_,GA_ROOT);
       if(controller_&&visible_&&!IsIconic(owner)&&GetForegroundWindow()==owner)controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);

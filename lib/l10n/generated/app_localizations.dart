@@ -1380,7 +1380,7 @@ abstract class AppLocalizations {
   /// No description provided for @invalidPage.
   ///
   /// In en, this message translates to:
-  /// **'Enter a page number in range, or an exact supplied page label.'**
+  /// **'Enter a physical page in range or an exact printed label. Use = for a numeric label.'**
   String get invalidPage;
 
   /// No description provided for @bookProgress.
@@ -1632,7 +1632,7 @@ abstract class AppLocalizations {
   /// No description provided for @noteSaveFailed.
   ///
   /// In en, this message translates to:
-  /// **'Note could not be saved. Your draft is retained; retry Save.'**
+  /// **'Note could not be saved. Your draft is retained.'**
   String get noteSaveFailed;
 
   /// No description provided for @discard.
@@ -2156,6 +2156,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Last page'**
   String get lastPage;
+
+  /// No description provided for @home.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get home;
+
+  /// No description provided for @marks.
+  ///
+  /// In en, this message translates to:
+  /// **'Marks'**
+  String get marks;
+
+  /// No description provided for @bookText.
+  ///
+  /// In en, this message translates to:
+  /// **'Book Text'**
+  String get bookText;
+
+  /// No description provided for @chapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get chapters;
+
+  /// No description provided for @searchCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Search category'**
+  String get searchCategory;
+
+  /// No description provided for @closeSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Search'**
+  String get closeSearch;
+
+  /// No description provided for @searchNeedsReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Reading to search the publication or load page previews.'**
+  String get searchNeedsReading;
+
+  /// No description provided for @enterSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a search query'**
+  String get enterSearch;
+
+  /// No description provided for @noResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get noResults;
+
+  /// No description provided for @allTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get allTypes;
+
+  /// No description provided for @bookOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Book Order'**
+  String get bookOrder;
+
+  /// No description provided for @type.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get type;
+
+  /// No description provided for @noNotebookResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No items match these filters.'**
+  String get noNotebookResults;
+
+  /// No description provided for @clearFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Filters'**
+  String get clearFilters;
+
+  /// No description provided for @saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get saved;
+
+  /// No description provided for @showFullNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Full Note'**
+  String get showFullNote;
+
+  /// No description provided for @showLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Less'**
+  String get showLess;
+
+  /// No description provided for @bookActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Book Actions'**
+  String get bookActions;
+
+  /// No description provided for @aboutBusyBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'About BusyBooks'**
+  String get aboutBusyBooks;
+
+  /// No description provided for @data.
+  ///
+  /// In en, this message translates to:
+  /// **'Data'**
+  String get data;
+
+  /// No description provided for @systemControlled.
+  ///
+  /// In en, this message translates to:
+  /// **'Controlled by your system'**
+  String get systemControlled;
+
+  /// No description provided for @motionReduced.
+  ///
+  /// In en, this message translates to:
+  /// **'Reduced'**
+  String get motionReduced;
+
+  /// No description provided for @motionEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Animations enabled'**
+  String get motionEnabled;
+
+  /// No description provided for @moreReadingSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'More Reading Settings…'**
+  String get moreReadingSettings;
+
+  /// No description provided for @pageDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Page number or printed label'**
+  String get pageDestination;
+
+  /// No description provided for @pageDestinationHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Numbers select physical pages. Use =label for a printed label.'**
+  String get pageDestinationHelp;
+
+  /// No description provided for @bareBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 bookmark without notes} other{{count} bookmarks without notes}}'**
+  String bareBookmarks(int count);
+
+  /// No description provided for @search.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get search;
+
+  /// No description provided for @actions.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get actions;
+
+  /// No description provided for @sortBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get sortBy;
+
+  /// No description provided for @readingDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading defaults'**
+  String get readingDefaults;
+
+  /// No description provided for @closeCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Collection'**
+  String get closeCollection;
+
+  /// No description provided for @refresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// No description provided for @anyNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Any notes'**
+  String get anyNotes;
+
+  /// No description provided for @dateUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Date unavailable'**
+  String get dateUnavailable;
+
+  /// No description provided for @regionPreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Region preview unavailable. The private note is still accessible.'**
+  String get regionPreviewUnavailable;
+
+  /// No description provided for @regionPreviewLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading region preview'**
+  String get regionPreviewLoading;
 }
 
 class _AppLocalizationsDelegate

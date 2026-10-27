@@ -4,8 +4,8 @@ Reflowable EPUB 2/3 and FB2 use these same preferences, local-font controls and
 durable reflow/selection safeguards. FB2's deterministic prepared tree is shared
 by rendering, search and CFI resolution. Comics report no typography capability
 and retain artwork colors; their zoom/spread/direction defaults are separate from
-PDF defaults. See [format verification](format-verification.md) for the format
-matrix, cache-deletion/restart attachment checks and remaining platform gates.
+PDF defaults. See [readers.md](readers.md) for supported inputs and
+[development tools](../../tools/README.md) for cache-deletion/restart checks.
 
 Font preferences belong to the reading system. `FontChoice` and
 `TypographyCapabilities` in `lib/src/core/typography.dart` contain no format or
@@ -45,8 +45,7 @@ Linux uses private worker-owned PangoCairo font maps and
 PangoFc/Fontconfig validate the actual matched family and provide local family,
 full-face and PostScript identities. The array returned by enumeration is freed;
 font maps, contexts, fonts, layouts and Cairo resources have scoped ownership.
-The implementation uses APIs available since Pango 1.48 (the verified host has
-1.52.1). A private
+The implementation requires Pango 1.48 or newer. A private
 [Fontconfig substitution callback](https://docs.gtk.org/PangoFc/method.FontMap.set_default_substitute.html)
 passes literal family strings without Pango's comma-separated description syntax.
 It changes neither global Fontconfig configuration nor files. Closed channel
@@ -102,7 +101,8 @@ it does not promise fonts outside a Snap's environment.
 
 ## Appearance, persistence and reflow
 
-One searchable chooser is embedded in the existing shared Appearance controls.
+One searchable chooser is embedded in Settings → Reading's advanced Appearance
+controls; the compact native reading popover links to it.
 Search keeps ordinary editing and IME composition. Search/candidate traversal
 updates only the sample; activation applies through the primary controller (or
 existing Settings writer). A committed, empty composition range is not treated
@@ -125,11 +125,12 @@ This also covers cold opening with saved customization. Later font changes reuse
 those originals; publisher restoration disables their protection stylesheet.
 
 An unavailable saved name is retained. Its effective local serif fallback is
-resolved separately and Appearance explains that fallback when custom typography
-is active. Availability refresh never overwrites a preference. Selecting a font
-changes the current book only; Save as Reading Defaults is explicit. Reset Book
-Appearance clears that book's override. Resetting Settings' defaults restores the
-existing application defaults. Other explicit book settings remain independent.
+resolved separately and advanced Appearance explains that fallback when custom
+typography is active. Availability refresh never overwrites a preference. Settings
+explicitly selects the current-book or application-default scope. Selecting a
+font writes only that scope. Reset Book Appearance clears the book's override;
+resetting application defaults restores the existing defaults. Other explicit
+book settings remain independent.
 Settings save failure rolls back its own optimistic reading-default revision.
 
 The controller serializes appearance writes, captures revisions/default targets
@@ -161,19 +162,18 @@ read-aloud underlines repaint against their existing anchors. Completion policy,
 annotation storage, search, dictionary, note drafts and original-file ownership
 remain with their existing owners.
 
-GTK's default Escape handling otherwise closes the native popover first. While
-the chooser is active, a session/presentation-checked handoff lets Flutter return
-to Appearance and focus Font Family. Other popovers retain their existing Escape
-path. Native hide disposes only Appearance's chooser/preview; protected note
-capture is preserved.
+The advanced local-family chooser is in Settings → Reading. Escape returns from
+the chooser to Font Family and disposes its bounded preview. The compact reading
+popover links to these settings; font identity, preference ownership and renderer
+apply/cancellation use the same shared model.
 
-## Reproduce and platform evidence
+## Development checks
 
 Use official Flutter 3.47.5 / bundled Dart 3.13.4 and the existing lockfile.
-No SDK, dependency or vendored-engine revision was changed. Relevant commands:
+Relevant commands:
 
 ```sh
-flutter pub get --offline --enforce-lockfile
+flutter pub get --enforce-lockfile
 flutter gen-l10n
 dart format --output=none --set-exit-if-changed lib test tools
 flutter analyze
@@ -196,9 +196,7 @@ chapter direction, rapid updates and publisher restoration. Fixed-layout and PDF
 passes reject replacement and check their page/text content. Deterministic Dart
 fixtures do not depend on a developer's installed collection.
 
-Current execution details and screenshots are recorded in
-[typography verification](typography-verification.md). Windows has a real native
-implementation and a separate stock-desktop backend probe:
+Windows has a native implementation and a separate stock-desktop backend probe:
 
 ```powershell
 flutter build windows --release

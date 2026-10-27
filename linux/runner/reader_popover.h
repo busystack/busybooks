@@ -13,6 +13,7 @@ class ReaderPopover {
   ~ReaderPopover();
   void Show(FlMethodCall* call);
   void Hide();
+  bool IsRequested() const { return requested_; }
   void Result(FlValue* data);
   void Capture(FlMethodCall* call);
  private:
@@ -28,10 +29,9 @@ class ReaderPopover {
   GtkWidget* popover_ = nullptr;
   FlView* view_ = nullptr;
   FlMethodChannel* channel_ = nullptr;
-  FlMethodChannel* fonts_ = nullptr;
   FlValue* data_ = nullptr;
   bool ready_ = false, frame_ = false, requested_ = false, painted_ = false, restart_ = false;
-  bool keyboard_dismissal_ = false, font_chooser_ = false;
+  bool keyboard_dismissal_ = false;
   FlMethodCall* pending_ = nullptr;
   guint timeout_ = 0;
   int maximum_height_ = 480;

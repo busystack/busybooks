@@ -1,45 +1,48 @@
 import 'dart:async';
-import 'dart:ui' show SemanticsRole;
 import 'dart:math' as math;
+import 'dart:ui' show SemanticsRole;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../annotations/domain/annotation_filter.dart';
+import '../../annotations/domain/annotation_order.dart';
+import '../../annotations/presentation/annotation_actions.dart' as actions;
+import '../../annotations/presentation/annotation_presentation.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
 import '../../app/command_registry.dart';
 import '../../app/localization.dart';
 import '../../app/product_actions.dart';
-import '../../annotations/domain/annotation_order.dart';
-import '../../annotations/presentation/annotation_presentation.dart';
+import '../../book_workspace/application/book_sidebar_controller.dart';
 import '../../library/data/record_validation.dart' show annotationColors;
 import '../../library/presentation/collection_screen.dart' show BookRow;
 import '../../notebook/application/notebook_controller.dart';
 import '../../notebook/presentation/book_view_selector.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/reader_controller.dart';
-import '../application/reader_sidebar_state.dart';
 import '../domain/publication_outline.dart';
 import 'publication_location.dart';
 
-String readerPanelLabel(BuildContext c, String panel) => switch (panel) {
-  'books' => c.l10n.books,
-  'search' => c.l10n.searchResults,
-  'annotations' => c.l10n.annotations,
-  'thumbnails' => c.l10n.thumbnails,
-  _ => c.l10n.outline,
-};
-IconData _panelIcon(String panel, TextDirection direction) => switch (panel) {
-  'books' => BusyBooksGlyphs.previewView,
-  'search' => BusyBooksGlyphs.search,
-  'annotations' => BusyBooksGlyphs.annotations,
-  'thumbnails' => BusyBooksGlyphs.image,
-  _ => BusyBooksGlyphs.indentFor(direction),
-};
-String _panelCommand(String panel) => switch (panel) {
-  'books' => BusyBooksCommandIds.readerBooks,
-  'search' => BusyBooksCommandIds.search,
-  'annotations' => BusyBooksCommandIds.annotations,
-  'thumbnails' => BusyBooksCommandIds.thumbnails,
+String readerPanelLabel(BuildContext c, BookSidebarPanel panel) =>
+    switch (panel) {
+      BookSidebarPanel.books => c.l10n.books,
+      BookSidebarPanel.marks => c.l10n.marks,
+      BookSidebarPanel.thumbnails => c.l10n.thumbnails,
+      _ => c.l10n.outline,
+    };
+IconData _panelIcon(BookSidebarPanel panel, TextDirection direction) =>
+    switch (panel) {
+      BookSidebarPanel.books => BusyBooksGlyphs.previewView,
+      BookSidebarPanel.marks => BusyBooksGlyphs.annotations,
+      BookSidebarPanel.thumbnails => BusyBooksGlyphs.image,
+      _ => BusyBooksGlyphs.indentFor(direction),
+    };
+String _panelCommand(BookSidebarPanel panel) => switch (panel) {
+  BookSidebarPanel.books => BusyBooksCommandIds.readerBooks,
+  BookSidebarPanel.marks => BusyBooksCommandIds.annotations,
+  BookSidebarPanel.thumbnails => BusyBooksCommandIds.thumbnails,
   _ => BusyBooksCommandIds.outline,
 };
 
@@ -50,21 +53,23 @@ class ReadingSidebarHeader extends ConsumerWidget {
   final String bookId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(readerControllerProvider),
-        reader = ref.read(readerControllerProvider.notifier),
+    final state = ref.watch(bookSidebarProvider(bookId)),
+        navigation = ref.read(bookSidebarProvider(bookId).notifier),
         workspace = ref.watch(workspaceControllerProvider).workspace,
-        book = reader.book;
+        book = ref.watch(workspaceControllerProvider).bookById(bookId);
     final colors = BusyBooksSurfaceColors.of(context),
         registry = BusyBooksCommandRegistryScope.maybeOf(context);
     final collection = workspace?.isBook == false;
     final views = [
-      'outline',
-      if (reader.panelAvailable('thumbnails')) 'thumbnails',
-      'annotations',
-      if (reader.panelAvailable('search')) 'search',
-      if (collection) 'books',
+      BookSidebarPanel.outline,
+      if (navigation.available(BookSidebarPanel.thumbnails))
+        BookSidebarPanel.thumbnails,
+      BookSidebarPanel.marks,
+      if (collection) BookSidebarPanel.books,
     ];
-    final selected = views.contains(state.panel) ? state.panel : 'outline';
+    final selected = views.contains(state.panel)
+        ? state.panel
+        : BookSidebarPanel.outline;
     return Padding(
       padding: BusyBooksInsets.sidebarHeader,
       child: Column(
@@ -87,9 +92,11 @@ class ReadingSidebarHeader extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: BusyBooksSpacing.sm),
-                BusyBooksHeaderPopupMenuButton<String>(
+                BusyBooksHeaderPopupMenuButton<BookSidebarPanel>(
                   key: const ValueKey('reader-sidebar-view-menu'),
                   tooltip: context.l10n.sidebarViewMenu,
+                  tooltipPositionDelegate: (info) =>
+                      BusyBooksTooltipStyle.positionWithin(context, info),
                   icon: _panelIcon(selected, Directionality.of(context)),
                   transparent: true,
                   borderRadius: BusyBooksRadius.nativeHeaderButton,
@@ -106,15 +113,7 @@ class ReadingSidebarHeader extends ConsumerWidget {
                             registry?[_panelCommand(view)]?.shortcut?.label,
                       ),
                   ],
-                  onSelected: (view) async {
-                    if (ref.read(readerControllerProvider).bookId != bookId) {
-                      return;
-                    }
-                    await reader.panel(view);
-                    if (view == 'search') {
-                      await reader.toggleSearch(visible: true);
-                    }
-                  },
+                  onSelected: navigation.selectPanel,
                 ),
               ],
             ),
@@ -187,18 +186,18 @@ class ReadingSidebarBody extends ConsumerWidget {
   final String bookId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(readerControllerProvider);
-    if (state.bookId != bookId) {
-      return Center(child: Text(context.l10n.loadingBook));
-    }
+    final sidebar = ref.watch(bookSidebarProvider(bookId));
+    final navigation = ref.read(bookSidebarProvider(bookId).notifier);
+    final panel = navigation.available(sidebar.panel)
+        ? sidebar.panel
+        : BookSidebarPanel.outline;
     return KeyedSubtree(
-      key: ValueKey('$bookId:${state.panel}'),
-      child: switch (state.panel) {
-        'books' => _BooksPanel(bookId: bookId),
-        'search' => _SearchPanel(bookId: bookId),
-        'annotations' => _AnnotationsPanel(bookId: bookId),
-        'thumbnails' => _ThumbnailPanel(bookId: bookId),
-        _ => _OutlinePanel(bookId: bookId),
+      key: ValueKey('$bookId:$panel'),
+      child: switch (panel) {
+        BookSidebarPanel.books => _BooksPanel(bookId: bookId),
+        BookSidebarPanel.marks => _AnnotationsPanel(bookId: bookId),
+        BookSidebarPanel.thumbnails => _ThumbnailPanel(bookId: bookId),
+        BookSidebarPanel.outline => _OutlinePanel(bookId: bookId),
       },
     );
   }
@@ -389,14 +388,14 @@ class _OutlinePanelState extends ConsumerState<_OutlinePanel> {
     return _visibleEntries;
   }
 
-  ReaderSidebarController get view =>
-      ref.read(readerSidebarProvider(widget.bookId).notifier);
+  BookSidebarController get view =>
+      ref.read(bookSidebarProvider(widget.bookId).notifier);
   @override
   void initState() {
     super.initState();
     _scroll = ScrollController(
       initialScrollOffset:
-          ref.read(readerSidebarProvider(widget.bookId)).scroll['outline'] ?? 0,
+          ref.read(bookSidebarProvider(widget.bookId)).scroll['outline'] ?? 0,
     )..addListener(_save);
   }
 
@@ -429,24 +428,24 @@ class _OutlinePanelState extends ConsumerState<_OutlinePanel> {
   @override
   Widget build(BuildContext context) {
     ref.watch(
-      readerSidebarProvider(
+      bookSidebarProvider(
         widget.bookId,
       ).select((v) => (v.expanded, v.focusedOutline, v.reveal)),
     );
     final state = ref.watch(readerControllerProvider),
-        ui = ref.read(readerSidebarProvider(widget.bookId)),
-        outline = state.outline,
+        ui = ref.read(bookSidebarProvider(widget.bookId)),
+        outline = ui.outline,
         entries = _visible(outline, ui.expanded),
         reader = ref.read(readerControllerProvider.notifier);
     if (entries.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(BusyBooksSpacing.lg),
-        child: state.outlineStatus == 'error'
+        child: ui.outlineStatus == 'error'
             ? Column(
                 children: [
                   Text(context.l10n.outlineFailed),
                   BusyBooksPushButton.standard(
-                    onPressed: state.ready
+                    onPressed: reader.interactive
                         ? () => reader.reloadOutline(bookId: widget.bookId)
                         : null,
                     child: Text(context.l10n.retry),
@@ -454,14 +453,23 @@ class _OutlinePanelState extends ConsumerState<_OutlinePanel> {
                 ],
               )
             : Text(
-                state.outlineStatus == 'loading'
+                ui.outlineStatus == 'loading'
                     ? context.l10n.loadingOutline
                     : context.l10n.noOutline,
               ),
       );
     }
     final active = outline.visibleAncestor(
-      outline.activeAt(state.location),
+      outline.activeAt(
+        state.bookId == widget.bookId
+            ? state.location
+            : {
+                'anchor': ref
+                    .read(workspaceControllerProvider)
+                    .bookById(widget.bookId)
+                    ?.anchor,
+              },
+      ),
       ui.expanded,
     );
     final extent = _rowHeight(context) + BusyBooksStroke.hairline * 2;
@@ -482,9 +490,7 @@ class _OutlinePanelState extends ConsumerState<_OutlinePanel> {
 
     void activate(PublicationOutlineNode node) {
       if (node.destination != null) {
-        unawaited(
-          reader.navigateFromSidebar(node.destination!, bookId: widget.bookId),
-        );
+        unawaited(_jump(context, ref, widget.bookId, node.destination!));
       }
     }
 
@@ -498,13 +504,20 @@ class _OutlinePanelState extends ConsumerState<_OutlinePanel> {
           return KeyEventResult.ignored;
         }
         final currentState = ref.read(readerControllerProvider);
-        if (currentState.bookId != widget.bookId) return KeyEventResult.ignored;
-        final ui = ref.read(readerSidebarProvider(widget.bookId));
-        final outline = currentState.outline,
-            entries = _visible(outline, ui.expanded);
+        final ui = ref.read(bookSidebarProvider(widget.bookId));
+        final outline = ui.outline, entries = _visible(outline, ui.expanded);
         if (entries.isEmpty) return KeyEventResult.ignored;
         final active = outline.visibleAncestor(
-          outline.activeAt(currentState.location),
+          outline.activeAt(
+            currentState.bookId == widget.bookId
+                ? currentState.location
+                : {
+                    'anchor': ref
+                        .read(workspaceControllerProvider)
+                        .bookById(widget.bookId)
+                        ?.anchor,
+                  },
+          ),
           ui.expanded,
         );
         final chosen = entries.indexWhere((n) => n.id == ui.focusedOutline);
@@ -585,8 +598,8 @@ class _OutlinePanelState extends ConsumerState<_OutlinePanel> {
                         reader.book?.pageBased == true && page is int
                         ? PublicationPageReference.pdf(
                             page,
-                            state.pages,
-                            state.labels,
+                            ui.pages,
+                            ui.labels,
                           )
                         : PublicationPageReference(label: node.pageLabel);
                     final description = describePublicationPage(
@@ -649,12 +662,12 @@ abstract class _RetainedPanelState<T extends ConsumerStatefulWidget>
     super.initState();
     scroll = ScrollController(
       initialScrollOffset:
-          ref.read(readerSidebarProvider(bookId)).scroll[panel] ?? 0,
+          ref.read(bookSidebarProvider(bookId)).scroll[panel] ?? 0,
     )..addListener(saveScroll);
   }
 
   void saveScroll() => ref
-      .read(readerSidebarProvider(bookId).notifier)
+      .read(bookSidebarProvider(bookId).notifier)
       .scrolled(panel, scroll.offset);
   @override
   void dispose() {
@@ -691,84 +704,6 @@ class _BooksPanelState extends _RetainedPanelState<_BooksPanel> {
   }
 }
 
-class _SearchPanel extends ConsumerStatefulWidget {
-  const _SearchPanel({required this.bookId});
-  final String bookId;
-  @override
-  ConsumerState<_SearchPanel> createState() => _SearchPanelState();
-}
-
-class _SearchPanelState extends _RetainedPanelState<_SearchPanel> {
-  @override
-  String get bookId => widget.bookId;
-  @override
-  String get panel => 'search';
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(readerControllerProvider),
-        reader = ref.read(readerControllerProvider.notifier),
-        l = context.l10n;
-    return Column(
-      children: [
-        if (state.searching) ...[
-          LinearProgressIndicator(value: state.searchProgress),
-          BusyBooksActionRow(title: l.cancel, onTap: reader.cancelSearch),
-        ],
-        if (state.matches.isNotEmpty)
-          Row(
-            children: [
-              BusyBooksHeaderIconButton(
-                tooltip: l.previousResult,
-                icon: BusyBooksGlyphs.upArrow,
-                onPressed: state.ready ? () => reader.stepMatch(-1) : null,
-              ),
-              Expanded(
-                child: Text(
-                  '${state.currentMatch + 1} / ${state.matches.length}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              BusyBooksHeaderIconButton(
-                tooltip: l.nextResult,
-                icon: BusyBooksGlyphs.downArrow,
-                onPressed: state.ready ? () => reader.stepMatch(1) : null,
-              ),
-            ],
-          ),
-        Expanded(
-          child: ListView.builder(
-            controller: scroll,
-            padding: BusyBooksInsets.sidebarList,
-            itemCount: math.max(1, state.matches.length),
-            itemBuilder: (c, i) {
-              if (state.matches.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(BusyBooksSpacing.lg),
-                  child: Text(switch (state.searchStatus) {
-                    'idle' => l.searchHint,
-                    'cancelled' => l.searchCancelled,
-                    'error' => l.searchFailed,
-                    'searching' => l.busy,
-                    _ => l.noSearchResults,
-                  }),
-                );
-              }
-              final match = state.matches[i];
-              return BusyBooksSidebarRecordRow<void>(
-                icon: BusyBooksGlyphs.search,
-                title: match['excerpt']?.toString() ?? '',
-                subtitle: match['reference']?.toString() ?? '',
-                selected: state.currentMatch == i,
-                onTap: state.ready ? () => reader.selectMatch(i) : null,
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _AnnotationsPanel extends ConsumerStatefulWidget {
   const _AnnotationsPanel({required this.bookId});
   final String bookId;
@@ -785,22 +720,25 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
   Widget build(BuildContext context) {
     ref.watch(workspaceControllerProvider);
     ref.watch(
-      readerSidebarProvider(
+      bookSidebarProvider(
         bookId,
       ).select((v) => (v.filter, v.withNotes, v.selectedAnnotation)),
     );
-    final notes = ref.watch(notebookControllerProvider),
-        ui = ref.read(readerSidebarProvider(bookId)),
-        state = ref.watch(readerControllerProvider),
+    ref.watch(notebookControllerProvider.select((s) => (s.drafts, s.sources)));
+    final notes = ref.read(notebookControllerProvider),
+        ui = ref.read(bookSidebarProvider(bookId)),
         reader = ref.read(readerControllerProvider.notifier),
-        view = ref.read(readerSidebarProvider(bookId).notifier),
+        view = ref.read(bookSidebarProvider(bookId).notifier),
         l = context.l10n;
     final annotations =
         notes
-            .annotationsFor(bookId, reader.annotations)
+            .annotationsFor(
+              bookId,
+              ref.read(workspaceControllerProvider).annotations,
+            )
             .where(
               (a) =>
-                  (ui.filter == 'all' || a.kind == ui.filter) &&
+                  ui.filter.includes(a) &&
                   (!ui.withNotes || notes.effectiveNote(a).trim().isNotEmpty),
             )
             .toList()
@@ -809,35 +747,36 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
       children: [
         Padding(
           padding: BusyBooksInsets.sidebarList,
-          child: BusyBooksPopupSelector<String>(
-            value: ui.filter,
-            label: switch (ui.filter) {
-              'highlight' => l.highlights,
-              'bookmark' => l.bookmarks,
-              'region' => l.regionNotes,
-              _ => l.allItems,
-            },
-            tooltip: l.annotations,
-            options: [
-              for (final (value, label) in [
-                ('all', l.allItems),
-                ('highlight', l.highlights),
-                ('bookmark', l.bookmarks),
-                ('region', l.regionNotes),
-              ])
-                BusyBooksPopupSelectorOption(value: value, label: label),
-              BusyBooksPopupSelectorOption(value: 'notes', label: l.withNotes),
+          child: Wrap(
+            spacing: BusyBooksSpacing.sm,
+            runSpacing: BusyBooksSpacing.sm,
+            children: [
+              BusyBooksPopupSelector<AnnotationTypeFilter>(
+                value: ui.filter,
+                label: annotationFilterLabel(context, ui.filter),
+                tooltip: l.type,
+                options: [
+                  for (final type in AnnotationTypeFilter.values)
+                    BusyBooksPopupSelectorOption(
+                      value: type,
+                      label: annotationFilterLabel(context, type),
+                    ),
+                ],
+                onSelected: (type) => view.filter(type: type),
+              ),
+              BusyBooksPopupSelector<bool>(
+                value: ui.withNotes,
+                label: ui.withNotes ? l.withNotes : l.anyNotes,
+                tooltip: l.privateNote,
+                options: [
+                  BusyBooksPopupSelectorOption(value: false, label: l.anyNotes),
+                  BusyBooksPopupSelectorOption(value: true, label: l.withNotes),
+                ],
+                onSelected: (value) => view.filter(withNotes: value),
+              ),
             ],
-            onSelected: (v) => v == 'notes'
-                ? view.filter(withNotes: !ui.withNotes)
-                : view.filter(kind: v),
           ),
         ),
-        if (ui.withNotes)
-          BusyBooksActionRow(
-            title: l.withNotes,
-            onTap: () => view.filter(withNotes: false),
-          ),
         Expanded(
           child: ListView.builder(
             controller: scroll,
@@ -856,13 +795,15 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
               final refText = page is int
                   ? describePublicationPage(
                       l,
-                      PublicationPageReference.pdf(
-                        page,
-                        state.pages,
-                        state.labels,
-                      ),
+                      PublicationPageReference.pdf(page, ui.pages, ui.labels),
                     )
-                  : annotationReference(c, a, book: reader.book);
+                  : annotationReference(
+                      c,
+                      a,
+                      book: ref
+                          .read(workspaceControllerProvider)
+                          .bookById(bookId),
+                    );
               final title = a.text.isEmpty
                   ? refText
                   : annotationPreview(a.text);
@@ -872,9 +813,7 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                 height: _rowHeight(c) * (note.isEmpty ? 2 : 2.5),
                 onTap: () {
                   view.selectAnnotation(a.id);
-                  unawaited(
-                    reader.navigateFromSidebar(a.anchor, bookId: bookId),
-                  );
+                  unawaited(_jump(context, ref, bookId, a.anchor));
                 },
                 child: Padding(
                   padding: const EdgeInsetsDirectional.only(
@@ -932,11 +871,6 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                         icon: BusyBooksGlyphs.menuVertical,
                         itemBuilder: (_) => [
                           BusyBooksPopupMenuItem(
-                            value: 'notebook',
-                            label: l.openInNotebook,
-                            icon: BusyBooksGlyphs.annotations,
-                          ),
-                          BusyBooksPopupMenuItem(
                             value: 'edit',
                             label: l.editNote,
                           ),
@@ -961,46 +895,29 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                         ],
                         onSelected: (action) async {
                           try {
-                            if (reader.stateBookId != bookId) return;
-                            if (action == 'notebook') {
-                              ref
-                                  .read(notebookControllerProvider.notifier)
-                                  .view(
-                                    bookId,
-                                    selected: a.id,
-                                    query: '',
-                                    filter: 'all',
-                                    withNotes: false,
-                                  );
+                            if (action == 'edit') {
                               await openNotebook(
                                 context,
                                 ref,
                                 bookId,
                                 annotationId: a.id,
                               );
-                            } else if (action == 'edit') {
-                              if (state.ready) {
-                                await reader.editAnnotation(a);
-                              } else {
-                                await openNotebook(
-                                  context,
-                                  ref,
-                                  bookId,
-                                  annotationId: a.id,
-                                );
-                              }
                             } else if (action == 'delete') {
-                              await ref
-                                  .read(workspaceControllerProvider.notifier)
-                                  .deleteAnnotation(a.id);
-                              await reader.syncAnnotations();
+                              await actions.deleteAnnotation(context, ref, a);
+                              if (reader.stateBookId == bookId &&
+                                  reader.interactive) {
+                                await reader.syncAnnotations();
+                              }
                             } else {
                               await ref
                                   .read(workspaceControllerProvider.notifier)
                                   .updateAnnotation(a.id, {
                                     'color': action,
                                   }, bookId: a.bookId);
-                              await reader.syncAnnotations();
+                              if (reader.stateBookId == bookId &&
+                                  reader.interactive) {
+                                await reader.syncAnnotations();
+                              }
                             }
                           } catch (error) {
                             if (c.mounted) await showError(c, error);
@@ -1049,8 +966,10 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
       final reader = ref.read(readerControllerProvider.notifier),
           state = ref.read(readerControllerProvider);
       if (state.bookId != bookId ||
-          !state.panelOpen ||
-          state.panel != 'thumbnails') {
+          !reader.interactive ||
+          !ref.read(bookSidebarProvider(bookId)).open ||
+          ref.read(bookSidebarProvider(bookId)).panel !=
+              BookSidebarPanel.thumbnails) {
         return;
       }
       final start = math.max(0, (scroll.offset / _extent).floor() - 1),
@@ -1068,18 +987,21 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(readerSidebarProvider(bookId).select((v) => v.reveal));
+    ref.watch(bookSidebarProvider(bookId).select((v) => v.reveal));
     final state = ref.watch(readerControllerProvider),
-        ui = ref.read(readerSidebarProvider(bookId)),
+        ui = ref.read(bookSidebarProvider(bookId)),
         reader = ref.read(readerControllerProvider.notifier),
         l = context.l10n;
-    if (state.error != null) {
+    if (ui.pages == 0) {
       return Padding(
         padding: const EdgeInsets.all(BusyBooksSpacing.lg),
         child: Text(l.thumbnailUnavailable),
       );
     }
-    final current = (state.location['anchor'] as Map?)?['page'] as int?;
+    final Map? currentAnchor = state.bookId == bookId
+        ? (state.location['anchor'] as Map?)
+        : ref.read(workspaceControllerProvider).bookById(bookId)?.anchor;
+    final current = currentAnchor?['page'] as int?;
     _extent =
         BusyBooksSizes.sidebarWidth * .55 +
         _rowHeight(context) +
@@ -1097,7 +1019,7 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
           );
         }
         ref
-            .read(readerSidebarProvider(bookId).notifier)
+            .read(bookSidebarProvider(bookId).notifier)
             .acknowledgeReveal(panel, ui.reveal);
         _schedule();
       });
@@ -1108,15 +1030,11 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
       controller: scroll,
       itemExtent: _extent,
       padding: BusyBooksInsets.sidebarList,
-      itemCount: state.pages,
+      itemCount: ui.pages,
       itemBuilder: (c, i) {
-        final preview = state.thumbnails[i],
-            error = state.thumbnailErrors[i],
-            reference = PublicationPageReference.pdf(
-              i,
-              state.pages,
-              state.labels,
-            ),
+        final preview = state.bookId == bookId ? state.thumbnails[i] : null,
+            error = state.bookId == bookId ? state.thumbnailErrors[i] : null,
+            reference = PublicationPageReference.pdf(i, ui.pages, ui.labels),
             description = describePublicationPage(l, reference);
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: BusyBooksSpacing.sm),
@@ -1127,8 +1045,7 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
             child: _SidebarRowSurface(
               selected: current == i,
               height: _extent - BusyBooksSpacing.md,
-              onTap: () =>
-                  reader.navigateFromSidebar({'page': i}, bookId: bookId),
+              onTap: () => _jump(context, ref, bookId, {'page': i}),
               child: Column(
                 children: [
                   Expanded(
@@ -1162,6 +1079,8 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
                                 ),
                               ],
                             )
+                          : !reader.interactive
+                          ? Center(child: Text(l.searchNeedsReading))
                           : const Center(
                               child: SizedBox.square(
                                 dimension: BusyBooksSizes.iconButton,
@@ -1191,3 +1110,10 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
     );
   }
 }
+
+Future<void> _jump(
+  BuildContext context,
+  WidgetRef ref,
+  String bookId,
+  Map<String, dynamic> anchor,
+) => openReading(context, ref, bookId, anchor: anchor);

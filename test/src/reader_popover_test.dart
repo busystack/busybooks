@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:busybooks/src/app/busybooks_design.dart';
 import 'package:busybooks/src/core/reading_preferences.dart';
 import 'package:busybooks/src/reading/presentation/reader_popover.dart';
@@ -89,8 +90,26 @@ void main() {
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(readerPopoverChannel, null),
   );
+  testWidgets('appearance accepts Escape before any control gains focus', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: ReaderPopoverApp()));
+    await _update(tester, {
+      'kind': 'appearance',
+      'typography': {'fontFamily': true, 'textMetrics': true},
+      'pdf': false,
+      'appearance': defaultReadingAppearance,
+    });
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(actions, contains(containsPair('action', 'dismiss')));
+    final dismissed = actions.singleWhere((a) => a['action'] == 'dismiss');
+    expect(dismissed['session'], '1');
+    expect(dismissed['presentation'], 1);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
-    'native font-chooser Escape returns focus to Font Family and hidden previews are disposed',
+    'compact appearance ignores stale hide and disposes the owned presentation',
     (tester) async {
       await tester.pumpWidget(const ProviderScope(child: ReaderPopoverApp()));
       await _update(tester, {
@@ -99,34 +118,29 @@ void main() {
         'pdf': false,
         'appearance': defaultReadingAppearance,
       });
-      await tester.tap(find.text('Font family'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('font-search')), findsOneWidget);
-      Future<void> native(
-        String method, [
-        Map<String, dynamic> changes = const {},
-      ]) async {
+      expect(find.text('Font size'), findsOneWidget);
+      expect(find.text('Font family'), findsNothing);
+      Future<void> hidden(int presentation) async {
         ServicesBinding.instance.channelBuffers.push(
           readerPopoverChannel.name,
           readerPopoverChannel.codec.encodeMethodCall(
-            MethodCall(method, {'session': '1', 'presentation': 1, ...changes}),
+            MethodCall('hidden', {
+              'session': '1',
+              'presentation': presentation,
+            }),
           ),
           (_) {},
         );
         await tester.pumpAndSettle();
       }
 
-      await native('escapeFontChooser', {'presentation': 0});
-      expect(find.byKey(const ValueKey('font-search')), findsOneWidget);
-      await native('escapeFontChooser');
-      expect(find.byKey(const ValueKey('font-family')), findsOneWidget);
-      expect(find.byKey(const ValueKey('font-search')), findsNothing);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('font-search')), findsOneWidget);
-      await native('hidden');
-      expect(find.byKey(const ValueKey('font-search')), findsNothing);
+      await hidden(0);
+      expect(find.text('Font size'), findsOneWidget);
+      await hidden(1);
+      expect(find.text('Font size'), findsNothing);
       expect(actions, isEmpty);
+      // Font-family editing and Escape/focus remain covered by font_chooser_test
+      // in the full Settings controls where advanced typography now belongs.
     },
   );
   testWidgets('selection exposes Search in This Book and deliberate Look Up', (
@@ -376,12 +390,7 @@ void main() {
         'toc': [],
         'location': {},
       });
-      final mode = tester.widget<BusyBooksComboRow<bool>>(
-        find.byType(BusyBooksComboRow<bool>),
-      );
-      mode.onSelected(true);
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '255');
+      await tester.enterText(find.byType(TextField), '=255');
       await tester.tap(find.text('Go'));
       await tester.pumpAndSettle();
       expect(actions.where((a) => a['action'] == 'goto'), isEmpty);
@@ -394,11 +403,7 @@ void main() {
         'toc': [],
         'location': {},
       });
-      tester
-          .widget<BusyBooksComboRow<bool>>(find.byType(BusyBooksComboRow<bool>))
-          .onSelected(true);
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '255');
+      await tester.enterText(find.byType(TextField), '=255');
       await tester.tap(find.text('Go'));
       await tester.pumpAndSettle();
       expect(actions.singleWhere((a) => a['action'] == 'goto')['anchor'], {
@@ -587,7 +592,7 @@ void main() {
     );
   }
   testWidgets(
-    'appearance starts with common controls and reveals advanced typography without replacing the sidebar',
+    'compact appearance exposes common controls and routes advanced typography to Settings',
     (tester) async {
       tester.view.physicalSize = const Size(460, 600);
       tester.view.devicePixelRatio = 1;
@@ -602,12 +607,11 @@ void main() {
       });
       expect(find.text('Font size'), findsOneWidget);
       expect(find.text('Font weight'), findsNothing);
-      await tester.scrollUntilVisible(find.text('More Typography'), 200);
-      await tester.tap(find.text('More Typography'));
+      expect(find.text('More Typography'), findsNothing);
+      await tester.scrollUntilVisible(find.text('More Reading Settings…'), 200);
+      await tester.tap(find.text('More Reading Settings…'));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Font weight'), 100);
-      expect(find.text('Regular'), findsOneWidget);
-      expect(find.text('Noto Serif'), findsNothing);
+      expect(actions.single['action'], 'readingSettings');
       expect(tester.takeException(), isNull);
     },
   );
@@ -632,7 +636,7 @@ void main() {
       expect(actions, isEmpty);
       expect(
         find.text(
-          'Enter a page number in range, or an exact supplied page label.',
+          'Enter a physical page in range or an exact printed label. Use = for a numeric label.',
         ),
         findsOneWidget,
       );

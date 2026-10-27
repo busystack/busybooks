@@ -1,23 +1,25 @@
 import 'dart:async';
-import 'package:busybooks/src/app/command_registry.dart';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:archive/archive_io.dart';
-import 'package:busybooks/src/library/domain/book.dart';
-import 'package:busybooks/src/notebook/application/notebook_controller.dart';
 import 'package:busybooks/l10n/generated/app_localizations.dart';
 import 'package:busybooks/src/app/app_router.dart';
 import 'package:busybooks/src/app/app_settings.dart';
 import 'package:busybooks/src/app/app_theme.dart';
-import 'package:busybooks/src/app/busybooks_dialogs.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
+import 'package:busybooks/src/app/busybooks_dialogs.dart';
 import 'package:busybooks/src/app/busybooks_toast.dart';
+import 'package:busybooks/src/app/command_registry.dart';
 import 'package:busybooks/src/app/product_actions.dart';
 import 'package:busybooks/src/app/settings_screen.dart';
 import 'package:busybooks/src/app/system_accent.dart';
-import 'package:busybooks/src/library/data/library_store.dart';
+import 'package:busybooks/src/book_workspace/application/book_sidebar_controller.dart';
 import 'package:busybooks/src/library/application/collection_view_controller.dart';
+import 'package:busybooks/src/library/data/library_store.dart';
+import 'package:busybooks/src/library/domain/book.dart';
 import 'package:busybooks/src/library/presentation/collection_screen.dart';
+import 'package:busybooks/src/notebook/application/notebook_controller.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
 import 'package:busybooks/src/reading/presentation/reader_screen.dart';
 import 'package:busybooks/src/workspace/presentation/welcome_screen.dart';
@@ -28,6 +30,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+
 import '../support/annotation_store_gate.dart';
 
 class _Settings implements LocalSettingsStore {
@@ -513,16 +516,25 @@ void main() {
           tester,
           () => container.read(readerControllerProvider).ready,
         );
-        expect(find.byType(ReaderScreen), findsOneWidget);
+        expect(find.byType(ReadingContent), findsOneWidget);
         tester.platformDispatcher.textScaleFactorTestValue = 1.5;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('reader-sidebar-toggle')));
+        await tester.tap(find.byKey(const ValueKey('book-sidebar-toggle')));
         await tester.pumpAndSettle();
-        expect(container.read(readerControllerProvider).panelOpen, isTrue);
+        expect(
+          container
+              .read(
+                bookSidebarProvider(
+                  container.read(readerControllerProvider).bookId!,
+                ),
+              )
+              .open,
+          isTrue,
+        );
         expect(tester.takeException(), isNull);
-        // Application navigation moved from Reading's leading arrow to the menu.
-        await tester.tap(find.byTooltip('Main Menu'));
+        // Returning to the collection is a book-context operation.
+        await tester.tap(find.byTooltip('Book Actions'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Back to Collection'));
         await tester.pumpAndSettle();
@@ -614,7 +626,7 @@ void main() {
               '$calls; route visibility: ${(container.read(readerControllerProvider.notifier) as _UiReader).requestedVisibility}',
         );
         final oldBounds = bounds;
-        origin = tester.element(find.byType(ReaderScreen));
+        origin = tester.element(find.byType(ReadingContent));
         await _action(
           tester,
           () => openPaths(origin, origin as WidgetRef, paths: [book.path]),
@@ -717,7 +729,7 @@ void main() {
             () => container.read(readerControllerProvider).ready,
           );
           await tester.pumpAndSettle();
-          origin = tester.element(find.byType(ReaderScreen));
+          origin = tester.element(find.byType(ReadingContent));
           late Future<void> operation;
           await tester.runAsync(() async {
             operation = exportBook(
@@ -806,7 +818,9 @@ void main() {
         });
         await tester.pumpAndSettle();
         // This is the production confirmation dialog, not a test replacement.
-        await tester.tap(find.widgetWithText(BusyBooksDialogButton, 'Open'));
+        await tester.tap(
+          find.widgetWithText(BusyBooksDialogButton, 'Restore Backup'),
+        );
         await _until(tester, () => gated.entered.isCompleted);
         await tester.pumpAndSettle();
         expect(settingsContext.mounted, isFalse);

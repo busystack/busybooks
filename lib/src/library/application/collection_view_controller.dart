@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../domain/book.dart';
 
 class CollectionViewState {
@@ -9,8 +10,10 @@ class CollectionViewState {
     this.scrollOffset = 0,
     this.focusRequest = 0,
     this.sort = 'added',
+    this.sidebarOpen = false,
   });
   final String query, filter, sort;
+  final bool sidebarOpen;
   final String? selectedBook;
   final double scrollOffset;
   final int focusRequest;
@@ -30,9 +33,11 @@ class CollectionViewController extends Notifier<CollectionViewState> {
     String? selectedBook,
     double? scrollOffset,
     bool focus = false,
+    bool? sidebarOpen,
   }) {
     state = CollectionViewState(
       query: query ?? state.query,
+      sidebarOpen: sidebarOpen ?? state.sidebarOpen,
       filter: filter ?? state.filter,
       sort: sort ?? state.sort,
       selectedBook: selectedBook ?? state.selectedBook,
