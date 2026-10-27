@@ -317,6 +317,12 @@ class BookSearchController extends Notifier<BookSearchState> {
         return;
       }
       final reader = ref.read(readerControllerProvider.notifier);
+      if (next.bookId == state.bookId && next.error != null) {
+        if (state.unavailable != 'reader-error' || state.loading) {
+          _readerFailed(next.error!);
+        }
+        return;
+      }
       var request = _nativeRequest;
       if (_windowLoading &&
           request != null &&
@@ -744,6 +750,23 @@ class BookSearchController extends Notifier<BookSearchState> {
     _schedule();
   }
 
+  void _readerFailed(String message) {
+    _timer?.cancel();
+    _timer = null;
+    _nativeRequest = null;
+    _finishNative();
+    state = state.copy(
+      generation: state.generation + 1,
+      loading: false,
+      results: const [],
+      selected: -1,
+      hasMore: false,
+      clearOccurrences: true,
+      error: message,
+      unavailable: 'reader-error',
+    );
+  }
+
   void _finishNative() {
     final done = _nativeDone;
     _nativeDone = null;
@@ -1121,6 +1144,11 @@ class BookSearchController extends Notifier<BookSearchState> {
             loading: false,
             unavailable: 'book-text-unavailable',
           );
+          return;
+        }
+        final readerError = ref.read(readerControllerProvider).error;
+        if (reader.stateBookId == id && readerError != null) {
+          _readerFailed(readerError);
           return;
         }
         if (reader.stateBookId != id || !reader.canSearch) {

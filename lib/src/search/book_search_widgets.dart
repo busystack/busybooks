@@ -460,7 +460,8 @@ class BookSearchSidebar extends ConsumerWidget {
               actionLabel: l.retry,
               onAction: controller.retry,
             ),
-          if (state.unavailable != null &&
+          if (state.error == null &&
+              state.unavailable != null &&
               !needsReading &&
               state.unavailable != 'reader-loading')
             BusyBooksBanner(

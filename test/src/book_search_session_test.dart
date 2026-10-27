@@ -85,6 +85,15 @@ class _OccurrenceReader extends _Reader {
       state = state.copy(location: {'noText': value});
 }
 
+class _LoadingReader extends _OccurrenceReader {
+  @override
+  ReaderState build() => const ReaderState(bookId: _first);
+  @override
+  bool get canSearch => state.ready && state.error == null;
+  void fail() => state = state.copy(error: 'Renderer startup failed');
+  void ready() => state = const ReaderState(bookId: _first, ready: true);
+}
+
 class _SearchStore implements ReadingDataStore {
   final updates = StreamController<int>.broadcast(sync: true);
   final requests = <Map<String, dynamic>>[];
@@ -556,6 +565,42 @@ void main() {
       expect(f.state.results.single.identity, _first);
       expect(f.state.hasMore, true);
       expect(await f.search.submit(), false);
+    },
+  );
+  test(
+    'Book Text renderer loading failure stops progress and preserves query for retry',
+    () async {
+      final reader = _LoadingReader();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      addTearDown(f.close);
+      f.container.read(appRouterProvider).go('/read/$_first');
+      await f.search.open(
+        category: BookSearchCategory.bookText,
+        query: '  intended query  ',
+      );
+      expect(f.state.loading, true);
+      expect(reader.dispatched, isEmpty);
+      reader.fail();
+      expect(f.state.loading, false);
+      expect(f.state.error, isNotNull);
+      expect(f.state.unavailable, 'reader-error');
+      expect(f.state.query, '  intended query  ');
+      f.search.retry();
+      expect(await f.search.submit(), false);
+      expect(f.state.loading, false);
+      expect(f.state.error, isNotNull);
+      expect(reader.dispatched, isEmpty);
+      reader.ready();
+      expect(await f.search.submit(), true);
+      expect(reader.dispatched, ['  intended query  ']);
+      expect(f.state.error, isNull);
+      expect(f.state.unavailable, isNull);
     },
   );
 }
