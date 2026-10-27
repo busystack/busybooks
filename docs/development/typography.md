@@ -4,8 +4,8 @@ Reflowable EPUB 2/3 and FB2 use these same preferences, local-font controls and
 durable reflow/selection safeguards. FB2's deterministic prepared tree is shared
 by rendering, search and CFI resolution. Comics report no typography capability
 and retain artwork colors; their zoom/spread/direction defaults are separate from
-PDF defaults. See [format verification](format-verification.md) for the format
-matrix, cache-deletion/restart attachment checks and remaining platform gates.
+PDF defaults. See [readers.md](readers.md) for supported inputs and
+[development tools](../../tools/README.md) for cache-deletion/restart checks.
 
 Font preferences belong to the reading system. `FontChoice` and
 `TypographyCapabilities` in `lib/src/core/typography.dart` contain no format or
@@ -45,8 +45,7 @@ Linux uses private worker-owned PangoCairo font maps and
 PangoFc/Fontconfig validate the actual matched family and provide local family,
 full-face and PostScript identities. The array returned by enumeration is freed;
 font maps, contexts, fonts, layouts and Cairo resources have scoped ownership.
-The implementation uses APIs available since Pango 1.48 (the verified host has
-1.52.1). A private
+The implementation requires Pango 1.48 or newer. A private
 [Fontconfig substitution callback](https://docs.gtk.org/PangoFc/method.FontMap.set_default_substitute.html)
 passes literal family strings without Pango's comma-separated description syntax.
 It changes neither global Fontconfig configuration nor files. Closed channel
@@ -165,17 +164,16 @@ remain with their existing owners.
 
 The advanced local-family chooser is in Settings → Reading. Escape returns from
 the chooser to Font Family and disposes its bounded preview. The compact reading
-popover links to these settings and no longer contains a separate native font
-chooser or its former GTK/Windows Escape channel. This changes presentation only;
-font identity, preference ownership and renderer apply/cancellation stay unchanged.
+popover links to these settings; font identity, preference ownership and renderer
+apply/cancellation use the same shared model.
 
-## Reproduce and platform evidence
+## Development checks
 
 Use official Flutter 3.47.5 / bundled Dart 3.13.4 and the existing lockfile.
-No SDK, dependency or vendored-engine revision was changed. Relevant commands:
+Relevant commands:
 
 ```sh
-flutter pub get --offline --enforce-lockfile
+flutter pub get --enforce-lockfile
 flutter gen-l10n
 dart format --output=none --set-exit-if-changed lib test tools
 flutter analyze
@@ -198,9 +196,7 @@ chapter direction, rapid updates and publisher restoration. Fixed-layout and PDF
 passes reject replacement and check their page/text content. Deterministic Dart
 fixtures do not depend on a developer's installed collection.
 
-Current execution details and screenshots are recorded in
-[typography verification](typography-verification.md). Windows has a real native
-implementation and a separate stock-desktop backend probe:
+Windows has a native implementation and a separate stock-desktop backend probe:
 
 ```powershell
 flutter build windows --release

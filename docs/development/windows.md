@@ -1,87 +1,63 @@
-# Windows build and native acceptance
+# Windows development and packaging
 
-## Local qualification environment (2026-10-26)
+## Prerequisites
 
-The existing Windows 11 VM was resumed after the host was upgraded to official
-VirtualBox **7.2.22r175245** and `vboxdrv` was restored. The earlier missing-driver
-result is historical; it no longer describes the available environment.
+Build on an x64 Windows 10/11 desktop with official Flutter **3.47.5**, its
+bundled Dart **3.13.4** SDK and the checked-in dependency lockfile. Install
+Visual Studio 2022 or newer with **Desktop development with C++**, an x64 MSVC
+toolchain, Windows SDK, CMake and the C++ ATL component used by SAPI. See
+[Flutter's Windows setup guide](https://docs.flutter.dev/platform-integration/windows/setup)
+for workload installation and diagnostics; use BusyBooks' pinned Flutter version.
 
-VM `474b7e1c-3ee7-4260-9d28-f6ce97c6f8e3` runs Windows 11 Enterprise 24H2,
-**10.0.26100.2894 x64**, with Guest Additions **7.1.8r168469**, eight virtual CPUs,
-4 GiB RAM, an 80 GiB dynamic SATA VDI and VBoxSVGA/128 MiB VRAM, with 3D
-acceleration disabled. The existing unlocked console session, rather than a
-service desktop, hosts the tests. Functional acceptance in this VM does not
-qualify physical GPU/driver performance.
+Put Flutter, Git, CMake, Node.js and Python on PATH for the complete verification
+workflow. Confirm the Windows and Visual Studio toolchains with `flutter doctor
+-v`, and confirm a Windows desktop device with `flutter devices`. Native menu
+checks require an unlocked interactive desktop.
 
-Task-owned tools, source and a disposable application profile are under
-`C:\BusyBooksQualification`. Official unmodified Flutter **3.47.5**, Dart
-**3.13.4**, Visual Studio Build Tools 2022 **17.14.43**, MSVC **19.44.35229**,
-Windows SDK **10.0.26100.0**, CMake **3.31.6-msvc6**, Node **24.22.1**, Python
-**3.13.4** and MinGit **2.56.0.windows.3** were installed or verified. The C++
-workload includes ATL, required by the existing SAPI implementation. The existing
-WebView2 Evergreen runtime is **135.0.3179.98**; the project SDK remains pinned to
-**1.0.3537.50**. No dependency or SDK versions were changed.
+The build fetches Microsoft.Web.WebView2 SDK **1.0.3537.50** from NuGet. Running
+the application requires the Microsoft **Evergreen WebView2 Runtime** and
+**Visual C++ x64 runtime**. Keep the complete Release directory together,
+including SQLite, plugin DLLs and `busybooks_comic_archive.exe`. CMake builds
+the RAR-only helper from the local checksum-pinned UnRAR archive and installs
+its full license and acknowledgements under `share/licenses/unrar`. Reading
+requires no external decoder or runtime decoder download.
 
-`flutter doctor -v` recognizes the Windows desktop toolchain and connected
-Windows device. Missing Android SDK and Chrome are unrelated platform warnings;
-Windows development passes. Detailed commands, versions, source hashes and
-results are retained in
-[`evidence/windows-qualification-20261025`](../../evidence/windows-qualification-20261025/)
-and indexed by [professional-workspace-results.json](professional-workspace-results.json).
+## Native runner
 
-Automation uses an official VirtualBox transient shared folder and physical
-console keyboard/mouse input, plus a PowerShell request queue running in the
-existing interactive session. MSAA inspects Flutter's actual Windows accessible
-nodes; UI Automation inspects Windows Settings and native file dialogs. Native
-menus are real Win32 popups, and publications render in the actual WebView2
-child surface. No passwords, authentication bypass, insecure remote service,
-execution-policy change or framework patch is involved. Preserve the original
-saved VM state, network/display configuration and personal session on completion.
-This run returned the VM to **Saved**, restored bridged `eno2`, 1024×768 and
-100% DPI, and removed its task share and consoles. The existing user session and
-original share remain intact; official tools remain in the isolated task directory.
+The runner extends Flutter's Windows template with a WebView2 child HWND, SAPI
+speech, DWM appearance, file-drop handling and per-profile single-instance
+file-open delivery. Flutter owns the titlebar and common BusyStack controls.
+Direct paths and drops use the shared opening workflow. Collections use IDs in
+`reading-data.sqlite`; directories are unsupported opening targets. Reading
+state uses content SHA-256 independently of collection membership.
 
-## Required build environment
-
-Use an actual x64 Windows 10/11 desktop, Visual Studio 2022 or newer with Desktop
-Development with C++, and official Flutter 3.47.5 stable. The runner extends the
-official Flutter template with a WebView2 child content surface, SAPI speech,
-DWM appearance, file-drop and per-profile single-instance file-open delivery.
-Flutter owns the single titlebar and common BusyStack controls.
-
-Direct book paths and drops reach the same opening workflow as Linux. Collections
-use IDs in reading-data.sqlite; directories are unsupported opening targets.
-Reading state uses full content fingerprints, independently of membership.
 Native readers receive explicit original/cache paths and a session identifier.
-Move Book releases the active native reader before moving a selected physical
-file. Same-volume no-clobber MoveFileExW omits COPY_ALLOWED. Cross-volume copying
-uses the worker's verified staging/journal path, then guarded source removal.
-Windows execution, locked-file behavior and package acceptance require a real
-Windows host; Linux tests do not validate Win32 or WebView2 behavior.
+Move Book releases the reader before moving the selected physical file.
+Same-volume no-clobber `MoveFileExW` omits `COPY_ALLOWED`; cross-volume moves use
+verified staging, a durable journal and guarded source removal. The decoder
+uses wide paths, a memory-limited Job Object and bounded streaming callbacks.
 
-The reading workspace now owns a reusable transient FlutterViewController above
-WebView2 for selection, inline notes, appearance, Go To and voice controls. It
-starts the same packaged official Flutter bundle through a restricted popover
-entry, before profile/window bootstrap. Main menus use a Win32 host with the
-existing BusyMark menu/session contract. Both paths keep the publication visible;
-main-route dialogs still hide it. No extra engine distribution, framework or
-Fluent styling is introduced. Both native source files are explicit runner
-build inputs. Compilation, actual transient popover placement at 100%, 150% and 200% display
-scaling, and tested focus-return paths are covered by the retained Windows
-qualification. Actual minimize/restore also passes on the final release. Other
-matrix items retain their individual evidence boundaries.
+A reusable transient `FlutterViewController` above WebView2 presents selection,
+inline notes, appearance, Go To and voice controls. It starts the same packaged
+Flutter bundle through the restricted popover entry before profile/window
+bootstrap. Main menus use the Win32 host and shared menu/session contract.
+Popovers and native menus keep the publication visible; main-route dialogs hide
+it. Channel readiness, first-frame readiness and a Flutter paint acknowledgement
+precede presentation/focus. See [workspace architecture](reading-workspace.md).
+
+The application bootstrap distinguishes the trusted browser ResizeObserver
+notification from script/import/rejection failures. Resize notifications remain
+session-scoped diagnostics; actual exceptions and authored lookalikes remain
+fatal. This boundary belongs to BusyBooks' bootstrap, with no browser/SDK patch.
+
+Both Flutter engines register the local-font channel. A joined worker uses
+DirectWrite's local-only collection and canonical/localized family and face
+identities. Samples use DirectWrite/Direct2D/WIC; WebView2 receives private local
+FontFace aliases. See [typography.md](typography.md).
 
 ## Build and run
 
-The build fetches Microsoft.Web.WebView2 SDK 1.0.3537.50 from NuGet. Install the
-Microsoft Evergreen WebView2 Runtime and Microsoft Visual C++ x64 runtime. Keep
-the complete Release directory together, including SQLite, plugin DLLs and
-`busybooks_comic_archive.exe`. CMake builds the RAR-only helper from the local
-checksum-pinned UnRAR source archive and installs its full license and
-acknowledgements under `share/licenses/unrar`. No external decoder installation
-or runtime download is required. The Win32 helper uses wide paths, a memory-limited
-Job Object and the same bounded streaming callbacks as Linux; execution on a real
-Windows host is covered by the Windows qualification probes and actual CBR rendering.
+Run these commands from the repository root:
 
 ```powershell
 flutter pub get --enforce-lockfile
@@ -94,99 +70,93 @@ dart run tools/storage_probe.dart
 dart run tools/cache_probe.dart
 dart run tools/annotation_order_probe.dart
 flutter build windows --release
-$env:BUSYBOOKS_PROFILE=Join-Path $env:TEMP ("busybooks-acceptance-" + [guid]::NewGuid())
-build\windows\x64\runner\Release\busybooks.exe test\fixtures\reflowable.epub
+$env:BUSYBOOKS_COMIC_DECODER = Join-Path $PWD 'build\windows\x64\runner\Release\busybooks_comic_archive.exe'
+python tools/qualify_rar.py $env:BUSYBOOKS_COMIC_DECODER
+dart run tools/format_probe.dart
+dart run tools/format_resources_probe.dart
+$env:BUSYBOOKS_PROFILE = Join-Path $env:TEMP ("busybooks-acceptance-" + [guid]::NewGuid())
+& .\build\windows\x64\runner\Release\busybooks.exe test\fixtures\reflowable.epub
 ```
 
-Run without an argument for Home. Create a collection using its action and
-open saved collections through Open Collection. Open PDF, EPUB 2/3, raw/wrapped
-FB2, CBZ and CBR through every file entry point. `.kepub.epub` follows EPUB;
-standalone `.kepub`, generic ZIP and generic RAR are not registered book formats.
-Test originals from two different directories and both internal/external
-references. For an offline distribution, supply the Microsoft-signed x64 runtime
-installers:
+Run without an argument for Home. Omit `BUSYBOOKS_PROFILE` for the normal
+application-support directory; use a disposable absolute profile and copied
+fixtures for acceptance. Open saved collections through Open Collection.
+
+PDF, EPUB 2/3, raw/wrapped FB2, CBZ and CBR should be exercised through the file
+chooser, drops and command-line forwarding. `.kepub.epub` follows EPUB;
+standalone `.kepub`, generic ZIP and generic RAR are not registered formats.
+Use originals from different directories and test missing/changed originals,
+Move/Locate, exact original export, backup/restore and offline operation.
+
+## Reproducible qualification
+
+Run [qualify_windows.ps1](../../tools/qualify_windows.ps1) in an unlocked desktop.
+The SDK path is the root of your official Flutter installation. The source path
+is your checkout, and the evidence path is a writable output directory:
 
 ```powershell
-./tools/package_windows.ps1 -WebViewRuntimeInstaller C:\path\webview.exe -VisualCppRuntimeInstaller C:\path\VC_redist.x64.exe
-iscc packaging/windows/busybooks.iss
-```
-
-The optional per-user Inno installer runs both installers before launch. Portable
-ZIP users install the runtimes first. File-association tasks are optional. Test
-only in disposable profiles/VMs; repository builds do not replace installations.
-Associations cover `.epub`, `.pdf`, `.fb2`, `.fbz`, `.cbz` and `.cbr`. Windows
-matches the final extension, so `.fb2.zip` uses Open Book, drops or command-line
-opening; BusyBooks does not claim generic `.zip` or `.rar` associations.
-
-## Reproducible qualification and evidence boundary
-
-Run the checked-in workflow in an unlocked Windows desktop with the installed
-pinned SDK and required tools on PATH:
-
-```powershell
+$flutterSdk = Split-Path -Parent (Split-Path -Parent (Get-Command flutter).Source)
 & ./tools/qualify_windows.ps1 `
-  -FlutterSdk C:\BusyBooksQualification\sdk\flutter `
-  -SourceDirectory C:\BusyBooksQualification\busybooks `
-  -EvidenceDirectory C:\BusyBooksQualification\evidence `
+  -FlutterSdk $flutterSdk `
+  -SourceDirectory $PWD.Path `
+  -EvidenceDirectory (Join-Path $PWD 'evidence\windows-qualification') `
   -SourceRevision (git rev-parse HEAD)
 ```
 
-The script enforces the official Flutter framework revision, resolves the
-existing lockfile, generates localizations, checks formatting/analysis, runs the
-complete Flutter suite, storage/cache/order and JavaScript probes, builds the
-Windows release and exercises the shipped comic decoder, format/resource
-validation, DirectWrite font probe and actual Win32 menu probe. It records each
-command, exit status, log hash and release-file hash. Keep the interactive desktop
-available for the menu probe. A portable C++ test alone does not qualify Win32.
+The script enforces the pinned official framework revision and bundled Dart,
+resolves the lockfile, generates localizations, checks formatting/analysis, runs
+Flutter tests and storage/cache/order/JavaScript probes, builds the release and
+checks the shipped decoder, formats/resources, DirectWrite fonts and Win32 menus.
+It writes command logs, statuses, log hashes, release-file hashes and
+`automated-results.json` to the supplied evidence directory, and verifies that
+`pubspec.lock` is unchanged. Keep generated output outside maintained docs.
 
-The application-owned bootstrap distinguishes the trusted browser ResizeObserver
-notification from actual script/import/rejection failures. WebView2's current
-URL attribution is covered by a captured native event and regression; notifications
-remain in session-scoped diagnostic logs and do not falsely close the book on a
-DPI change. Actual exceptions and authored lookalike events remain fatal. No
-browser, vendor reader or SDK patch is involved.
+The native menu probe compiles production `native_menu_host.cpp` with the
+Flutter message codec and exercises actual `TrackPopupMenuEx`, keyboard/pointer
+input, disabled/radio entries, selection validation, session cancellation,
+dismissal, unavailable-host errors and focus return. The font probe uses stock
+Arial and Times New Roman. These can also be run individually after the app build:
 
-The menu probe uses the production `native_menu_host.cpp`, actual
-`TrackPopupMenuEx`, physical pointer/keyboard input and the official Flutter
-message codec. It checks disabled radio entries, enabled selection, rejection
-of conflicting selections, preserved menu indices/session cancellation,
-repeated dismissal, unavailable-host errors and owner-focus return. Controlled
-Flutter fallback tests remain identified separately from native execution.
+```powershell
+cmake -S tools/native_font_probe -B build/native-font-probe
+cmake --build build/native-font-probe --config Release
+./build/native-font-probe/Release/busybooks_native_font_probe.exe
+cmake -S tools/native_menu_probe -B build/native-menu-probe
+cmake --build build/native-menu-probe --config Release
+./build/native-menu-probe/Release/busybooks_native_menu_probe.exe
+./build/native-menu-probe/Release/busybooks_menu_selection_test.exe
+```
 
-Native acceptance uses disposable book copies and a disposable SQLite profile.
-Selected screenshots, MSAA trees, native child visibility/focus, saved-note
-hashes, normal-exit process handles and before/after storage checks establish the
-executed scope. Maximum-length multiline notes, a real SQLite-lock failure and
-Retry, native backup/restore dialogs and a missing CBR original are included.
-The full current disposition and tested revisions are recorded in
-[professional-workspace-verification.md](professional-workspace-verification.md).
-Exploratory screenshots, failed test-driver assumptions and earlier builds are
-retained with their actual scope; filenames alone are not passing evidence.
+Automated probes do not establish all GUI behavior. Actual Windows acceptance
+also checks WebView2 rendering/selection/footnotes, native popover placement and
+focus, minimize/restore, 100%/150%/200% display scaling, page/region notes after
+cache deletion/restart, native failed-save/Retry and backup/restore dialogs.
+Linux, Chromium and controlled Flutter results do not establish Win32/WebView2
+behavior. Physical GPU/driver performance, complex IME composition, audible voice
+quality and a full screen-reader audit need their own checks.
 
-The prior GitHub run
-[39312939311](https://github.com/albert-gee/busybooks/actions/runs/39312939311/job/118266965365)
-and the earlier missing-host-driver attempt are historical results, not current
-Windows qualification. No CI push, public release or binary publication was
-performed.
+## Packaging and installation
 
-Packaging/installer registration, file associations, physical GPU compatibility,
-complex IME composition, audible voice quality and a full screen-reader audit
-require their own explicit results. The local release executable and native
-workflows do not imply those broader qualifications. See
-[format-verification.md](format-verification.md) for the larger format matrix.
+Supply official Microsoft-signed x64 offline runtime installers. The packaging
+script validates both signatures, performs a clean pinned build/test cycle and
+stages the whole release with root licenses and this guide:
 
-## Local typography implementation
+```powershell
+./tools/package_windows.ps1 `
+  -WebViewRuntimeInstaller 'C:\path\to\MicrosoftEdgeWebView2RuntimeInstallerX64.exe' `
+  -VisualCppRuntimeInstaller 'C:\path\to\VC_redist.x64.exe'
+iscc packaging/windows/busybooks.iss
+```
 
-The main and transient Flutter engines register the same application-owned font
-channel. A joined worker uses DirectWrite's local-only system collection,
-canonical/localized family names and full/PostScript face identities. Native
-samples use DirectWrite/Direct2D/WIC; WebView2 receives private local FontFace
-aliases. No font downloads, filesystem font endpoint or interface-font change is
-introduced. See [typography.md](typography.md) and its verification record.
+Replace the installer paths with your downloads. The portable ZIP and SHA-256
+sidecar are under `build/distributions/`; portable users install the runtimes
+before launch. The optional per-user Inno Setup installer runs both runtime
+installers before launch and requires Inno Setup's `iscc` command. File-association
+tasks are optional and cover `.epub`, `.pdf`, `.fb2`, `.fbz`, `.cbz` and `.cbr`.
+Windows matches the final extension, so `.fb2.zip` uses Open Book, drops or the
+command line; BusyBooks does not claim generic `.zip` or `.rar` associations.
 
-The Windows CI also builds/runs `tools/native_font_probe` against stock Arial and
-Times New Roman. Run its CMake commands from typography.md on a Windows desktop.
-The Windows qualification executes this native probe against stock Arial and
-Times New Roman. The local font channel is not substituted by a Linux result.
-A full assistive-technology audit and physical-display font rendering remain
-separate qualification scopes.
+Validate the installed package, helper/licenses, runtime installation, file
+associations and offline startup in a disposable environment. Building a release
+executable does not establish installer acceptance. See
+[known issues and qualification limits](known-issues.md).

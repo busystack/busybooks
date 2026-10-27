@@ -41,7 +41,6 @@ dart format --output=none --set-exit-if-changed lib test tools
 flutter analyze
 flutter test
 dart run tools/storage_probe.dart
-dart run tools/move_volume_probe.dart /tmp /mnt/Media/busystack
 dart run tools/cache_probe.dart
 dart run tools/annotation_order_probe.dart
 node tools/reader_logic_probe.mjs
@@ -61,14 +60,18 @@ in [windows.md](docs/development/windows.md). Linux package inputs are
 `tools/package_linux.sh` and `snap/snapcraft.yaml`; neither installs or publishes
 an application. Native smoke checks use `tools/probe_linux_engines.sh`.
 
-IDE builds need a persistent package cache. After verification with a temporary
-`PUB_CACHE`, regenerate the project's package configuration with the developer's
-normal pinned SDK and cache before handing the workspace back. For the default
-cache on Linux:
+The cross-volume move probe requires two writable directories on different
+filesystems. It creates disposable files within them; choose locations suitable
+for testing (for example, `/tmp` and `/dev/shm` when they are separate mounts):
 
 ```sh
-env -u PUB_CACHE flutter pub get --offline --enforce-lockfile
+dart run tools/move_volume_probe.dart /path/on/first/filesystem /path/on/second/filesystem
 ```
+
+See [development tools](tools/README.md) for native checks, fixture generation
+and optional memory/performance probes. Keep local execution evidence in
+`evidence/`, generated test output in `test-results/`, and automated logs in CI
+artifacts. Selected release qualification records can accompany a release.
 
 Current data lives in `reading-data.sqlite`; backups contain reading data and
 references, excluding original books. Historical `library.sqlite` files and
@@ -76,14 +79,13 @@ managed book copies are left untouched and are not inspected. They have no
 effect on startup or the interface. Schema migrations apply only to the current
 reading-data database. See [storage.md](docs/development/storage.md).
 
-## Project notes
+## Development documentation
 
 - [BusyMark revision and reuse map](docs/development/reference.md)
 - [Reading workspace controls and native popovers](docs/development/reading-workspace.md)
-- [Professional workspace verification and release gates](docs/development/professional-workspace-verification.md)
 - [Shared typography and local fonts](docs/development/typography.md)
 - [Reader engines and content boundary](docs/development/readers.md)
-- [Format profiles, limits and executed verification](docs/development/format-verification.md)
-- [Format review corrections and regression evidence](docs/development/format-review-verification.md)
 - [Books, database collections, backup and recovery](docs/development/storage.md)
+- [Windows development and packaging](docs/development/windows.md)
+- [Known issues and qualification limits](docs/development/known-issues.md)
 - [Third-party sources](NOTICE) and licenses under `assets/reader/vendor` and `native/vendor`

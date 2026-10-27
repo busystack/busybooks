@@ -135,7 +135,7 @@ Outline and Go To. No EPUB page-preview capability is advertised.
 Marks uses publication order and typed All types/Highlights/Bookmarks/Region Notes
 filters plus Has Notes. Rows distinguish type, passage, effective private-note
 preview, location and selection. Edit Note opens Notebook, reveals that identity
-and focuses its editor; the duplicate Open in Notebook action is removed.
+and focuses its editor.
 Color updates preserve the same record contract. Marks and Notebook call one
 confirmation action inside the existing per-annotation deletion coordination.
 Cancellation/failure retains drafts and in-flight save protections.
@@ -192,8 +192,8 @@ offstage navigation; Close Search uses the same placement. Positioning reads
 layout constraints rather than another render object's size during overlay layout.
 Book-header controls inherit beside-trigger placement within the shared header,
 so their hints remain above native content even with the sidebar closed.
-Native theme/icon and overlay evidence is recorded in
-[professional-workspace-verification.md](professional-workspace-verification.md).
+Native theme/icon and overlay checks use the
+[workspace driver](../../tools/README.md#linux-workspace-and-shutdown-diagnostics).
 
 Windows' native view-mode entries receive bounded alpha masks rasterized from
 the existing Yaru glyphs at the current display scale (16–64 pixels). The Win32
@@ -244,8 +244,8 @@ old presentation. A never-ready timed-out engine can be recreated on retry;
 engines that may contain accepted input remain available for protected capture.
 Go To waits for a correlated renderer navigation result before closing; failed or
 cancelled page work keeps the form available. Controlled tests exercise the
-channel/paint protocol; native GTK/WebView2 acceptance is reported separately from those tests in the
-verification record.
+channel/paint protocol; actual GTK/WebView2 placement and focus require native
+acceptance as described in [development tools](../../tools/README.md).
 
 Reading retains Foliate.js, PDF.js, the labeled sidebar,
 search, appearance, selection controls, dictionary and narration. Changing views
@@ -394,8 +394,8 @@ before creating the pinned Flutter engine and before explicit realization; this
 avoids the reproduced blank compositor surface without changing the SDK or host.
 A hide notification preceding failed presentation still preserves primary Retry
 feedback. [The selection/lookup contract](readers.md#selection-search-and-online-lookup)
-and [workspace verification](professional-workspace-verification.md) distinguish
-controlled checks from actual native execution and remaining acceptance gates.
+and [known issues](known-issues.md) describe service limits and remaining
+qualification boundaries. Controlled checks do not establish native acceptance.
 
 ## Local font selection
 
@@ -403,8 +403,8 @@ Settings → Reading owns the advanced searchable local-family chooser and bound
 native sample. The compact native reading popover presents only theme, size,
 spacing, width/margins and publisher style, or applicable fit/zoom/rotation/spread
 controls for fixed layouts. More Reading Settings opens the current-book scope
-explicitly; global defaults remain separately selected. The obsolete popover
-font-chooser channel and Escape branch are removed. Candidate movement never saves or repaginates; explicit activation
+explicitly; global defaults remain separately selected. Candidate movement never
+saves or repaginates; explicit activation
 uses the existing book/default writer. Publisher mode retains the custom choice;
 unavailable choices retain their identity and show a local fallback explanation.
 Renderer-supplied typography capabilities gate the controls and application path.
@@ -463,5 +463,5 @@ still own their combination and retain the existing text-editing safeguards.
 
 GTK window destruction releases the native reader/popover, chrome hosts and
 channels before GTK disposes the main Flutter view and overlay. Application
-disposal is an idempotent fallback. Deferring reader ownership until application
-disposal caused a reproduced invalid signal-disconnect during normal shutdown.
+disposal is an idempotent fallback. See [known issues](known-issues.md) for the
+separate intermittent Linux compositor shutdown abort.

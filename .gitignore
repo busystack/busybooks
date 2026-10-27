@@ -38,6 +38,11 @@ migrate_working_dir/
 /test-results/
 /evidence/
 /docs/development/evidence/
+# Execution results belong in evidence/, test-results/ or CI artifacts.
+/docs/development/*-results.json
+/docs/development/*-verification.json
+/docs/development/format-review-corrections.json
+/docs/development/performance.json
 .widget_preview/
 **/node_modules/
 linux/flutter/ephemeral/

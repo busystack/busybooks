@@ -226,7 +226,7 @@
     "native/vendor/unrar/license.txt": "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a",
     "native/vendor/unrar/unrarsrc-7.2.6.tar.gz": "d1afa67ef4121ebc5986815699e05db0ce8648499e5dca854f282a4c3f72c003",
     "native/vendor/unrar/acknow.txt": "6aa07945033641cc693aa4a2ab3404c68c1e39acc0c672293aad4d4c290102fc",
-    "native/vendor/unrar/README.md": "6ae53c2a8e39a3d13ed4b6c9966499ce014421f79c53ca3f162bb109c732c6c5"
+    "native/vendor/unrar/README.md": "4b97fa1ab27fd9a55ecb69e4d0aeb38c5e5af9d5e8d61bc90c8c23fab944ef72"
   },
   "unrarVersion": "7.21",
   "unrarSource": "https://www.rarlab.com/rar/unrarsrc-7.2.6.tar.gz",
