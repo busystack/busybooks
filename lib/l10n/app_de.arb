@@ -417,5 +417,43 @@
     }
   },
   "searchMoreAvailable": "Weitere Ergebnisse sind verfügbar.",
-  "searchEarlierResults": "Frühere Ergebnisse liegen außerhalb dieses Bereichs. Erneut suchen, um zum Anfang zurückzukehren."
+  "searchEarlierResults": "Frühere Ergebnisse liegen außerhalb dieses Bereichs. Erneut suchen, um zum Anfang zurückzukehren.",
+  "split": "Geteilte Ansicht",
+  "resizeSplitPanes": "Bereiche für Lesen und Notizbuch anpassen",
+  "splitPaneRatio": "Lesen {reading} %, Notizbuch {notebook} %",
+  "resizeSplitPanesHelp": "Mit Pfeil nach links und rechts die Bereiche anpassen.",
+  "@splitPaneRatio": {
+    "placeholders": {
+      "reading": {
+        "type": "int"
+      },
+      "notebook": {
+        "type": "int"
+      }
+    }
+  },
+  "splitMinimumWidth": "Benötigt {width} px Inhaltsbreite.",
+  "splitCollapsed": "Die geteilte Ansicht zeigt wegen des begrenzten Platzes vorübergehend {pane}.",
+  "showSplitPane": "{pane} anzeigen",
+  "@splitMinimumWidth": {
+    "placeholders": {
+      "width": {
+        "type": "int"
+      }
+    }
+  },
+  "@splitCollapsed": {
+    "placeholders": {
+      "pane": {
+        "type": "String"
+      }
+    }
+  },
+  "@showSplitPane": {
+    "placeholders": {
+      "pane": {
+        "type": "String"
+      }
+    }
+  }
 }

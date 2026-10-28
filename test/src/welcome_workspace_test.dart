@@ -13,7 +13,7 @@ import 'package:busybooks/src/app/system_accent.dart';
 import 'package:busybooks/src/book_workspace/presentation/book_workspace_screen.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/domain/book.dart';
-import 'package:busybooks/src/notebook/presentation/book_view_selector.dart';
+import 'package:busybooks/src/book_workspace/application/book_presentation.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
 import 'package:busybooks/src/workspace/presentation/welcome_screen.dart';
 import 'package:busybooks/src/workspace/workspace_controller.dart';
@@ -621,6 +621,69 @@ void main() {
       expect(
         container.read(readerControllerProvider).bookId,
         'b'.padRight(64, 'b'),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
+  testWidgets(
+    'queued file opens reject an unrelated excursion after an owned predecessor',
+    (tester) async {
+      final model = _NavigationState();
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(readerChannel, (_) async => null);
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(readerChannel, null),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            workspaceControllerProvider.overrideWith(() => model),
+            readerControllerProvider.overrideWith(_NavigationReader.new),
+            startupAppSettingsProvider.overrideWithValue(
+              StartupAppSettings(AppSettings(), _SettingsStore()),
+            ),
+          ],
+          child: Consumer(
+            builder: (context, ref, _) => MaterialApp.router(
+              theme: buildBusyBooksTheme(
+                brightness: Brightness.light,
+                accentColor: busyBooksDefaultAccentColor,
+              ),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              routerConfig: ref.watch(appRouterProvider),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final origin = tester.element(find.byType(WelcomeScreen));
+      final originRef = origin as WidgetRef;
+      final container = ProviderScope.containerOf(origin, listen: false);
+      final router = container.read(appRouterProvider);
+      final a = openPaths(origin, originRef, paths: ['/fixtures/a.epub']);
+      final b = openPaths(origin, originRef, paths: ['/fixtures/b.epub']);
+      model.first.complete();
+      await tester.pumpAndSettle();
+      final firstRoute = '/read/${'a'.padRight(64, 'a')}';
+      expect(router.routeInformationProvider.value.uri.path, firstRoute);
+      expect(origin.mounted, isFalse);
+
+      router.go('/workspace');
+      router.go(firstRoute);
+      model.second.complete();
+      await tester.pumpAndSettle();
+      await Future.wait([a, b]);
+      expect(router.routeInformationProvider.value.uri.path, firstRoute);
+      expect(
+        container.read(workspaceControllerProvider).workspace!.path,
+        '/fixtures/a.epub',
+      );
+      expect(
+        container.read(readerControllerProvider).bookId,
+        'a'.padRight(64, 'a'),
       );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();

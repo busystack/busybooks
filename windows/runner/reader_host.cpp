@@ -83,18 +83,29 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       popover_->Hide();
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;if(!map){result->Error("reader-bounds","Invalid bounds");return;}double dpi=GetDpiForWindow(parent_)/96.0;
       bounds_={static_cast<LONG>(number(*map,"x")*dpi),static_cast<LONG>(number(*map,"y")*dpi),static_cast<LONG>((number(*map,"x")+number(*map,"width"))*dpi),static_cast<LONG>((number(*map,"y")+number(*map,"height"))*dpi)};if(controller_)controller_->put_Bounds(bounds_);
+    }else if(name=="hasFocus"){
+      const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
+      const auto* value=map?field(*map,"session"):nullptr;
+      const auto* session=value?std::get_if<std::string>(value):nullptr;
+      if(!session){result->Error("reader-focus","Missing focus owner");return;}
+      HWND owner=GetAncestor(parent_,GA_ROOT);
+      result->Success(EncodableValue(*session==session_&&controller_&&visible_&&focused_&&!popover_->IsRequested()&&!IsIconic(owner)&&GetForegroundWindow()==owner));return;
     }else if(name=="focusChrome"){
       const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       const auto* value=map?field(*map,"session"):nullptr;
       const auto* session=value?std::get_if<std::string>(value):nullptr;
       if(!session){result->Error("reader-focus","Missing focus owner");return;}
       HWND owner=GetAncestor(parent_,GA_ROOT);
-      if(*session==session_&&!popover_->IsRequested()&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner)SetFocus(parent_);
+      if(*session==session_&&!popover_->IsRequested()&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner){focused_=false;SetFocus(parent_);}
     }else if(name=="focus"){
+      const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
+      const auto* value=map?field(*map,"session"):nullptr;
+      const auto* session=value?std::get_if<std::string>(value):nullptr;
+      if(!session){result->Error("reader-focus","Missing focus owner");return;}
       HWND owner=GetAncestor(parent_,GA_ROOT);
-      if(controller_&&visible_&&!IsIconic(owner)&&GetForegroundWindow()==owner)controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+      if(*session==session_&&controller_&&visible_&&!popover_->IsRequested()&&!IsIconic(owner)&&GetForegroundWindow()==owner)controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
     }else if(name=="visible"){
-      auto value=call.arguments()?std::get_if<bool>(call.arguments()):nullptr;visible_=value&&*value;if(!visible_)popover_->Hide();if(controller_)controller_->put_IsVisible(visible_);
+      auto value=call.arguments()?std::get_if<bool>(call.arguments()):nullptr;visible_=value&&*value;if(!visible_){focused_=false;popover_->Hide();}if(controller_)controller_->put_IsVisible(visible_);
       // A hidden publication must not retain keyboard ownership in Notebook.
       HWND owner=GetAncestor(parent_,GA_ROOT);
       if(!visible_&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner)SetFocus(parent_);
@@ -108,7 +119,7 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       // A completed close must release WebView2 response/file-stream handles
       // before an explicit Move Book starts. Navigating to blank is asynchronous.
       ++initialization_generation_;initializing_=false;
-      navigation_uri_=L"about:blank";navigation_id_=0;session_.clear();visible_=false;
+      navigation_uri_=L"about:blank";navigation_id_=0;session_.clear();visible_=false;focused_=false;
       if(web_)web_->Stop();
       if(controller_)controller_->Close();
       web_.Reset();controller_.Reset();environment_.Reset();
@@ -154,6 +165,8 @@ void ReaderHost::Initialize(){
       controller_->get_CoreWebView2(&web_);controller_->put_Bounds(bounds_);controller_->put_IsVisible(visible_);
       Microsoft::WRL::ComPtr<ICoreWebView2Settings> settings;web_->get_Settings(&settings);settings->put_AreDevToolsEnabled(FALSE);settings->put_AreDefaultContextMenusEnabled(FALSE);settings->put_IsStatusBarEnabled(FALSE);
       EventRegistrationToken token;
+      controller_->add_GotFocus(Callback<ICoreWebView2FocusChangedEventHandler>([this,alive=alive_,generation](ICoreWebView2Controller*,IUnknown*)->HRESULT{if(*alive&&generation==initialization_generation_)focused_=true;return S_OK;}).Get(),&token);
+      controller_->add_LostFocus(Callback<ICoreWebView2FocusChangedEventHandler>([this,alive=alive_,generation](ICoreWebView2Controller*,IUnknown*)->HRESULT{if(*alive&&generation==initialization_generation_)focused_=false;return S_OK;}).Get(),&token);
       web_->add_WebMessageReceived(Callback<ICoreWebView2WebMessageReceivedEventHandler>([this,alive=alive_,generation](ICoreWebView2*,ICoreWebView2WebMessageReceivedEventArgs* args)->HRESULT{if(!*alive||generation!=initialization_generation_)return S_OK;wchar_t* value=nullptr;if(SUCCEEDED(args->TryGetWebMessageAsString(&value))){Event(utf8(value));CoTaskMemFree(value);}return S_OK;}).Get(),&token);
       web_->AddWebResourceRequestedFilter(L"*",COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
       web_->add_WebResourceRequested(Callback<ICoreWebView2WebResourceRequestedEventHandler>([this,alive=alive_,generation](ICoreWebView2*,ICoreWebView2WebResourceRequestedEventArgs* args)->HRESULT{

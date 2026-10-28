@@ -1,6 +1,7 @@
 #include "reader_popover.h"
 #include "../../native/reader_action_limits.h"
 #include "../../native/reader_popover_events.h"
+#include "../../native/reader_popover_geometry.h"
 #include <flutter/dart_project.h>
 #include <flutter/standard_method_codec.h>
 #include <algorithm>
@@ -70,6 +71,17 @@ void ReaderPopover::Show(const EncodableValue& data, std::unique_ptr<flutter::Me
   if (!map) { result->Error("popover-payload", "Invalid reader controls"); return; }
   HWND owner=GetAncestor(anchor_,GA_ROOT),foreground=GetForegroundWindow();
   if(IsIconic(owner)||(foreground!=owner&&foreground!=window_)){result->Error("popover-cancelled", "Reader window is inactive");return;}
+  auto number = [map](const char* name, double fallback) {
+    auto it = map->find(EncodableValue(name));
+    if (it == map->end()) return fallback;
+    double n = fallback;
+    if (auto v = std::get_if<double>(&it->second)) n = *v;
+    if (auto v = std::get_if<int32_t>(&it->second)) n = static_cast<double>(*v);
+    return std::isfinite(n) ? n : fallback;
+  };
+  const ReaderPopoverRect pane{number("viewportX", 0), number("viewportY", 0),
+      number("viewportWidth", 0), number("viewportHeight", 0)};
+  if (!ValidReaderPopoverRect(pane)) { result->Error("popover-payload", "Invalid reader pane"); return; }
   Hide();
   if (restart_) {
     if (channel_) channel_->SetMethodCallHandler(nullptr);
@@ -80,24 +92,29 @@ void ReaderPopover::Show(const EncodableValue& data, std::unique_ptr<flutter::Me
   data_ = data;
   pending_ = std::move(result); requested_ = true;
   if (!EnsureView()) { Complete("popover-unavailable"); requested_ = false; return; }
-  auto number = [map](const char* name, double fallback) {
-    auto it = map->find(EncodableValue(name));
-    if (it == map->end()) return fallback;
-    if (auto v = std::get_if<double>(&it->second)) return *v;
-    if (auto v = std::get_if<int32_t>(&it->second)) return static_cast<double>(*v);
-    return fallback;
-  };
   const double scale = GetDpiForWindow(anchor_) / 96.0;
-  POINT point{static_cast<LONG>(number("x", 0) * scale), static_cast<LONG>((number("y", 0) + number("anchorHeight", 1)) * scale)};
+  POINT point{static_cast<LONG>(number("x", 0) * scale), static_cast<LONG>(number("y", 0) * scale)};
   ClientToScreen(anchor_, &point);
   MONITORINFO monitor{sizeof(MONITORINFO)};
   GetMonitorInfoW(MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST), &monitor);
-  int width = std::min(static_cast<int>(number("width", 460) * scale), static_cast<int>(monitor.rcWork.right - monitor.rcWork.left));
-  int height = std::min(static_cast<int>(number("height", 360) * scale), static_cast<int>(monitor.rcWork.bottom - monitor.rcWork.top));
-  point.x = std::clamp(point.x, monitor.rcWork.left, monitor.rcWork.right - width);
-  point.y = std::clamp(point.y, monitor.rcWork.top, monitor.rcWork.bottom - height);
+  POINT pane_top{static_cast<LONG>(pane.x * scale), static_cast<LONG>(pane.y * scale)};
+  POINT pane_bottom{static_cast<LONG>((pane.x + pane.width) * scale), static_cast<LONG>((pane.y + pane.height) * scale)};
+  ClientToScreen(anchor_, &pane_top); ClientToScreen(anchor_, &pane_bottom);
+  const RECT pane_screen{pane_top.x, pane_top.y, pane_bottom.x, pane_bottom.y};
+  if (!IntersectRect(&placement_bounds_, &pane_screen, &monitor.rcWork)) {
+    Complete("popover-unavailable"); Hide(); return;
+  }
+  const auto placement = PlaceReaderPopover(
+      {static_cast<double>(placement_bounds_.left), static_cast<double>(placement_bounds_.top),
+       static_cast<double>(placement_bounds_.right - placement_bounds_.left),
+       static_cast<double>(placement_bounds_.bottom - placement_bounds_.top)},
+      {static_cast<double>(point.x), static_cast<double>(point.y),
+       std::max(1.0, number("anchorWidth", 1) * scale), std::max(1.0, number("anchorHeight", 1) * scale)},
+      number("width", 460) * scale, number("height", 360) * scale, 12 * scale);
+  const int width = static_cast<int>(placement.body.width);
+  const int height = static_cast<int>(placement.body.height);
   maximum_height_ = height;
-  SetWindowPos(window_, HWND_TOP, point.x, point.y, width, height, SWP_NOACTIVATE);
+  SetWindowPos(window_, HWND_TOP, static_cast<int>(placement.body.x), static_cast<int>(placement.body.y), width, height, SWP_NOACTIVATE);
   RECT client{}; GetClientRect(window_, &client);
   MoveWindow(controller_->view()->GetNativeWindow(), 0, 0, client.right, client.bottom, TRUE);
   SetTimer(window_, 1, 15000, nullptr);
@@ -143,19 +160,18 @@ void ReaderPopover::Present(const EncodableValue& value) {
         return fallback;
       };
       const double scale = GetDpiForWindow(anchor_) / 96.0;
-      POINT point{static_cast<LONG>(number("x", 0) * scale),
-          static_cast<LONG>((number("y", 0) + number("anchorHeight", 1)) * scale)};
+      POINT point{static_cast<LONG>(number("x", 0) * scale), static_cast<LONG>(number("y", 0) * scale)};
       ClientToScreen(anchor_, &point);
-      MONITORINFO monitor{sizeof(MONITORINFO)};
-      GetMonitorInfoW(MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST), &monitor);
       int width = rect.right - rect.left;
-      point.x = std::clamp(point.x, monitor.rcWork.left, monitor.rcWork.right - width);
-      if (point.y + height > monitor.rcWork.bottom) {
-        LONG above = point.y - static_cast<LONG>(number("anchorHeight", 1) * scale) - height;
-        point.y = above >= monitor.rcWork.top ? above : monitor.rcWork.bottom - height;
-      }
-      point.y = std::clamp(point.y, monitor.rcWork.top, monitor.rcWork.bottom - height);
-      SetWindowPos(window_, nullptr, point.x, point.y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+      const auto placement = PlaceReaderPopover(
+          {static_cast<double>(placement_bounds_.left), static_cast<double>(placement_bounds_.top),
+           static_cast<double>(placement_bounds_.right - placement_bounds_.left),
+           static_cast<double>(placement_bounds_.bottom - placement_bounds_.top)},
+          {static_cast<double>(point.x), static_cast<double>(point.y),
+           std::max(1.0, number("anchorWidth", 1) * scale), std::max(1.0, number("anchorHeight", 1) * scale)},
+          width, height, 12 * scale);
+      SetWindowPos(window_, nullptr, static_cast<int>(placement.body.x), static_cast<int>(placement.body.y),
+          static_cast<int>(placement.body.width), static_cast<int>(placement.body.height), SWP_NOZORDER | SWP_NOACTIVATE);
     }
   }
   auto owner = data_; auto alive = alive_;

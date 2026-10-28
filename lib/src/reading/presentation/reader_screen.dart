@@ -10,6 +10,7 @@ import '../../app/busybooks_toast.dart';
 import '../../app/command_focus.dart';
 import '../../app/localization.dart';
 import '../../app/product_actions.dart';
+import '../../book_workspace/application/book_presentation.dart';
 import '../../notebook/application/notebook_controller.dart';
 import '../../notebook/presentation/book_view_selector.dart';
 import '../../search/book_search_session.dart';
@@ -23,9 +24,13 @@ class ReadingContent extends ConsumerStatefulWidget {
     required this.id,
     required this.active,
     required this.visible,
+    this.focusOnOpen = true,
+    this.focusRequest = 0,
   });
   final String id;
   final bool active, visible;
+  final bool focusOnOpen;
+  final int focusRequest;
   @override
   ConsumerState<ReadingContent> createState() => _ReadingContentState();
 }
@@ -77,12 +82,15 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
       if (event['type'] == 'opened' || event['type'] == 'focusBook') {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted &&
+              widget.active &&
+              widget.visible &&
               ref.read(readerControllerProvider).ready &&
               ref.read(readerControllerProvider).bookId == widget.id &&
               ModalRoute.of(context)?.isCurrent == true &&
-              (event['restorePublicationFocus'] == true
-                  ? _reader.ownsFocusRequest(event)
-                  : !ref.read(bookSearchSessionProvider).active)) {
+              _reader.ownsFocusRequest(event) &&
+              (event['restorePublicationFocus'] == true ||
+                  widget.focusOnOpen &&
+                      !ref.read(bookSearchSessionProvider).active)) {
             _surface.currentState?.focusBook();
           }
         });
@@ -90,7 +98,14 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
           WidgetsBinding.instance.scheduleFrame();
         }
       }
-      if (event['type'] == 'focusChrome') {
+      if (event['type'] == 'contentFocus' && _reader.ownsContentFocus(event)) {
+        _surface.currentState?.mirrorNativeFocus();
+      }
+      if (event['type'] == 'viewportNeeded' &&
+          event['session'] == _reader.sessionId) {
+        _surface.currentState?.refreshViewport();
+      }
+      if (event['type'] == 'focusChrome' && _reader.ownsContentFocus(event)) {
         _surface.currentState?.leaveFocus(event['backwards'] == true);
       }
     });
@@ -102,6 +117,20 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
     if (widget.active && (!oldWidget.active || oldWidget.id != widget.id)) {
       Future.microtask(() {
         if (mounted && widget.active) unawaited(_reader.open(widget.id));
+      });
+    }
+    if (widget.focusRequest != oldWidget.focusRequest) {
+      final request = widget.focusRequest, revision = _reader.focusRevision;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            widget.visible &&
+            widget.focusOnOpen &&
+            widget.focusRequest == request &&
+            _reader.focusRevision == revision &&
+            ModalRoute.of(context)?.isCurrent != false &&
+            !ref.read(bookSearchSessionProvider).active) {
+          _surface.currentState?.focusBook();
+        }
       });
     }
   }
@@ -146,6 +175,7 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
               } catch (_) {
                 /* The warning retains the pending save. */
               }
+              if (mounted) _surface.currentState?.refreshViewport();
             },
           ),
         if (state.error != null)
@@ -171,6 +201,7 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
               Positioned.fill(
                 child: _NativeReaderSurface(
                   key: _surface,
+                  bookId: widget.id,
                   active:
                       widget.visible &&
                       state.bookId == widget.id &&
@@ -320,7 +351,12 @@ class _PlaybackBar extends ConsumerWidget {
 }
 
 class _NativeReaderSurface extends ConsumerStatefulWidget {
-  const _NativeReaderSurface({super.key, required this.active});
+  const _NativeReaderSurface({
+    super.key,
+    required this.bookId,
+    required this.active,
+  });
+  final String bookId;
   final bool active;
   @override
   ConsumerState<_NativeReaderSurface> createState() =>
@@ -332,6 +368,15 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
   late final ReaderController _reader;
   final _focus = BusyBooksPublicationFocusNode();
   Rect? _last;
+  String? _lastSession;
+  int _layoutRevision = 0;
+  int? _focusIntent;
+  String? _focusSession;
+  int? _mirroredNativeRevision;
+  String? _mirroredNativeSession;
+  bool _mirroringNativeFocus = false;
+  bool _presenting = false;
+  bool _viewportRejected = false;
   bool _queued = false;
   @override
   void initState() {
@@ -343,6 +388,17 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
   @override
   void didChangeMetrics() => _schedule();
   @override
+  void didUpdateWidget(covariant _NativeReaderSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active ||
+        oldWidget.bookId != widget.bookId) {
+      _layoutRevision++;
+      _last = null;
+      _lastSession = null;
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _focus.dispose();
@@ -350,8 +406,75 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
   }
 
   void focusBook() {
+    _focusIntent = _reader.focusRevision;
+    _focusSession = _reader.sessionId;
+    _mirroredNativeRevision = _focusIntent;
+    _mirroredNativeSession = _focusSession;
     _focus.requestFocus();
-    unawaited(_reader.send('focus'));
+    _sendOwnedFocus();
+  }
+
+  void mirrorNativeFocus() {
+    if (!mounted || !widget.active) return;
+    // A genuine native focus event is also the intent to retain publication
+    // focus through a bounds-only hide/reveal. Mirroring still sends no native
+    // focus request back to the surface that already owns it.
+    _focusIntent = _reader.focusRevision;
+    _focusSession = _reader.sessionId;
+    final revision = _focusIntent!, session = _focusSession!;
+    final alreadyMirrored =
+        _mirroredNativeRevision == revision &&
+        _mirroredNativeSession == session;
+    _mirroredNativeRevision = revision;
+    _mirroredNativeSession = session;
+    if (_focus.hasFocus || alreadyMirrored) return;
+    final presentation = _reader.presentationId, id = widget.bookId;
+    _mirroringNativeFocus = true;
+    _focus.requestFocus();
+    // Mirroring can make a desktop Flutter view take OS focus from its native
+    // sibling. Reconcile only a confirmed loss of this exact pointer/focus
+    // intent. A focusin from that reconciliation is already mirrored above.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      bool current() =>
+          mounted &&
+          widget.active &&
+          widget.bookId == id &&
+          _reader.stateBookId == id &&
+          _reader.sessionId == session &&
+          _reader.focusRevision == revision &&
+          _reader.presentationId == presentation &&
+          _reader.interactive &&
+          _focus.hasFocus &&
+          ref.read(bookPresentationProvider).lastPane == BookPane.reading &&
+          ModalRoute.of(context)?.isCurrent != false;
+      if (!current()) return;
+      final focused = await _reader.nativeContentHasFocus();
+      if (focused == false && current()) _sendOwnedFocus();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  void _sendOwnedFocus() {
+    final revision = _focusIntent, session = _focusSession;
+    final presentation = _reader.presentationId;
+    bool current() =>
+        mounted &&
+        widget.active &&
+        _focus.hasFocus &&
+        revision != null &&
+        session != null &&
+        _focusIntent == revision &&
+        _reader.focusRevision == revision &&
+        _focusSession == session &&
+        _reader.sessionId == session &&
+        _reader.presentationId == presentation &&
+        _reader.stateBookId == widget.bookId &&
+        _reader.interactive &&
+        ref.read(bookPresentationProvider).lastPane == BookPane.reading &&
+        ModalRoute.of(context)?.isCurrent != false;
+    if (current()) {
+      unawaited(_reader.focusPublication(isCurrent: current));
+    }
   }
 
   void leaveFocus(bool backwards) {
@@ -361,6 +484,15 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
     } else {
       _focus.nextFocus();
     }
+  }
+
+  void refreshViewport() {
+    _layoutRevision++;
+    _last = null;
+    _lastSession = null;
+    _viewportRejected = false;
+    _schedule();
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   void _schedule() {
@@ -377,18 +509,51 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
   }
 
   void _acceptBounds(Rect rect) {
-    if (!mounted || !widget.active) return;
-    _reader.viewport = rect;
-    if (_last == rect) return;
+    if (!mounted || !widget.active || _reader.stateBookId != widget.bookId) {
+      return;
+    }
+    final session = _reader.sessionId;
+    if (_last == rect &&
+        _lastSession == session &&
+        ((_reader.hasCurrentViewport && _reader.viewport == rect) ||
+            _presenting ||
+            _viewportRejected)) {
+      return;
+    }
     _last = rect;
-    unawaited(
-      readerChannel.invokeMethod<void>('bounds', {
-        'x': rect.left,
-        'y': rect.top,
-        'width': rect.width,
-        'height': rect.height,
-      }),
-    );
+    _lastSession = session;
+    final revision = ++_layoutRevision;
+    _presenting = true;
+    _viewportRejected = false;
+    bool current() =>
+        mounted &&
+        widget.active &&
+        revision == _layoutRevision &&
+        _reader.sessionId == session &&
+        _reader.stateBookId == widget.bookId;
+    unawaited(() async {
+      try {
+        if (!await _reader.updateViewport(
+          rect,
+          bookId: widget.bookId,
+          isCurrent: current,
+        )) {
+          if (current()) _viewportRejected = true;
+          return;
+        }
+        if (!mounted || !current()) return;
+        if (ModalRoute.of(context)?.isCurrent == false) return;
+        await _reader.setWorkspaceVisible(true);
+        if (current()) _sendOwnedFocus();
+      } finally {
+        if (current()) {
+          _presenting = false;
+          if (!_viewportRejected && !_reader.hasCurrentViewport) {
+            refreshViewport();
+          }
+        }
+      }
+    }());
   }
 
   @override
@@ -411,8 +576,23 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
     return Focus(
       focusNode: _focus,
       onFocusChange: (value) {
-        if (value && widget.active) {
-          unawaited(_reader.send('focus'));
+        if (!value) {
+          _focusIntent = null;
+          _focusSession = null;
+          _mirroringNativeFocus = false;
+          // Native content can itself make Flutter inactive. Explicit chrome
+          // handoffs own OS focus; reacting to this blur would focus-loop.
+        } else if (widget.active) {
+          ref
+              .read(bookPresentationProvider.notifier)
+              .focusPane(widget.bookId, BookPane.reading);
+          if (_mirroringNativeFocus) {
+            _mirroringNativeFocus = false;
+            return;
+          }
+          _focusIntent = _reader.focusRevision;
+          _focusSession = _reader.sessionId;
+          _sendOwnedFocus();
         }
       },
       child: _ReaderSurfaceBounds(
@@ -463,6 +643,6 @@ class _ReaderSurfaceBoundsRender extends RenderProxyBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     super.paint(context, offset);
-    _report();
+    if (attached && hasSize) onBounds(localToGlobal(Offset.zero) & size);
   }
 }

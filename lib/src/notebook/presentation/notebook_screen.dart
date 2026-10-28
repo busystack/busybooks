@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,14 +8,19 @@ import 'package:intl/intl.dart';
 import '../../annotations/domain/annotation_filter.dart';
 import '../../annotations/presentation/annotation_presentation.dart';
 import '../../app/busybooks_design.dart';
+import '../../app/app_router.dart';
+import '../../app/busybooks_search_field.dart';
 import '../../app/localization.dart';
 import '../../app/product_actions.dart';
+import '../../book_workspace/application/book_presentation.dart';
 import '../../library/domain/book.dart';
+import '../../library/data/record_validation.dart' show validateAnchor;
 import '../../search/book_search_session.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/notebook_controller.dart';
 import '../application/notebook_view.dart';
 import 'notebook_item.dart';
+import 'book_view_selector.dart';
 
 String notebookSortLabel(BuildContext context, NotebookSort sort) =>
     switch (sort) {
@@ -23,9 +30,16 @@ String notebookSortLabel(BuildContext context, NotebookSort sort) =>
     };
 
 class NotebookContent extends ConsumerStatefulWidget {
-  const NotebookContent({super.key, required this.id, required this.active});
+  const NotebookContent({
+    super.key,
+    required this.id,
+    required this.active,
+    this.focusOnActivate = true,
+    this.onFocus,
+  });
   final String id;
-  final bool active;
+  final bool active, focusOnActivate;
+  final VoidCallback? onFocus;
   @override
   ConsumerState<NotebookContent> createState() => _NotebookContentState();
 }
@@ -34,7 +48,7 @@ class _NotebookContentState extends ConsumerState<NotebookContent> {
   late final ScrollController _scroll;
   final _centerKey = GlobalKey();
   final _listFocus = FocusNode(debugLabel: 'Notebook items');
-  int _revealed = -1, _layout = 0;
+  int _revealed = -1, _layout = 0, _selectionRevision = 0;
   String? _unavailable;
   NotebookController get controller =>
       ref.read(notebookControllerProvider.notifier);
@@ -51,6 +65,60 @@ class _NotebookContentState extends ConsumerState<NotebookContent> {
   }
 
   void _saveScroll() => controller.view(widget.id, scroll: _scroll.offset);
+
+  void _select(
+    ReadingAnnotation annotation, {
+    bool focusEditor = true,
+    bool reveal = false,
+  }) {
+    widget.onFocus?.call();
+    controller.view(
+      widget.id,
+      selected: annotation.id,
+      focusEditor: focusEditor,
+      revealAnnotation: reveal ? annotation.id : null,
+      scrollCenter: reveal ? annotation.id : null,
+      scroll: reveal ? 0 : null,
+    );
+    final revision = ++_selectionRevision;
+    final router = ref.read(appRouterProvider);
+    final origin = router.routeInformationProvider.value.uri;
+    final book = ref.read(workspaceControllerProvider).bookById(widget.id);
+    if (!widget.active ||
+        bookViewForRoute(origin.path) != BookView.split ||
+        bookIdForRoute(origin.path) != widget.id ||
+        !ref.read(bookPresentationProvider).splitAvailable ||
+        book == null ||
+        !book.available && book.status != 'unverified') {
+      return;
+    }
+    try {
+      validateAnchor(annotation.data['anchor'], book.format);
+    } on FormatException {
+      return;
+    }
+    bool current() =>
+        mounted &&
+        widget.active &&
+        revision == _selectionRevision &&
+        router.routeInformationProvider.value.uri == origin &&
+        ref.read(notebookControllerProvider).view(widget.id).selected ==
+            annotation.id;
+    unawaited(
+      runAppAction(
+        context,
+        () => openReading(
+          context,
+          ref,
+          widget.id,
+          anchor: annotation.anchor,
+          annotationId: annotation.id,
+          canActivate: current,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _scroll.removeListener(_saveScroll);
@@ -172,9 +240,11 @@ class _NotebookContentState extends ConsumerState<NotebookContent> {
               annotation: a,
               selected: view.selected == a.id,
               active: widget.active,
+              focusOnActivate:
+                  widget.focusOnActivate || view.revealAnnotation == a.id,
+              onFocus: widget.onFocus,
               focusRequest: view.editFocused ? view.editFocusRequest : 0,
-              onSelect: () =>
-                  controller.view(widget.id, selected: a.id, focusEditor: true),
+              onSelect: () => _select(a),
             ),
           ],
         ),
@@ -183,8 +253,9 @@ class _NotebookContentState extends ConsumerState<NotebookContent> {
 
     return Focus(
       focusNode: _listFocus,
-      autofocus: widget.active,
+      autofocus: widget.active && widget.focusOnActivate,
       onKeyEvent: (_, event) {
+        if (busyBooksTextInputComposing()) return KeyEventResult.ignored;
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape &&
             view.editFocused &&
@@ -209,20 +280,12 @@ class _NotebookContentState extends ConsumerState<NotebookContent> {
                           ? 1
                           : -1))
                   .clamp(0, items.length - 1);
-          controller.revealAnnotation(
-            widget.id,
-            items[index].id,
-            focusEditor: false,
-          );
+          _select(items[index], focusEditor: false, reveal: true);
           _listFocus.requestFocus();
           return KeyEventResult.handled;
         }
         if (event.logicalKey == LogicalKeyboardKey.enter && selected >= 0) {
-          controller.view(
-            widget.id,
-            selected: items[selected].id,
-            focusEditor: true,
-          );
+          _select(items[selected]);
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;

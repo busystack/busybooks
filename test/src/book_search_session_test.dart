@@ -4,6 +4,7 @@ import 'package:busybooks/src/app/app_router.dart';
 import 'package:busybooks/src/app/app_theme.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
 import 'package:busybooks/src/book_workspace/application/book_sidebar_controller.dart';
+import 'package:busybooks/src/book_workspace/application/book_presentation.dart';
 import 'package:busybooks/src/app/command_registry.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/domain/book.dart';
@@ -260,6 +261,156 @@ BookActionSearchResult _action(
   enabled: enabled,
 );
 void main() {
+  test(
+    'Reading and Split retain the same native search results and generation',
+    () async {
+      final reader = _OccurrenceReader()..total = 1;
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      addTearDown(f.close);
+      final router = f.container.read(appRouterProvider);
+      router.go('/read/$_first');
+      await f.search.open(
+        category: BookSearchCategory.bookText,
+        query: '  needle  ',
+      );
+      expect(await f.search.submit(), true);
+      final generation = f.state.generation, results = f.state.results;
+      for (final route in ['/split/$_first', '/read/$_first']) {
+        router.go(route);
+        expect(f.state.active, true);
+        expect(f.state.originRoute, route);
+        expect(f.state.generation, generation);
+        expect(identical(f.state.results, results), true);
+        expect(f.state.query, '  needle  ');
+      }
+      expect(reader.dispatched, ['  needle  ']);
+    },
+  );
+  test('first Split search follows the last focused content pane', () async {
+    final f = _Fixture(
+      state: WorkspaceState(
+        openedBook: _book(_first),
+        readingData: {_first: _book(_first)},
+      ),
+    );
+    addTearDown(f.close);
+    f.container.read(appRouterProvider).go('/split/$_first');
+    final presentation = f.container.read(bookPresentationProvider.notifier);
+    presentation.enterBook(_first, BookView.split);
+    presentation.focusPane(_first, BookPane.notebook);
+    await f.search.open();
+    expect(f.state.category, BookSearchCategory.notebook);
+    expect(f.state.scope.id, _first);
+    expect(f.state.results, isEmpty);
+    expect(f.store.requests, isEmpty);
+  });
+  test(
+    'Split renderer retry survives its same-book Reading handoff with the latest query',
+    () async {
+      final reader = _LoadingReader()..retryGate = Completer<void>();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      addTearDown(f.close);
+      final router = f.container.read(appRouterProvider);
+      router.go('/split/$_first');
+      reader.fail();
+      await f.search.open(category: BookSearchCategory.bookText, query: 'old');
+      final retry = f.search.retry();
+      router.go('/read/$_first');
+      f.search.query('  latest  ');
+      reader.retryGate!.complete();
+      await retry;
+      expect(await f.search.submit(), true);
+      expect(reader.retried, [_first]);
+      expect(reader.dispatched, ['  latest  ']);
+      expect(f.state.originRoute, '/read/$_first');
+    },
+  );
+  test(
+    'Split retry stays abandoned after Notebook and a return to the same book',
+    () async {
+      final reader = _LoadingReader()..retryGate = Completer<void>();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      addTearDown(f.close);
+      final router = f.container.read(appRouterProvider);
+      router.go('/split/$_first');
+      reader.fail();
+      await f.search.open(
+        category: BookSearchCategory.bookText,
+        query: 'needle',
+      );
+      final retry = f.search.retry();
+      router.go('/notebook/$_first');
+      router.go('/split/$_first');
+      reader.retryGate!.complete();
+      await retry;
+      expect(reader.retried, [_first]);
+      expect(reader.canSearch, false);
+      expect(reader.dispatched, isEmpty);
+    },
+  );
+  test(
+    'cross-book Split activation retains its scope and owned deferred lease',
+    () async {
+      final reader = _Reader();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first), _second: _book(_second)},
+        ),
+      );
+      addTearDown(f.close);
+      final router = f.container.read(appRouterProvider);
+      router.go('/split/$_first');
+      f.store.rows = [_passageRow()];
+      await f.search.open(
+        category: BookSearchCategory.bookmarks,
+        scope: const BookSearchScope.all(),
+        query: 'needle',
+      );
+      final result = f.state.results.single, generation = f.state.generation;
+      final target = readingTargetRoute('/split/$_first', _second);
+      expect(
+        f.search.beginActivation(
+          result,
+          generation,
+          targetBookId: _second,
+          targetRoute: target,
+        ),
+        true,
+      );
+      final request = reader.deferJump(bookId: _second, anchor: {'page': 1});
+      f.search.retainDeferredActivation(request);
+      router.go(target);
+      f.search.endActivation();
+      expect(f.state.originRoute, '/split/$_second');
+      expect(f.state.scope, const BookSearchScope.all());
+      expect(f.state.query, 'needle');
+      expect(f.search.accepts(result, generation), true);
+      expect(await f.search.validateResult(result, generation), true);
+      router.go('/notebook/$_first');
+      await request.finished;
+      expect(f.search.accepts(result, generation), false);
+    },
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'Home exposes resource categories and only Actions enumerates an empty query',

@@ -6,6 +6,18 @@ const readerBridgeInlineBytes = 128 * 1024;
 const readerBridgeChunkCharacters = 32 * 1024;
 const readerBridgePayloadCharacters = 16 * 1024 * 1024;
 
+/// Focus reports contain only an input source and their renderer owner. They
+/// never carry a navigation target or an application command.
+bool validReaderContentFocusEvent(Map<String, dynamic> event) =>
+    event.keys.every(
+      (key) => const {'type', 'session', 'source'}.contains(key),
+    ) &&
+    event['type'] == 'contentFocus' &&
+    event['session'] is String &&
+    (event['session'] as String).isNotEmpty &&
+    (event['session'] as String).length <= 128 &&
+    const {'pointer', 'focus'}.contains(event['source']);
+
 /// JSON string chunks preserve arbitrary Unicode and escaped text. Each frame
 /// is comfortably below the native byte limit, including JSON escaping.
 Iterable<Map<String, dynamic>> readerBridgeFrames(

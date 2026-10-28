@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../book_workspace/application/book_presentation.dart';
 import '../reading/application/reader_controller.dart';
 import '../reading/presentation/appearance_panel.dart';
 import '../search/book_search_session.dart';
@@ -73,8 +74,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             .queryParameters['returnTo'];
     final currentBook =
         renderer.bookId != null &&
-            (returnTo == '/read/${renderer.bookId}' ||
-                returnTo == '/notebook/${renderer.bookId}')
+            bookIdForRoute(safeSettingsReturnTarget(returnTo)) ==
+                renderer.bookId
         ? reader.book
         : null;
     final body = switch (_page) {

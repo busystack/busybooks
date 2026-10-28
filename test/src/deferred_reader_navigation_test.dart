@@ -82,6 +82,15 @@ class _Fixture {
             final command = jsonDecode(call.arguments as String) as Map;
             f.dispatches.add(command);
             await f.dispatch?.call(command);
+            if (command['action'] == 'layoutVisibility') {
+              scheduleMicrotask(
+                () => f.event('layoutVisibility', {
+                  'request': command['request'],
+                  'revision': command['revision'],
+                  'visible': command['visible'],
+                }),
+              );
+            }
             if (command['action'] == 'flush') {
               scheduleMicrotask(
                 () => f.event('flushed', {'request': command['request']}),
@@ -112,6 +121,14 @@ class _Fixture {
     Map<String, dynamic> data = const {},
     String? session,
   ]) async {
+    if (type == 'opened' &&
+        (session ?? reader.sessionId) == reader.sessionId &&
+        state.bookId != null) {
+      await reader.updateViewport(
+        const Rect.fromLTWH(0, 0, 900, 650),
+        bookId: state.bookId!,
+      );
+    }
     final done = Completer<void>();
     ServicesBinding.instance.channelBuffers.push(
       readerChannel.name,
@@ -147,6 +164,93 @@ class _Fixture {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'a ready hidden pane keeps its exact jump until current measured bounds acknowledge reveal',
+    () async {
+      final f = await _Fixture.create();
+      addTearDown(f.dispose);
+      await f.reader.open(f.first);
+      await f.ready();
+      await f.reader.setWorkspaceVisible(false);
+      final pending = f.reader.deferJump(
+        bookId: f.first,
+        anchor: {'page': 2},
+        useCurrentOpening: true,
+      );
+      await f.reader.setWorkspaceVisible(true);
+      expect(f.jumps, isEmpty);
+      await f.reader.updateViewport(
+        const Rect.fromLTWH(0, 0, 600, 650),
+        bookId: f.first,
+      );
+      await pending.finished;
+      expect(f.jumps.single['anchor'], {'page': 2});
+      expect(f.jumps.single['session'], f.reader.sessionId);
+      await f.reader.setWorkspaceVisible(true);
+      expect(f.jumps, hasLength(1));
+    },
+  );
+  test(
+    'visible sidebar passage repeats source validation after queued native work',
+    () async {
+      final f = await _Fixture.create();
+      addTearDown(f.dispose);
+      await f.reader.open(f.first);
+      await f.ready();
+      expect(f.reader.interactive, isTrue);
+      await f.store.call('putAnnotation', {
+        'id': 'annotation-visible',
+        'bookId': f.first,
+        'annotationKind': 'bookmark',
+        'text': '',
+        'note': 'saved',
+        'reference': 'Page 3',
+        'anchor': {'page': 2},
+        'color': 'yellow',
+        'created': 1,
+      });
+      final transferEntered = Completer<void>(),
+          transferProceed = Completer<void>();
+      f.dispatch = (command) async {
+        if (!transferEntered.isCompleted) {
+          transferEntered.complete();
+          await transferProceed.future;
+        }
+      };
+      final transfer = f.reader.send('annotations', {
+        'value': [
+          {'text': 'x' * (readerBridgeFrameBytes * 2)},
+        ],
+      });
+      await transferEntered.future;
+      var validations = 0;
+      final validated = Completer<void>();
+      final jump = f.reader.navigateFromSidebar(
+        {'page': 2},
+        bookId: f.first,
+        validateNavigation: () async {
+          validations++;
+          try {
+            await f.store.call('annotation', {
+              'id': 'annotation-visible',
+              'bookId': f.first,
+            });
+            if (!validated.isCompleted) validated.complete();
+            return true;
+          } on Object {
+            return false;
+          }
+        },
+      );
+      await validated.future.timeout(const Duration(seconds: 5));
+      await f.store.call('deleteAnnotation', 'annotation-visible');
+      transferProceed.complete();
+      await transfer;
+      await jump;
+      expect(validations, greaterThanOrEqualTo(2));
+      expect(f.jumps, isEmpty);
+    },
+  );
   test(
     'failed target opening cannot donate its passage to another book',
     () async {

@@ -14,6 +14,7 @@ import '../../reading/application/reader_controller.dart';
 import '../../search/book_search_session.dart';
 import '../../search/book_search_widgets.dart';
 import '../../workspace/workspace_controller.dart';
+import '../application/book_presentation.dart';
 import '../application/book_sidebar_controller.dart';
 import 'book_context_menu.dart';
 import 'reading_location_control.dart';
@@ -72,12 +73,18 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
     final state = ref.watch(readerControllerProvider),
         sidebar = ref.watch(bookSidebarProvider(widget.bookId)),
         search = ref.watch(bookSearchSessionProvider),
+        presentation = ref.watch(bookPresentationProvider),
         book = ref.watch(workspaceControllerProvider).bookById(widget.bookId),
         l = context.l10n;
     final registry =
         BusyBooksCommandRegistryScope.maybeOf(context) ??
         BusyBooksCommandCatalog.metadata;
-    final reading = widget.view == BookView.reading;
+    final collapsedNotebook =
+        widget.view == BookView.split &&
+        presentation.bookId == widget.bookId &&
+        !presentation.splitAvailable &&
+        presentation.lastPane == BookPane.notebook;
+    final reading = widget.view.hasReader && !collapsedNotebook;
     _reader.popoverTextScale = MediaQuery.textScalerOf(context).scale(1);
     String? binding(String id) => registry[id]?.shortcut?.label;
     return LayoutBuilder(

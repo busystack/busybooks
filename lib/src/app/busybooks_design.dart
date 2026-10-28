@@ -1499,7 +1499,8 @@ Future<List<NativeMenuEntry>?> _busyBooksNativeMenuEntries<T>(
       final useMask =
           defaultTargetPlatform == TargetPlatform.windows &&
           (item.icon == BusyBooksGlyphs.previewView ||
-              item.icon == BusyBooksGlyphs.notebookView);
+              item.icon == BusyBooksGlyphs.notebookView ||
+              item.icon == BusyBooksGlyphs.splitView);
       final mask = useMask
           ? await _busyBooksMenuIconMask(item.icon!, iconSize)
           : null;

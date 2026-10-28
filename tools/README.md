@@ -18,16 +18,32 @@ procedures, rather than individual executions.
 | `format_probe.dart` | Format preparation, original-byte export, locators, cache deletion/restart and data-only backup |
 | `format_resources_probe.dart` | Resource ownership and active-decoder cancellation |
 | `reader_logic_probe.mjs` | CFI, network policy, geometry and controlled adapter regressions |
+| `reader_focus_probe.mjs` | Application focus protocol and resize/selection ownership with fresh controlled interfaces; also imported by `reader_logic_probe.mjs` |
 | `qualify_rar.py DECODER` | Exact decoded RAR4/5 fixture bytes and corrupt/encrypted/multipart/path rejection |
 | `check_epub2_fixtures.py EPUBCHECK_JAR` | Independent EPUB 2 schemas and narrowly scoped checker exceptions |
 
 Run Dart tools with `dart run tools/NAME.dart`, Python tools with `python3 tools/NAME.py`, and the JavaScript entry with `node tools/reader_logic_probe.mjs`.
 The JavaScript entry imports `fixed_layout_probe.mjs`, `reader_startup_probe.mjs`,
 `reader_defects_probe.mjs`, `reader_review_regressions.mjs`,
-`reader_sidebar_probe.mjs`, `typography_probe.mjs` and
-`comic_interaction_probe.mjs`, `literal_search_probe.mjs` and
-`epub_integration_probe.mjs`. These execute actual adapter/renderer logic with
-controlled APIs; they do not establish native layout, selection or focus.
+`reader_sidebar_probe.mjs`, `typography_probe.mjs`,
+`comic_interaction_probe.mjs`, `literal_search_probe.mjs`,
+`epub_integration_probe.mjs` and `reader_focus_probe.mjs`. These execute actual
+adapter/renderer logic with controlled APIs; they do not establish native layout,
+selection or focus.
+The focus probe rejects synthetic input and detached/replaced publication
+documents, checks current visible-document ownership, and coalesces resize
+updates while preserving the exact source anchor. It checks stale resize rejection,
+detached-selection clearing and absence of new selection popovers. It uses
+application-owned fixtures; no browser or dependency implementation is replaced.
+The defects probe also exercises PDF pause/drain/resume ordering, coalesced hidden
+resize, retained source coordinates during hidden flush, expired/stopped passage
+requests, and content search when display animation frames are unavailable.
+
+Focused Flutter coverage lives in `book_presentation_test.dart`,
+`book_pane_layout_test.dart`, `reader_focus_geometry_test.dart`,
+`deferred_reader_navigation_test.dart`,
+`book_search_session_test.dart`, `reader_workspace_test.dart` and the existing
+Notebook suites under `test/src`. The full `flutter test` entry includes them.
 
 Build the application first for the bundled RAR decoder. Set
 `BUSYBOOKS_COMIC_DECODER` to its absolute path for Dart format/resource checks;
@@ -44,7 +60,7 @@ headless CI. Build the Linux release first for bundled decoder/opening checks.
 
 | Entry point | Native boundary and supporting tools |
 | --- | --- |
-| `bash tools/probe_linux_input.sh` | Actual GTK input/teardown and portable menu contract from `test/src/linux_reader_surface_test.cc` and `native_menu_selection_test.cc` |
+| `bash tools/probe_linux_input.sh` | Actual GTK input/teardown, portable menu contract and reader-pane popup placement from `test/src/linux_reader_surface_test.cc`, `native_menu_selection_test.cc` and `native_popover_geometry_test.cc` |
 | `bash tools/probe_linux_engines.sh` | WebKitGTK engine smoke using `prepare_engine_probe.dart` and `native_engine_probe.cc` |
 | `bash tools/probe_linux_formats.sh` | Format matrix, typed locator validation and real-store/cache restart using `prepare_format_acceptance.dart`, `formats_native_proof.js` and `validate_native_locations.dart` |
 | `bash tools/probe_linux_format_review.sh` | Overflow/spread/region, spine fallback and unnamed FB2 section regressions using `format_review_native_proof.js` and the same preparation/validation helpers |
@@ -75,6 +91,44 @@ projects and their C++ sources. [Windows development](../docs/development/window
 documents prerequisites, build/run commands and `qualify_windows.ps1`. A native
 probe does not substitute for full application acceptance at different display
 scales, with keyboard/IME, assistive technology and audible speech.
+
+### Split workspace acceptance
+
+Use the actual release application, fixture books and disposable profiles on
+both Linux/WebKitGTK and Windows/WebView2. Follow
+[the workspace contract](../docs/development/reading-workspace.md) and check:
+
+- Reading ↔ Notebook ↔ Split retains exact publication locations, Notebook
+  selection/scroll/filters and unsaved or failed-save drafts. Reading ↔ Split
+  must retain the same usable reader rather than reopening the book.
+- Drag and keyboard-resize the divider, including its minimum bounds, after
+  opening/closing the sidebar, window resize/maximization and display-scale
+  changes. Verify native content remains inside the reader pane and does not
+  cover Notebook, the divider, menus or dialogs. Check text scaling separately.
+- Below the measured content minimum, Split entry is disabled with its reason.
+  An active Split temporarily shows its last focused pane, keeps the same route
+  and sessions, and offers the other pane. Widening restores both panes and the
+  ratio; explicitly choosing Reading/Notebook cancels this preference.
+- Select a note in side-by-side Split and verify exact passage/highlight alignment
+  without stealing editing focus or resetting filters. In collapsed Notebook,
+  selecting/editing stays local; Show in Reading deliberately reveals its source.
+  Check new annotations, independent scrolling, missing originals and reader Retry.
+- Exercise keyboard traversal, note text selection, clipboard, undo, IME and
+  focus return. Ctrl+F follows the focused content pane; delayed native input
+  must not take over Notebook. Hidden panes must not remain accessibility targets.
+- After resizing a PDF, collapse Split to Notebook and export through the real
+  Save As workflow. Verify completion, full note text and unchanged saved PDF
+  segments; widen and verify the same source position returns. Escape must close
+  a noneditable selection popup before it can close the shared search sidebar.
+- Activate same-book and cross-book search results with retained query/scopes,
+  including narrow-overlay dismissal, deleted annotations and interrupted
+  opening/recovery. Verify renderer Retry resumes the latest applicable query
+  and does not navigate a superseded book.
+
+Record the platform/runtime, display and text scales, inputs and observations
+outside maintained source. Controlled Flutter/JavaScript tests and successful
+compilation do not establish these native checks. Complex IME, assistive
+technology and physical display/GPU behavior require explicit qualification.
 
 ## Linux workspace and shutdown diagnostics
 

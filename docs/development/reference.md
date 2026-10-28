@@ -12,8 +12,8 @@ build or run BusyBooks.
 | --- | --- |
 | Theme, semantic surfaces, glyphs and controls | Shared BusyStack appearance and geometry |
 | Linux window/header services, GTK preferences/icons/accent | Flutter window controls, header gestures and live desktop preferences |
-| Workspace header/view selector and outline rows | Retained Reading/Notebook shell, labeled selector, disclosure/indentation and trailing location column |
-| Search session/sidebar and shared header input | Book-scoped categorized search with owned native session checks |
+| Workspace header/view selector, side-by-side panes and outline rows | Retained Reading/Notebook/Split shell, labeled selector, disclosure/indentation and trailing location column |
+| Search session/sidebar and shared header input | Shared categorized search with repository-backed scopes and owned native session checks |
 | Dialogs, feedback, motion, Settings and menus | Shared controls, adaptive navigation and reduced-motion behavior |
 | Command registry, keymaps and shortcut capture | Book commands, configurable bindings and conflict validation |
 | Ordered settings writer and startup handoff | Reading preferences and serialized atomic settings writes |
@@ -24,6 +24,12 @@ BusyBooks' publication engines, content identity, collection model, protected
 Notebook drafts and file workflows have their own owners. See
 [workspace architecture](reading-workspace.md), [readers](readers.md) and
 [storage](storage.md).
+
+BusyMark's `_EditorPreviewSplit` uses side-by-side panes and a fixed divider.
+BusyBooks retains that presentation concept while adding its own adjustable
+divider, shared reader/Notebook ownership and measured-width collapse policy.
+These are application integration changes, not modifications to a dependency or
+a runtime link to the neighbouring checkout.
 
 The adjacent Previous/Next controls follow BusyMax's schedule-toolbar reference
 at `3fff55e62ae7dc6467d60309ca988b74d0950bc4`, using `go-previous-symbolic` and

@@ -81,6 +81,9 @@ class NarrationController extends Notifier<NarrationState> {
         continueReading = passage['selected'] != true;
       }
       if (revision != _revision) return;
+      if (passage['message'] is String) {
+        throw StateError(passage['message'] as String);
+      }
       final text = passage['text']?.toString() ?? '';
       if (text.trim().isEmpty) {
         state = const NarrationState(error: 'no-text');

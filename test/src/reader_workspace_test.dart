@@ -12,6 +12,7 @@ import 'package:busybooks/src/app/app_settings.dart';
 import 'package:busybooks/src/app/app_theme.dart';
 import 'package:busybooks/src/app/busybooks_app.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
+import 'package:busybooks/src/app/busybooks_dialogs.dart';
 import 'package:busybooks/src/app/busybooks_glyphs.dart';
 import 'package:busybooks/src/app/busybooks_main_menu.dart';
 import 'package:busybooks/src/app/busybooks_search_field.dart';
@@ -27,6 +28,7 @@ import 'package:busybooks/src/app/window_control_service.dart';
 import 'package:busybooks/src/book_workspace/application/book_sidebar_controller.dart';
 import 'package:busybooks/src/book_workspace/presentation/book_header.dart';
 import 'package:busybooks/src/book_workspace/presentation/book_workspace_screen.dart';
+import 'package:busybooks/src/book_workspace/application/book_presentation.dart';
 import 'package:busybooks/src/core/typography.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/application/collection_view_controller.dart';
@@ -354,6 +356,7 @@ class _ReaderFixture {
   final rejectedDispatches = <Map>[];
   int dispatchFailures = 0;
   bool acknowledgeFlush = true;
+  bool nativeFocused = true;
   int _verification = 0;
   ReaderController get reader =>
       container.read(readerControllerProvider.notifier);
@@ -424,11 +427,28 @@ class _ReaderFixture {
             );
           }
           final nativeResult = await test.onNativeCall?.call(call);
+          if (call.method == 'focusChrome') test.nativeFocused = false;
+          if (call.method == 'focus') test.nativeFocused = true;
+          if (call.method == 'hasFocus') {
+            return nativeResult ?? test.nativeFocused;
+          }
           if (call.method == 'capturePopover' || call.method == 'popover') {
             return nativeResult;
           }
           if (call.method == 'open') {
             test.session = (call.arguments as Map)['session'] as String;
+          }
+          if (call.method == 'dispatch') {
+            final command = jsonDecode(call.arguments as String) as Map;
+            if (command['action'] == 'layoutVisibility') {
+              scheduleMicrotask(
+                () => test.event('layoutVisibility', {
+                  'request': command['request'],
+                  'revision': command['revision'],
+                  'visible': command['visible'],
+                }),
+              );
+            }
           }
           if (test.acknowledgeFlush &&
               call.method == 'dispatch' &&
@@ -486,6 +506,14 @@ class _ReaderFixture {
     String type, [
     Map<String, dynamic> args = const {},
   ]) async {
+    if (type == 'opened' &&
+        (args['session'] ?? session) == reader.sessionId &&
+        state.bookId != null) {
+      await reader.updateViewport(
+        const Rect.fromLTWH(0, 0, 900, 650),
+        bookId: state.bookId!,
+      );
+    }
     final reply = Completer<void>();
     ServicesBinding.instance.channelBuffers.push(
       readerChannel.name,
@@ -505,7 +533,15 @@ class _ReaderFixture {
   Future<void> checkedEvent(
     String type, [
     Map<String, dynamic> args = const {},
-  ]) {
+  ]) async {
+    if (type == 'opened' &&
+        (args['session'] ?? session) == reader.sessionId &&
+        state.bookId != null) {
+      await reader.updateViewport(
+        const Rect.fromLTWH(0, 0, 900, 650),
+        bookId: state.bookId!,
+      );
+    }
     final reply = Completer<void>();
     ServicesBinding.instance.channelBuffers.push(
       readerChannel.name,
@@ -984,6 +1020,839 @@ Future<void> _startLookup(_ReaderFixture f, String term) async {
 
 void main() {
   _professionalWorkspaceTests();
+  for (final invalidation in ['capacity', 'book']) {
+    testWidgets(
+      'selector without a registry rejects a delayed $invalidation change',
+      (tester) async {
+        late _ReaderFixture f;
+        late String first, second;
+        await _readerAction(tester, () async {
+          f = await _ReaderFixture.create('text.pdf');
+          first = f.state.bookId!;
+          final other =
+              await File(
+                p.join(f.directory.path, 'other-selector-book.pdf'),
+              ).writeAsBytes([
+                ...await File('test/fixtures/text.pdf').readAsBytes(),
+                ...'\n% separate selector publication\n'.codeUnits,
+              ]);
+          final workspace = f.container.read(
+            workspaceControllerProvider.notifier,
+          );
+          second = (await workspace.openPath(other.path)).books.single.id;
+          await workspace.loadBook(first, activate: true);
+        });
+        final entered = Completer<void>(), proceed = Completer<int?>();
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(
+          const MethodChannel(nativeMenuChannelName),
+          (call) async {
+            if (call.method != 'show') return null;
+            final entries = _nativeLeaves(
+              (call.arguments as Map)['entries'] as List,
+            );
+            final split = entries.indexWhere(
+              (entry) => entry['label'] == 'Split',
+            );
+            expect(split, greaterThanOrEqualTo(0));
+            expect(entries[split]['enabled'], true);
+            entered.complete();
+            return proceed.future;
+          },
+        );
+        try {
+          final router = f.container.read(appRouterProvider);
+          router.go('/read/$first');
+          final presentation = f.container.read(
+            bookPresentationProvider.notifier,
+          );
+          presentation.enterBook(first, BookView.reading);
+          presentation.updateLayout(first, availableWidth: 1200, textScale: 1);
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: f.container,
+              child: MaterialApp(
+                theme: buildBusyBooksTheme(
+                  brightness: Brightness.light,
+                  accentColor: Colors.orange,
+                ),
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: Consumer(
+                  builder: (context, ref, child) {
+                    ref.watch(appLocationProvider);
+                    final route = ref
+                        .read(appRouterProvider)
+                        .routeInformationProvider
+                        .value
+                        .uri
+                        .path;
+                    return Scaffold(
+                      body: BookViewSelector(
+                        id: bookIdForRoute(route)!,
+                        view: bookViewForRoute(route)!,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('View'));
+          await _pumpUntil(tester, () => entered.isCompleted, settle: false);
+          final closes = f.calls.where((call) => call.method == 'close').length;
+          if (invalidation == 'capacity') {
+            presentation.updateLayout(first, availableWidth: 700, textScale: 1);
+          } else {
+            await _readerAction(
+              tester,
+              () => f.container
+                  .read(workspaceControllerProvider.notifier)
+                  .loadBook(second, activate: true)
+                  .then((_) {}),
+              settle: false,
+            );
+            router.go('/read/$second');
+            presentation.enterBook(second, BookView.reading);
+            presentation.updateLayout(
+              second,
+              availableWidth: 1200,
+              textScale: 1,
+            );
+          }
+          await tester.pump();
+          expect(
+            tester.widget<BookViewSelector>(find.byType(BookViewSelector)).id,
+            invalidation == 'book' ? second : first,
+          );
+          proceed.complete(2);
+          await tester.pumpAndSettle();
+          expect(
+            router.routeInformationProvider.value.uri.path,
+            '/read/${invalidation == 'book' ? second : first}',
+          );
+          expect(
+            f.calls.where((call) => call.method == 'close').length,
+            closes,
+          );
+          expect(tester.takeException(), isNull);
+        } finally {
+          if (!proceed.isCompleted) proceed.complete(null);
+          messenger.setMockMethodCallHandler(
+            const MethodChannel(nativeMenuChannelName),
+            null,
+          );
+          await _disposeHeaderApplication(tester, f);
+        }
+      },
+    );
+  }
+  testWidgets(
+    'native publication focus survives geometry and a retained Split view command',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+      });
+      try {
+        final id = f.state.bookId!;
+        await _mountHeaderApplication(tester, f, '/read/$id');
+        await _pumpUntil(tester, () => f.reader.interactive);
+        // Model a genuine native click after Flutter chrome owned focus. The
+        // event mirrors that ownership without sending focus back to native.
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pump();
+        f.nativeFocused = true;
+        await _readerAction(
+          tester,
+          () => f.event('contentFocus', {'source': 'pointer'}),
+        );
+        expect(
+          FocusManager.instance.primaryFocus,
+          isA<BusyBooksPublicationFocusNode>(),
+        );
+        final session = f.reader.sessionId;
+        final opens = f.calls.where((call) => call.method == 'open').length;
+        f.acceptedDispatches.clear();
+        tester.view.physicalSize = const Size(1400, 850);
+        await _pumpUntil(
+          tester,
+          () =>
+              f.reader.hasCurrentViewport &&
+              f.acceptedDispatches.any(
+                (command) => command['action'] == 'focus',
+              ),
+        );
+        expect(
+          FocusManager.instance.primaryFocus,
+          isA<BusyBooksPublicationFocusNode>(),
+        );
+        f.acceptedDispatches.clear();
+        await _readerAction(
+          tester,
+          () => _appCommands(tester).execute(BusyBooksCommandIds.viewSplit),
+        );
+        await _pumpUntil(
+          tester,
+          () =>
+              f.reader.interactive &&
+              f.acceptedDispatches.any(
+                (command) => command['action'] == 'focus',
+              ),
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/split/$id',
+        );
+        expect(f.reader.sessionId, session);
+        expect(f.calls.where((call) => call.method == 'open').length, opens);
+        expect(
+          FocusManager.instance.primaryFocus,
+          isA<BusyBooksPublicationFocusNode>(),
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+  testWidgets(
+    'native publication focus loss does not reactivate Flutter chrome',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+      });
+      try {
+        final id = f.state.bookId!;
+        await _mountHeaderApplication(tester, f, '/read/$id');
+        await _pumpUntil(tester, () => f.reader.interactive);
+        FocusManager.instance.listenToApplicationLifecycleChangesIfSupported();
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        f.nativeFocused = true;
+        await _readerAction(
+          tester,
+          () => f.event('contentFocus', {'source': 'pointer'}),
+        );
+        expect(
+          FocusManager.instance.primaryFocus,
+          isA<BusyBooksPublicationFocusNode>(),
+        );
+        final chromeRequests = f.calls
+            .where((call) => call.method == 'focusChrome')
+            .length;
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pump();
+        expect(
+          FocusManager.instance.primaryFocus,
+          same(FocusManager.instance.rootScope),
+        );
+        expect(
+          f.calls.where((call) => call.method == 'focusChrome').length,
+          chromeRequests,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+  testWidgets(
+    'native focus mirroring repairs confirmed loss once and rejects a later Notebook handoff',
+    (tester) async {
+      late _ReaderFixture f;
+      final pending = Completer<bool>();
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+      });
+      try {
+        final id = f.state.bookId!;
+        await _mountHeaderApplication(tester, f, '/split/$id');
+        await _pumpUntil(tester, () => f.reader.interactive);
+        await _readerAction(tester, f.reader.focusChrome);
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pump();
+        var queries = 0;
+        f.onNativeCall = (call) async {
+          if (call.method != 'hasFocus') return null;
+          queries++;
+          return queries == 1;
+        };
+        f.calls.clear();
+        await _readerAction(
+          tester,
+          () => f.event('contentFocus', {'source': 'pointer'}),
+        );
+        await _pumpUntil(
+          tester,
+          () => f.calls.any((call) => call.method == 'focus'),
+        );
+        expect(queries, 2);
+        expect(
+          f.calls.singleWhere((call) => call.method == 'focus').arguments,
+          {'session': f.reader.sessionId},
+        );
+        f.onNativeCall = null;
+        f.calls.clear();
+        await _readerAction(
+          tester,
+          () => f.event('contentFocus', {'source': 'focus'}),
+        );
+        expect(f.calls.where((call) => call.method == 'focus'), isEmpty);
+        await _readerAction(tester, f.reader.focusChrome);
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pump();
+        queries = 0;
+        f.onNativeCall = (call) async {
+          if (call.method != 'hasFocus') return null;
+          queries++;
+          return queries == 1 ? true : pending.future;
+        };
+        f.calls.clear();
+        await _readerAction(
+          tester,
+          () => f.event('contentFocus', {'source': 'pointer'}),
+          settle: false,
+        );
+        await _pumpUntil(tester, () => queries == 2, settle: false);
+        f.container
+            .read(bookPresentationProvider.notifier)
+            .focusPane(id, BookPane.notebook);
+        await _readerAction(tester, f.reader.focusChrome, settle: false);
+        pending.complete(false);
+        await tester.pumpAndSettle();
+        expect(f.calls.where((call) => call.method == 'focus'), isEmpty);
+        expect(
+          f.container.read(bookPresentationProvider).lastPane,
+          BookPane.notebook,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!pending.isCompleted) pending.complete(false);
+        f.onNativeCall = null;
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+  testWidgets(
+    'explicit Notebook cancels collapsed Split restoration and retains its draft and browsing state',
+    (tester) async {
+      late _ReaderFixture f;
+      late AnnotationStoreGate gate;
+      late ReadingAnnotation annotation;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          wrapStore: (store) => gate = AnnotationStoreGate(store),
+        );
+        annotation = ReadingAnnotation({
+          'id': 'annotation-split-explicit-view',
+          'bookId': f.state.bookId!,
+          'annotationKind': 'highlight',
+          'text': 'A retained passage.\n' * 80,
+          'note': 'Saved baseline',
+          'reference': 'Page 2',
+          'anchor': {'page': 1},
+          'color': 'yellow',
+          'created': 1,
+        });
+        await f.container
+            .read(workspaceControllerProvider.notifier)
+            .saveAnnotation(annotation);
+        f.notes.view(
+          annotation.bookId,
+          filter: AnnotationTypeFilter.highlights,
+          sort: NotebookSort.bookOrder,
+          withNotes: true,
+          selected: annotation.id,
+        );
+      });
+      try {
+        final id = annotation.bookId;
+        await _mountHeaderApplication(tester, f, '/split/$id');
+        await _pumpUntil(
+          tester,
+          () =>
+              f.reader.interactive &&
+              f.container.read(bookPresentationProvider).splitAvailable,
+        );
+        final notebookScroll = tester
+            .widget<CustomScrollView>(
+              find.descendant(
+                of: find.byType(NotebookContent),
+                matching: find.byType(CustomScrollView),
+              ),
+            )
+            .controller!;
+        expect(notebookScroll.position.maxScrollExtent, greaterThan(120));
+        notebookScroll.jumpTo(120);
+        f.container
+            .read(bookPresentationProvider.notifier)
+            .setDividerRatio(id, .55);
+        gate.fail = true;
+        await _readerAction(tester, () async {
+          f.notes.edit(annotation, 'Protected draft through explicit Notebook');
+          try {
+            await f.notes.save(annotation.id);
+          } catch (_) {}
+        });
+        final draft = f.drafts.drafts[annotation.id]!;
+        final session = f.reader.sessionId;
+        final opens = f.calls.where((call) => call.method == 'open').length;
+        tester.view.physicalSize = const Size(700, 850);
+        await _pumpUntil(
+          tester,
+          () => !f.container.read(bookPresentationProvider).splitAvailable,
+        );
+        await _readerAction(
+          tester,
+          () => _appCommands(tester).execute(BusyBooksCommandIds.viewNotebook),
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/notebook/$id',
+        );
+        expect(f.reader.suspended, true);
+        expect(f.state.surfaceVisible, false);
+        expect(f.reader.sessionId, session);
+        tester.view.physicalSize = const Size(1200, 850);
+        await tester.pumpAndSettle();
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/notebook/$id',
+        );
+        expect(f.reader.suspended, true);
+        expect(f.state.bookId, id);
+        expect(f.calls.where((call) => call.method == 'open').length, opens);
+        expect(
+          find.byType(ReadingContent, skipOffstage: false),
+          findsOneWidget,
+        );
+        expect(
+          find.byType(NotebookContent, skipOffstage: false),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<CustomScrollView>(
+                find.descendant(
+                  of: find.byType(NotebookContent),
+                  matching: find.byType(CustomScrollView),
+                ),
+              )
+              .controller,
+          same(notebookScroll),
+        );
+        expect(notebookScroll.offset, closeTo(120, .01));
+        final view = f.drafts.view(id);
+        expect(view.filter, AnnotationTypeFilter.highlights);
+        expect(view.sort, NotebookSort.bookOrder);
+        expect(view.withNotes, true);
+        expect(view.selected, annotation.id);
+        expect(f.drafts.drafts[annotation.id]!.text, draft.text);
+        expect(f.drafts.drafts[annotation.id]!.revision, draft.revision);
+        expect(f.container.read(bookPresentationProvider).dividerRatio, .55);
+        expect(find.textContaining('Split temporarily shows'), findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        gate.fail = false;
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+  testWidgets(
+    'a delayed collapsed-pane action cannot change the retained workspace behind a modal',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+      });
+      final entered = Completer<void>(), proceed = Completer<void>();
+      Future<void>? dialog;
+      try {
+        final id = f.state.bookId!;
+        await _mountHeaderApplication(tester, f, '/split/$id');
+        tester.view.physicalSize = const Size(700, 850);
+        await _pumpUntil(
+          tester,
+          () => find.text('Show Notebook').evaluate().isNotEmpty,
+        );
+        await tester.tap(find.text('Show Notebook'));
+        await _pumpUntil(
+          tester,
+          () =>
+              f.container.read(bookPresentationProvider).lastPane ==
+                  BookPane.notebook &&
+              !f.state.surfaceVisible,
+        );
+        f.onNativeCall = (call) async {
+          if (call.method == 'dismissPopover' && !entered.isCompleted) {
+            entered.complete();
+            await proceed.future;
+          }
+          return null;
+        };
+        await tester.tap(find.text('Show Reading'));
+        await _pumpUntil(tester, () => entered.isCompleted, settle: false);
+        dialog = showBusyBooksModalDialog<void>(
+          rootNavigatorKey.currentContext!,
+          builder: (_) => const BusyBooksDialogShell(
+            title: 'Retained modal',
+            children: [Text('Another active surface')],
+          ),
+        );
+        await tester.pumpAndSettle();
+        final focusCalls = f.calls
+            .where((call) => call.method == 'focus')
+            .length;
+        proceed.complete();
+        await tester.pumpAndSettle();
+        expect(
+          f.container.read(bookPresentationProvider).lastPane,
+          BookPane.notebook,
+        );
+        expect(
+          f.calls.where((call) => call.method == 'focus').length,
+          focusCalls,
+        );
+        expect(
+          find.byType(BookWorkspaceScreen, skipOffstage: false),
+          findsOneWidget,
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/split/$id',
+        );
+        rootNavigatorKey.currentState!.pop();
+        await tester.pumpAndSettle();
+        await dialog;
+        dialog = null;
+        expect(
+          f.container.read(bookPresentationProvider).lastPane,
+          BookPane.notebook,
+        );
+        expect(f.state.surfaceVisible, false);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!proceed.isCompleted) proceed.complete();
+        f.onNativeCall = null;
+        if (dialog != null) rootNavigatorKey.currentState?.pop();
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+  testWidgets(
+    'collapsed Split keeps Notebook editing local and reveals an explicit passage after measured pane handoff',
+    (tester) async {
+      late _ReaderFixture f;
+      late ReadingAnnotation annotation;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        annotation = ReadingAnnotation({
+          'id': 'annotation-split-collapsed',
+          'bookId': f.state.bookId!,
+          'annotationKind': 'highlight',
+          'text': 'Source beside the note',
+          'note': 'Retained private text',
+          'reference': 'Page 2',
+          'anchor': {'page': 1},
+          'color': 'yellow',
+          'created': 1,
+        });
+        await f.container
+            .read(workspaceControllerProvider.notifier)
+            .saveAnnotation(annotation);
+      });
+      try {
+        final id = annotation.bookId;
+        await _mountHeaderApplication(tester, f, '/split/$id');
+        await _pumpUntil(
+          tester,
+          () =>
+              f.container.read(bookPresentationProvider).splitAvailable &&
+              f.reader.interactive,
+        );
+        f.container
+            .read(bookPresentationProvider.notifier)
+            .setDividerRatio(id, .55);
+        final opens = f.calls.where((call) => call.method == 'open').length;
+        tester.view.physicalSize = const Size(700, 850);
+        await _pumpUntil(
+          tester,
+          () => find.text('Show Notebook').evaluate().isNotEmpty,
+        );
+        await tester.tap(find.text('Show Notebook'));
+        await _pumpUntil(
+          tester,
+          () =>
+              !f.state.surfaceVisible &&
+              find
+                  .byKey(ValueKey('notebook-select-${annotation.id}'))
+                  .evaluate()
+                  .isNotEmpty,
+        );
+        final jumps = f.dispatches
+            .where((command) => command['action'] == 'goto')
+            .length;
+        await tester.tap(
+          find.byKey(ValueKey('notebook-select-${annotation.id}')),
+        );
+        await tester.pumpAndSettle();
+        final editor = find.descendant(
+          of: find.byKey(ValueKey('notebook-note-${annotation.id}')),
+          matching: find.byType(TextField),
+        );
+        expect(tester.widget<TextField>(editor).focusNode!.hasFocus, true);
+        await tester.enterText(
+          editor,
+          'Collapsed edit survives the reader handoff',
+        );
+        await tester.pump();
+        expect(
+          f.dispatches.where((command) => command['action'] == 'goto').length,
+          jumps,
+        );
+        expect(f.state.surfaceVisible, false);
+        await _mainMenuSelect(
+          tester,
+          'Show in Reading',
+          tooltip: 'Annotation Actions',
+        );
+        await _pumpUntil(
+          tester,
+          () =>
+              f.state.surfaceVisible &&
+              f.dispatches
+                      .where((command) => command['action'] == 'goto')
+                      .length ==
+                  jumps + 1,
+        );
+        expect(
+          f.dispatches
+              .where((command) => command['action'] == 'goto')
+              .last['anchor'],
+          {'page': 1},
+        );
+        expect(
+          f.container.read(bookPresentationProvider).lastPane,
+          BookPane.reading,
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/split/$id',
+        );
+        expect(f.calls.where((call) => call.method == 'open').length, opens);
+        tester.view.physicalSize = const Size(1200, 850);
+        await _pumpUntil(
+          tester,
+          () =>
+              f.container.read(bookPresentationProvider).splitAvailable &&
+              find
+                  .byKey(ValueKey('notebook-note-${annotation.id}'))
+                  .evaluate()
+                  .isNotEmpty,
+        );
+        expect(f.container.read(bookPresentationProvider).dividerRatio, .55);
+        expect(
+          tester.widget<TextField>(editor).controller!.text,
+          'Collapsed edit survives the reader handoff',
+        );
+        expect(f.drafts.view(id).selected, annotation.id);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+  testWidgets(
+    'Split deliberate Notebook selection reveals one passage without losing filters or editing focus',
+    (tester) async {
+      late _ReaderFixture f;
+      late ReadingAnnotation annotation;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        annotation = ReadingAnnotation({
+          'id': 'annotation-split-selection',
+          'bookId': f.state.bookId!,
+          'annotationKind': 'highlight',
+          'text': 'Adjacent saved passage',
+          'note': 'A private note',
+          'reference': 'Page 2',
+          'anchor': {'page': 1},
+          'color': 'yellow',
+          'created': 1,
+        });
+        await f.container
+            .read(workspaceControllerProvider.notifier)
+            .saveAnnotation(annotation);
+        f.notes.view(
+          annotation.bookId,
+          filter: AnnotationTypeFilter.highlights,
+          sort: NotebookSort.bookOrder,
+          withNotes: true,
+        );
+      });
+      try {
+        final id = annotation.bookId;
+        await _mountHeaderApplication(tester, f, '/split/$id');
+        await _pumpUntil(
+          tester,
+          () =>
+              f.reader.interactive &&
+              find
+                  .byKey(ValueKey('notebook-select-${annotation.id}'))
+                  .evaluate()
+                  .isNotEmpty,
+        );
+        final opens = f.calls.where((call) => call.method == 'open').length;
+        final jumps = f.dispatches
+            .where((command) => command['action'] == 'goto')
+            .length;
+        final focuses = f.dispatches
+            .where((command) => command['action'] == 'focus')
+            .length;
+        await tester.tap(
+          find.byKey(ValueKey('notebook-select-${annotation.id}')),
+        );
+        await _pumpUntil(
+          tester,
+          () =>
+              f.dispatches
+                  .where((command) => command['action'] == 'goto')
+                  .length >
+              jumps,
+        );
+        final editor = find.descendant(
+          of: find.byKey(ValueKey('notebook-note-${annotation.id}')),
+          matching: find.byType(TextField),
+        );
+        expect(editor, findsOneWidget);
+        expect(tester.widget<TextField>(editor).focusNode!.hasFocus, true);
+        expect(
+          f.dispatches
+              .where((command) => command['action'] == 'goto')
+              .last['anchor'],
+          {'page': 1},
+        );
+        expect(
+          f.dispatches.where((command) => command['action'] == 'focus').length,
+          focuses,
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/split/$id',
+        );
+        expect(f.drafts.view(id).filter, AnnotationTypeFilter.highlights);
+        expect(f.drafts.view(id).sort, NotebookSort.bookOrder);
+        expect(f.drafts.view(id).withNotes, true);
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: 'あ',
+            selection: TextSelection.collapsed(offset: 1),
+            composing: TextRange(start: 0, end: 1),
+          ),
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(tester.widget<TextField>(editor).focusNode!.hasFocus, true);
+        expect(tester.widget<TextField>(editor).controller!.text, 'あ');
+        await tester.enterText(editor, 'An unsaved Split edit');
+        await tester.pump();
+        f.notes.view(id, sort: NotebookSort.recentlyAdded);
+        await tester.pump(const Duration(milliseconds: 800));
+        await _pumpUntil(tester, () => f.drafts.drafts.isEmpty);
+        expect(
+          f.dispatches.where((command) => command['action'] == 'goto').length,
+          jumps + 1,
+        );
+        expect(
+          tester.widget<TextField>(editor).controller!.text,
+          'An unsaved Split edit',
+        );
+        await _readerAction(
+          tester,
+          () => _appCommands(tester).execute(BusyBooksCommandIds.viewReading),
+        );
+        expect(
+          f.container
+              .read(appRouterProvider)
+              .routeInformationProvider
+              .value
+              .uri
+              .path,
+          '/read/$id',
+        );
+        expect(f.calls.where((call) => call.method == 'open').length, opens);
+        expect(f.drafts.view(id).selected, annotation.id);
+        expect(f.drafts.view(id).filter, AnnotationTypeFilter.highlights);
+        expect(f.drafts.view(id).withNotes, true);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
   test(
     'a newer choice wins over retained-reader reconciliation and late results',
     () async {
@@ -2120,7 +2989,11 @@ void main() {
           final menus = <List<Map>>[];
           await _mainMenuSelect(tester, null, snapshots: menus);
           final modes = menus.single
-              .where((e) => ['Reading', 'Notebook'].contains(e['label']))
+              .where(
+                (e) =>
+                    ['Reading', 'Notebook'].contains(e['label']) ||
+                    (e['label'] as String).startsWith('Split'),
+              )
               .toList();
           final groups = menus.single
               .where((e) => e['label'] == 'View')
@@ -2131,21 +3004,42 @@ void main() {
           } else {
             expect(groups.length, 1);
             final children = groups.single['children'] as List;
-            expect(children.map((e) => e['label']), ['Reading', 'Notebook']);
-            for (final item in children) {
-              final reading = item['label'] == 'Reading';
+            expect(children, hasLength(3));
+            expect(children.take(2).map((e) => e['label']), [
+              'Reading',
+              'Notebook',
+            ]);
+            expect(children.last['label'], startsWith('Split'));
+            for (final (index, item) in children.indexed) {
               final command =
-                  _appCommands(tester)[reading
-                      ? BusyBooksCommandIds.viewReading
-                      : BusyBooksCommandIds.viewNotebook]!;
+                  _appCommands(tester)[[
+                    BusyBooksCommandIds.viewReading,
+                    BusyBooksCommandIds.viewNotebook,
+                    BusyBooksCommandIds.viewSplit,
+                  ][index]]!;
               expect(
                 item['icon'],
-                reading ? 'view-paged-symbolic' : 'document-edit-symbolic',
+                [
+                  'view-paged-symbolic',
+                  'document-edit-symbolic',
+                  'sidebar-show-right-symbolic',
+                ][index],
               );
               expect(item['selected'], item['label'] == active);
               expect(item['mutuallyExclusive'], true);
-              expect(item['shortcut'], command.shortcut!.label);
-              expect(item['gtkAccelerator'], command.shortcut!.gtkAccelerator);
+              expect(item['enabled'], command.canExecute);
+              expect(item['shortcut'], command.shortcut?.label);
+              expect(item['gtkAccelerator'], command.shortcut?.gtkAccelerator);
+              if (index == 2 && !command.canExecute) {
+                expect(
+                  item['label'],
+                  contains(
+                    command.disabledReason!(
+                      tester.element(find.byType(BusyBooksMainMenuButton)),
+                    ),
+                  ),
+                );
+              }
             }
           }
           expect(find.byType(BusyBooksMainMenuButton), findsOneWidget);
@@ -2212,7 +3106,9 @@ void main() {
           await _mainMenuSelect(tester, null, snapshots: menus);
           expect(
             menus.single.where(
-              (e) => ['Reading', 'Notebook', 'View'].contains(e['label']),
+              (e) =>
+                  ['Reading', 'Notebook', 'View'].contains(e['label']) ||
+                  (e['label'] as String).startsWith('Split'),
             ),
             isEmpty,
           );
@@ -2341,6 +3237,7 @@ void main() {
             () => find.text('Notebook').evaluate().isNotEmpty,
           );
           expect(find.byIcon(BusyBooksGlyphs.notebookView), findsOneWidget);
+          expect(find.byIcon(BusyBooksGlyphs.splitView), findsOneWidget);
           expect(find.byIcon(BusyBooksGlyphs.previewView), findsWidgets);
           expect(find.byIcon(BusyBooksGlyphs.annotations), findsNothing);
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -2533,7 +3430,9 @@ void main() {
         await _mainMenuSelect(tester, null, snapshots: menus);
         expect(
           menus.single.where(
-            (e) => ['Reading', 'Notebook', 'View'].contains(e['label']),
+            (e) =>
+                ['Reading', 'Notebook', 'View'].contains(e['label']) ||
+                (e['label'] as String).startsWith('Split'),
           ),
           isEmpty,
         );
@@ -2581,11 +3480,19 @@ void main() {
         expect(snapshots.single.map((e) => e['label']), [
           'Reading',
           'Notebook',
+          'Split',
         ]);
         expect(snapshots.single[0]['icon'], 'view-paged-symbolic');
         expect(snapshots.single[1]['icon'], 'document-edit-symbolic');
+        expect(snapshots.single[2]['icon'], 'sidebar-show-right-symbolic');
         expect(snapshots.single[0]['selected'], true);
         expect(snapshots.single[1]['selected'], false);
+        expect(snapshots.single[2]['selected'], false);
+        expect(snapshots.single[2]['enabled'], true);
+        expect(
+          snapshots.single[2]['shortcut'],
+          _appCommands(tester)[BusyBooksCommandIds.viewSplit]!.shortcut?.label,
+        );
         expect(
           snapshots.single[1]['shortcut'],
           _appCommands(
@@ -10015,110 +10922,125 @@ void _professionalWorkspaceTests() {
       }
     },
   );
-  for (final narrow in [false, true]) {
-    testWidgets(
-      'repository note activation reveals exact missing-book annotation and retains scope (narrow: $narrow)',
-      (tester) async {
-        late _ReaderFixture f;
-        late String owner, collectionId, originId;
-        await _readerAction(tester, () async {
-          f = await _ReaderFixture.create(
-            'text.pdf',
-            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
-          );
-          originId = f.state.bookId!;
-          final source = File(
-            p.join(f.directory.path, 'Other publication.pdf'),
-          );
-          await source.writeAsBytes([
-            ...await File('test/fixtures/text.pdf').readAsBytes(),
-            ...'\n% different saved publication\n'.codeUnits,
-          ]);
-          await f.container.read(appSettingsControllerProvider.notifier).update(
-            {'grid': false},
-          );
-          final workspace = f.container.read(
-            workspaceControllerProvider.notifier,
-          );
-          await workspace.createCollection('Origin collection');
-          collectionId = f.container
-              .read(workspaceControllerProvider)
-              .workspace!
-              .id;
-          await workspace.addBooks([f.reader.book!.path, source.path]);
-          owner = f.container
-              .read(workspaceControllerProvider)
-              .books
-              .firstWhere((b) => b.id != originId)
-              .id;
-          await f.store.call('putAnnotation', {
-            'id': 'annotation-cross-book-note',
-            'bookId': owner,
-            'annotationKind': 'highlight',
-            'text': 'Cross-book quotation',
-            'note': 'Exact missing-original needle',
-            'reference': 'Page 1',
-            'anchor': {'page': 0},
-            'color': 'yellow',
-            'created': 1,
+  for (final originView in [BookView.notebook, BookView.split]) {
+    for (final narrow in [false, true]) {
+      testWidgets(
+        'repository note activation reveals exact missing-book annotation and retains scope (origin: ${originView.name}, narrow: $narrow)',
+        (tester) async {
+          late _ReaderFixture f;
+          late String owner, collectionId, originId;
+          await _readerAction(tester, () async {
+            f = await _ReaderFixture.create(
+              'text.pdf',
+              windowControls: WindowControlService(
+                nativeWindow: _HeaderWindow(),
+              ),
+            );
+            originId = f.state.bookId!;
+            final source = File(
+              p.join(f.directory.path, 'Other publication.pdf'),
+            );
+            await source.writeAsBytes([
+              ...await File('test/fixtures/text.pdf').readAsBytes(),
+              ...'\n% different saved publication\n'.codeUnits,
+            ]);
+            await f.container
+                .read(appSettingsControllerProvider.notifier)
+                .update({'grid': false});
+            final workspace = f.container.read(
+              workspaceControllerProvider.notifier,
+            );
+            await workspace.createCollection('Origin collection');
+            collectionId = f.container
+                .read(workspaceControllerProvider)
+                .workspace!
+                .id;
+            await workspace.addBooks([f.reader.book!.path, source.path]);
+            owner = f.container
+                .read(workspaceControllerProvider)
+                .books
+                .firstWhere((b) => b.id != originId)
+                .id;
+            await f.store.call('putAnnotation', {
+              'id': 'annotation-cross-book-note',
+              'bookId': owner,
+              'annotationKind': 'highlight',
+              'text': 'Cross-book quotation',
+              'note': 'Exact missing-original needle',
+              'reference': 'Page 1',
+              'anchor': {'page': 0},
+              'color': 'yellow',
+              'created': 1,
+            });
+            await source.delete();
+            await workspace.loadBook(originId, activate: true);
           });
-          await source.delete();
-          await workspace.loadBook(originId, activate: true);
-        });
-        try {
-          await _mountHeaderApplication(tester, f, '/notebook/$originId');
-          tester.view.physicalSize = Size(narrow ? 540 : 1200, 850);
-          await tester.pumpAndSettle();
-          final scope = BookSearchScope(
-            BookSearchScopeKind.currentCollection,
-            id: collectionId,
-            name: 'Origin collection',
-          );
-          await _readerAction(
-            tester,
-            () => f.searchController.open(
-              category: BookSearchCategory.notebook,
-              query: 'needle',
-              scope: scope,
-            ),
-          );
-          expect(f.search.results, hasLength(1));
-          final row = find.byKey(ValueKey('$owner:annotation-cross-book-note'));
-          await tester.tap(row);
-          await _pumpUntil(
-            tester,
-            () =>
-                f.container
-                    .read(appRouterProvider)
-                    .routeInformationProvider
-                    .value
-                    .uri
-                    .path ==
-                '/notebook/$owner',
-          );
-          await _pumpUntil(
-            tester,
-            () => find
-                .byKey(
-                  const ValueKey('notebook-note-annotation-cross-book-note'),
-                )
-                .evaluate()
-                .isNotEmpty,
-          );
-          expect(f.search.scope, scope);
-          expect(f.search.query, 'needle');
-          expect(f.search.active, !narrow);
-          expect(f.search.results, narrow ? isEmpty : isNotEmpty);
-          expect(
-            f.container.read(workspaceControllerProvider).workspace!.id,
-            collectionId,
-          );
-          expect(tester.takeException(), isNull);
-        } finally {
-          await _disposeHeaderApplication(tester, f);
-        }
-      },
-    );
+          try {
+            await _mountHeaderApplication(
+              tester,
+              f,
+              originView.routeFor(originId),
+            );
+            tester.view.physicalSize = Size(narrow ? 540 : 1200, 850);
+            await tester.pumpAndSettle();
+            final scope = BookSearchScope(
+              BookSearchScopeKind.currentCollection,
+              id: collectionId,
+              name: 'Origin collection',
+            );
+            await _readerAction(
+              tester,
+              () => f.searchController.open(
+                category: BookSearchCategory.notebook,
+                query: 'needle',
+                scope: scope,
+              ),
+            );
+            expect(f.search.results, hasLength(1));
+            final row = find.byKey(
+              ValueKey('$owner:annotation-cross-book-note'),
+            );
+            await tester.tap(row);
+            await _pumpUntil(
+              tester,
+              () =>
+                  f.container
+                          .read(appRouterProvider)
+                          .routeInformationProvider
+                          .value
+                          .uri
+                          .path ==
+                      notebookTargetRoute(
+                        originView.routeFor(originId),
+                        owner,
+                      ) &&
+                  (originView != BookView.split ||
+                      f.state.bookId == owner && f.state.error != null),
+            );
+            await _pumpUntil(
+              tester,
+              () => find
+                  .byKey(
+                    const ValueKey('notebook-note-annotation-cross-book-note'),
+                  )
+                  .evaluate()
+                  .isNotEmpty,
+            );
+            expect(f.search.scope, scope);
+            expect(f.search.query, 'needle');
+            expect(f.search.active, !narrow);
+            expect(f.search.results, narrow ? isEmpty : isNotEmpty);
+            expect(
+              f.container.read(workspaceControllerProvider).workspace!.id,
+              collectionId,
+            );
+            expect(tester.takeException(), isNull);
+          } finally {
+            await _disposeHeaderApplication(tester, f);
+          }
+        },
+      );
+    }
   }
   testWidgets(
     'narrow Books activation dismisses search and ordinary sidebar before reader handoff',
@@ -10178,121 +11100,132 @@ void _professionalWorkspaceTests() {
       }
     },
   );
-  for (final narrow in [false, true]) {
-    for (final removed in [false, true]) {
-      testWidgets(
-        'deferred cross-book bookmark validates exact annotation (narrow: $narrow, removed: $removed)',
-        (tester) async {
-          late _ReaderFixture f;
-          late String originId, targetId;
-          await _readerAction(tester, () async {
-            f = await _ReaderFixture.create(
-              'text.pdf',
-              windowControls: WindowControlService(
-                nativeWindow: _HeaderWindow(),
-              ),
-            );
-            originId = f.state.bookId!;
-            final file =
-                await File(
-                  p.join(f.directory.path, 'Deferred target.pdf'),
-                ).writeAsBytes([
-                  ...await File('test/fixtures/text.pdf').readAsBytes(),
-                  ...'\n% deferred target publication\n'.codeUnits,
-                ]);
-            final workspace = f.container.read(
-              workspaceControllerProvider.notifier,
-            );
-            await workspace.createCollection('Deferred navigation collection');
-            await workspace.addBooks([f.reader.book!.path, file.path]);
-            targetId = f.container
-                .read(workspaceControllerProvider)
-                .books
-                .firstWhere((b) => b.id != originId)
-                .id;
-            await f.store.call('putAnnotation', {
-              'id': 'annotation-deferred-crossbook',
-              'bookId': targetId,
-              'annotationKind': 'bookmark',
-              'text': '',
-              'note': 'pending passage',
-              'reference': 'Page 3',
-              'anchor': {'page': 2},
-              'color': 'yellow',
-              'created': 1,
+  for (final originView in [BookView.notebook, BookView.split]) {
+    for (final narrow in [false, true]) {
+      for (final removed in [false, true]) {
+        testWidgets(
+          'deferred cross-book bookmark validates exact annotation (origin: ${originView.name}, narrow: $narrow, removed: $removed)',
+          (tester) async {
+            late _ReaderFixture f;
+            late String originId, targetId;
+            await _readerAction(tester, () async {
+              f = await _ReaderFixture.create(
+                'text.pdf',
+                windowControls: WindowControlService(
+                  nativeWindow: _HeaderWindow(),
+                ),
+              );
+              originId = f.state.bookId!;
+              final file =
+                  await File(
+                    p.join(f.directory.path, 'Deferred target.pdf'),
+                  ).writeAsBytes([
+                    ...await File('test/fixtures/text.pdf').readAsBytes(),
+                    ...'\n% deferred target publication\n'.codeUnits,
+                  ]);
+              final workspace = f.container.read(
+                workspaceControllerProvider.notifier,
+              );
+              await workspace.createCollection(
+                'Deferred navigation collection',
+              );
+              await workspace.addBooks([f.reader.book!.path, file.path]);
+              targetId = f.container
+                  .read(workspaceControllerProvider)
+                  .books
+                  .firstWhere((b) => b.id != originId)
+                  .id;
+              await f.store.call('putAnnotation', {
+                'id': 'annotation-deferred-crossbook',
+                'bookId': targetId,
+                'annotationKind': 'bookmark',
+                'text': '',
+                'note': 'pending passage',
+                'reference': 'Page 3',
+                'anchor': {'page': 2},
+                'color': 'yellow',
+                'created': 1,
+              });
+              await workspace.loadBook(originId, activate: true);
             });
-            await workspace.loadBook(originId, activate: true);
-          });
-          try {
-            await _mountHeaderApplication(tester, f, '/notebook/$originId');
-            tester.view.physicalSize = Size(narrow ? 540 : 1200, 850);
-            await tester.pumpAndSettle();
-            await _readerAction(
-              tester,
-              () => f.searchController.open(
-                category: BookSearchCategory.bookmarks,
-                query: 'pending passage',
-                scope: const BookSearchScope.all(),
-              ),
-            );
-            await tester.tap(
-              find.byKey(ValueKey('$targetId:annotation-deferred-crossbook')),
-            );
-            // Initialization begins before the native open request. Deliver
-            // readiness only after the mock owns the new renderer session.
-            await _pumpUntil(
-              tester,
-              () =>
-                  f.state.bookId == targetId &&
-                  f.state.phase == 'initializing' &&
-                  f.session == f.reader.sessionId,
-              settle: false,
-            );
-            expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
-            if (removed) {
+            try {
+              await _mountHeaderApplication(
+                tester,
+                f,
+                originView.routeFor(originId),
+              );
+              tester.view.physicalSize = Size(narrow ? 540 : 1200, 850);
+              await tester.pumpAndSettle();
               await _readerAction(
                 tester,
-                () => f.container
-                    .read(workspaceControllerProvider.notifier)
-                    .deleteAnnotation('annotation-deferred-crossbook'),
+                () => f.searchController.open(
+                  category: BookSearchCategory.bookmarks,
+                  query: 'pending passage',
+                  scope: const BookSearchScope.all(),
+                ),
+              );
+              await tester.tap(
+                find.byKey(ValueKey('$targetId:annotation-deferred-crossbook')),
+              );
+              // Initialization begins before the native open request. Deliver
+              // readiness only after the mock owns the new renderer session.
+              await _pumpUntil(
+                tester,
+                () =>
+                    f.state.bookId == targetId &&
+                    f.state.phase == 'initializing' &&
+                    f.session == f.reader.sessionId,
                 settle: false,
               );
+              expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
+              if (removed) {
+                await _readerAction(
+                  tester,
+                  () => f.container
+                      .read(workspaceControllerProvider.notifier)
+                      .deleteAnnotation('annotation-deferred-crossbook'),
+                  settle: false,
+                );
+              }
+              await _readerAction(tester, () async {
+                await f.event('ready');
+                await f.event('opened');
+              }, settle: false);
+              // A cancelled deferred activation republishes changed repository
+              // rows after its debounce, using the real storage worker.
+              await tester.pump(const Duration(milliseconds: 150));
+              await _pumpUntil(
+                tester,
+                () => f.state.ready && !f.search.loading,
+              );
+              final jumps = f.dispatches
+                  .where((d) => d['action'] == 'goto')
+                  .toList();
+              if (removed) {
+                expect(jumps, isEmpty);
+              } else {
+                expect(jumps, hasLength(1));
+                expect(jumps.single['anchor'], {'page': 2});
+              }
+              expect(
+                f.container
+                    .read(appRouterProvider)
+                    .routeInformationProvider
+                    .value
+                    .uri
+                    .path,
+                readingTargetRoute(originView.routeFor(originId), targetId),
+              );
+              expect(f.search.active, !narrow);
+              expect(f.search.query, 'pending passage');
+              expect(f.search.scope, const BookSearchScope.all());
+              expect(tester.takeException(), isNull);
+            } finally {
+              await _disposeHeaderApplication(tester, f);
             }
-            await _readerAction(tester, () async {
-              await f.event('ready');
-              await f.event('opened');
-            }, settle: false);
-            // A cancelled deferred activation republishes changed repository
-            // rows after its debounce, using the real storage worker.
-            await tester.pump(const Duration(milliseconds: 150));
-            await _pumpUntil(tester, () => f.state.ready && !f.search.loading);
-            final jumps = f.dispatches
-                .where((d) => d['action'] == 'goto')
-                .toList();
-            if (removed) {
-              expect(jumps, isEmpty);
-            } else {
-              expect(jumps, hasLength(1));
-              expect(jumps.single['anchor'], {'page': 2});
-            }
-            expect(
-              f.container
-                  .read(appRouterProvider)
-                  .routeInformationProvider
-                  .value
-                  .uri
-                  .path,
-              '/read/$targetId',
-            );
-            expect(f.search.active, !narrow);
-            expect(f.search.query, 'pending passage');
-            expect(f.search.scope, const BookSearchScope.all());
-            expect(tester.takeException(), isNull);
-          } finally {
-            await _disposeHeaderApplication(tester, f);
-          }
-        },
-      );
+          },
+        );
+      }
     }
   }
 }

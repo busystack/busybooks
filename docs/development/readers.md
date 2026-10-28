@@ -17,6 +17,14 @@ experimental PDF adapter. Worker code, CMaps, standard fonts, image/color WASM,
 fallback scripts, ICC resources and their licenses are local assets. The adapter
 uses actual PDF pages, text layers, page labels, outline, destinations and
 PDF-coordinate highlight rectangles. Canvas rendering is for PDF pages only.
+A retained hidden Split pane pauses application-scheduled PDF layout: BusyBooks
+quiesces existing navigation and appearance work while the native view still
+produces frames, then hides it. Resize requests coalesce until native visibility
+and the acknowledged pane bounds return. Hidden flush/export preserves the last
+settled PDF source rather than deriving coordinates from hidden DOM geometry.
+This uses the engine's normal display render tasks without changing PDF.js.
+Publication search yields through the application event loop and can finish
+while the native view is hidden; it does not wait for animation frames.
 
 Both engines run in the native desktop hosts described below. Controlled
 adapter tests, native engine probes and full application acceptance have
@@ -322,6 +330,29 @@ through Foliate's section/anchor API and sanitized before presentation; local
 images use the existing publication loader, without adding a blob/network fetch
 permission. PDF fits use each page's intrinsic geometry/rotation.
 
+Reading, Notebook and Split share one book workspace, one reader session and one
+Notebook editing state. Split allocates the reader on the left and Notebook on
+the right using application-owned layout, with a constrained adjustable divider.
+Standalone Notebook suspends its reader; Split retains an operational reader,
+including when the approved narrow layout temporarily shows only one pane.
+Native WebKitGTK/WebView2 bounds follow the actual visible reader pane after
+sidebar allocation and display scaling. Visibility/focus intent is separate from
+geometry, and native reveal requires a current book/session bounds acknowledgement.
+Hidden reader panes cannot receive input or accessibility focus.
+
+Publication focus notifications contain only a bounded session and trusted input
+source, never a command or navigation destination. The controller confirms actual
+native focus and its focus revision before accepting them, so delayed input cannot
+take editing ownership from Notebook. Resizing updates selection geometry around
+the same original source anchor without requesting another selection popover.
+This uses supported engine APIs, application events and native-host composition;
+no renderer method, prototype or dependency implementation is replaced.
+
+PDF viewport relayout rebuilds its text-layer DOM. A temporary native text
+selection can clear during that rebuild; the adapter reports an empty selection
+instead of retaining a detached range or stale popup rectangle. Stored PDF-unit
+annotation segments, highlights and navigation locations remain unchanged.
+
 `test/fixtures/mixed-pages.pdf` adds eight deterministic pages with different
 sizes, orientations and intrinsic rotation (4,593 bytes). Use it alongside
 text.pdf and image-only.pdf for fit/zoom/rotation checks. Executable pure geometry
@@ -347,7 +378,7 @@ is one URI-encoded path segment. Requests have a ten-second total deadline, a
 one-MiB response limit, shape/MIME validation and bounded same-source redirects.
 Obsolete requests are closed where possible and ignored by book, reader session,
 presentation, term and request revision. Dismissal (including native outside
-click/deactivation), replacement, book switch and leaving Reading invalidate the
+click/deactivation), replacement, book switch and hiding/leaving the reader invalidate the
 lookup. Results update the existing presentation without reopening or focusing it.
 Keyboard Escape/Close uses the existing focus return. Draft capture must succeed
 before selection actions can replace or dismiss an editor.

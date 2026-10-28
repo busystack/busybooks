@@ -34,6 +34,42 @@ void main() {
     },
   );
 
+  test(
+    'Split is discoverable without stealing a binding and remains configurable',
+    () {
+      var enabled = false;
+      String? reason(BuildContext _) => 'Needs 772 px of content width.';
+      final catalog = BusyBooksCommandCatalog.create(
+        executions: {BusyBooksCommandIds.viewSplit: () {}},
+        enabled: {BusyBooksCommandIds.viewSplit: () => enabled},
+        disabledReasons: {BusyBooksCommandIds.viewSplit: reason},
+      );
+      final split = catalog[BusyBooksCommandIds.viewSplit]!;
+      expect(split.shortcut, isNull);
+      expect(split.scope, BusyBooksCommandScope.documentView);
+      expect(split.canExecute, isFalse);
+      final effective = effectiveCommandRegistry(catalog, {
+        BusyBooksCommandIds.viewSplit: const BusyBooksKeyBinding(
+          LogicalKeyboardKey.digit3,
+          control: true,
+          alt: true,
+        ),
+      })[BusyBooksCommandIds.viewSplit]!;
+      expect(effective.shortcut!.label, 'Ctrl+Alt+3');
+      expect(effective.disabledReason, same(reason));
+      enabled = true;
+      expect(effective.canExecute, isTrue);
+      expect(
+        catalog[BusyBooksCommandIds.viewReading]!.shortcut!.label,
+        'Ctrl+Alt+1',
+      );
+      expect(
+        catalog[BusyBooksCommandIds.viewNotebook]!.shortcut!.label,
+        'Ctrl+Alt+2',
+      );
+    },
+  );
+
   testWidgets(
     'visible book Search owns Ctrl+F while Collection Search is hidden',
     (tester) async {

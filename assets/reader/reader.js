@@ -104,6 +104,21 @@ function receiveAnnotations(command){
     annotationOperation=operation;return operation
 }
 function userNavigation(){typographyWork.navigate();pinnedTypographyLocation=null;programmaticSelections=new WeakMap()}
+const focusDocuments=new WeakSet()
+function observePublicationFocus(doc,publication=null){
+    if(focusDocuments.has(doc))return
+    focusDocuments.add(doc)
+    const report=event=>{
+        if(event.isTrusted!==true)return
+        if(publication){
+            if(publication!==view||!getContents(publication).some(part=>part.doc===doc))return
+        }else if(!view&&!pdf)return
+        else if(!content.contains(event.target)&&!event.target.closest?.('dialog'))return
+        emit('contentFocus',{source:event.type==='pointerdown'?'pointer':'focus'})
+    }
+    doc.addEventListener('pointerdown',report,{capture:true,passive:true})
+    doc.addEventListener('focusin',report,{capture:true})
+}
 function reportEpubLocation(data){
     lastEpubRelocation=data
     if(typographyWork.active&&typographyWork.canRestore(typographyWork.active))return
@@ -135,6 +150,25 @@ function selected(data,range,doc=document,settle=true) {
     selection={...data,rect:selectionRect(range,doc)};emit('selection',selection)
     clearTimeout(selectionTimer)
     if(settle)selectionTimer=setTimeout(()=>{if(selection?.text&&performance.now()>suppressSelectionUntil)emit('selection',{...selection,settled:true})},450)
+}
+let selectionGeometryRevision=0
+function refreshSelectionGeometry(){
+    if(!selection?.anchor)return
+    const documents=selection.note||pdf?[document]:getContents(view).map(part=>part.doc)
+    const doc=documents.find(doc=>{const value=doc.getSelection?.();return value?.rangeCount&&!value.isCollapsed})
+    const value=doc?.getSelection(),range=value?.rangeCount?value.getRangeAt(0):null
+    if(!range?.startContainer.isConnected||value.toString()!==selection.text){
+        selection=null;clearTimeout(selectionTimer);emit('selection',{text:'',anchor:null});return
+    }
+    // The durable source anchor stays byte-for-byte identical. Only native
+    // presentation geometry changes, and resizing never opens its popover.
+    selected(selection,range,doc,false)
+}
+function scheduleSelectionGeometry(){
+    const revision=++selectionGeometryRevision,publication=view,sourcePdf=pdf
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        if(revision===selectionGeometryRevision&&publication===view&&sourcePdf===pdf)refreshSelectionGeometry()
+    }))
 }
 function theme(value){
     chrome=value
@@ -454,11 +488,13 @@ async function mountFoliate(book,config){
         if (/xhtml|html|svg/.test(e.detail.type)) e.detail.data=Promise.resolve(e.detail.data).then(async value=>safeDocument(typeof value==='string'?value:await value.text()))
     })
     view=document.createElement('foliate-view');content.className='';content.replaceChildren(view)
+    const publication=view
     fixedLayout=book.rendition?.layout==='pre-paginated'
         ?new FixedLayoutIntegration(view,book,fixedContents,reportFixedLocation,configureFixedRenderer):null
     fixedLayout?.prepare(config.appearance??{},config.anchor?.page??config.anchor?.index??0)
     view.history.addEventListener('index-change',reportNavigation)
     view.addEventListener('load',({detail:{doc,index}})=>{
+        observePublicationFocus(doc,publication)
         doc.addEventListener('pointerdown',userNavigation,{passive:true})
         doc.addEventListener('wheel',userNavigation,{passive:true})
         doc.addEventListener('touchstart',userNavigation,{passive:true})
@@ -816,7 +852,7 @@ async function openPdf(config){
     while(!usable&&pdfLayout&&pdfLayout!==layout){layout=pdfLayout;usable=await layout}
     if(!usable)return false
     content.addEventListener('scroll',()=>{
-        if(layingOut)return
+        if(layingOut||pdfLayoutPaused)return
         const y=content.scrollTop, page=pages.findIndex(p=>p.element.offsetTop+p.element.offsetHeight>y+content.clientHeight*.25)
         if(page>=0){const p=pages[page];reportLocation({anchor:pdfAnchor(page,Math.max(0,(y-p.element.offsetTop)/p.element.offsetHeight)),progress:(page+1)/pdf.numPages,chapter:'',tocHref:pdfTocHref(page),tocId:pdfTocId(pdfAnchor(page,Math.max(0,(y-p.element.offsetTop)/p.element.offsetHeight))),reference:pdfReference(page),text:p.text??'',noText:p.text!=null&&!p.text.trim()})}
     },{passive:true})
@@ -940,7 +976,63 @@ function trimPages(){
         p.element.replaceChildren();p.rendering=null;p.text=null;geometry.get(i)?.cleanup()
     }
 }
-let pdfLayout,pdfViewport
+let pdfLayout,pdfViewport,pdfLayoutPaused=false,pdfLayoutVisibilityRevision=-1,pdfResizePending=false
+const pdfResumeWaiters=new Set()
+function waitForPdfResume(){
+    return new Promise(resolve=>{
+        let timer
+        const finish=visible=>{clearTimeout(timer);pdfResumeWaiters.delete(finish);resolve(visible)}
+        pdfResumeWaiters.add(finish)
+        // Passage requests already have a bounded application lifetime. A
+        // hidden pane must never revive an expired request on a later reveal.
+        timer=setTimeout(()=>finish(false),10000)
+    })
+}
+function capturePdfLocation(){
+    if(layingOut||pdfLayoutPaused||location.anchor?.page==null)return
+    const index=location.anchor.page,p=pages[index]
+    if(p?.element.offsetHeight>0)location={...location,anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight)}
+}
+function schedulePdfResize(){
+    pdfResizePending=true
+    clearTimeout(window.pdfResizeTimer)
+    if(pdfLayoutPaused)return
+    window.pdfResizeTimer=setTimeout(()=>queueNavigation(async()=>{
+        // A timer can already have entered the navigation queue when a newer
+        // visibility request pauses layout. Recheck at execution as well.
+        if(pdfLayoutPaused)return
+        pdfResizePending=false
+        if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight)return
+        await relayoutPdf(location.anchor)
+        // A rebuilt text layer may clear its temporary DOM selection.
+        refreshSelectionGeometry()
+    }).catch(error=>emit('navigationError',{message:String(error)})),150)
+}
+function layoutVisibility(command){
+    const {revision,visible,request}=command
+    if(!Number.isSafeInteger(revision)||revision<0||typeof visible!=='boolean'||!Number.isSafeInteger(request))throw Error('Invalid layout visibility request')
+    if(revision<pdfLayoutVisibilityRevision){emit('layoutVisibility',{request,revision,visible});return}
+    pdfLayoutVisibilityRevision=revision
+    if(!pdf){emit('layoutVisibility',{request,revision,visible});return}
+    if(visible){
+        pdfLayoutPaused=false
+        for(const resume of pdfResumeWaiters)resume(true)
+        pdfResumeWaiters.clear()
+        if(pdfResizePending||pdfViewport?.[0]!==content.clientWidth||pdfViewport?.[1]!==content.clientHeight)schedulePdfResize()
+        emit('layoutVisibility',{request,revision,visible})
+        return
+    }
+    capturePdfLocation()
+    pdfLayoutPaused=true
+    clearTimeout(window.pdfResizeTimer)
+    pdfResizePending=true
+    // The caller keeps the native surface visible until this acknowledgement.
+    // No later automatic resize may append another frame-dependent render.
+    return queueNavigation(async()=>{
+        await appearanceOperation;await annotationOperation
+        emit('layoutVisibility',{request,revision,visible})
+    })
+}
 function relayoutPdf(anchor){return pdfLayout=layoutPdf(anchor)}
 async function layoutPdf(anchor){
     const epoch=++layoutGeneration;layingOut=true;navigatingPage=anchor?.page??0
@@ -959,7 +1051,7 @@ async function layoutPdf(anchor){
             if(prefs.flow!=='scrolled'&&i!==(anchor?.page??0)&&!(prefs.spread&&i===(anchor?.page??0)+1))el.hidden=true
             content.append(el);pages.push({element:el,scale,epoch})
         }
-        observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
+        observer=new IntersectionObserver(entries=>{if(pdfLayoutPaused)return;for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
         for(const p of pages)observer.observe(p.element)
         const rendered=await queuePage(anchor?.page??0,epoch)
         if(!rendered||epoch!==layoutGeneration)return false
@@ -1082,6 +1174,7 @@ function requestSearch(query,queryId,offset=0,limit=200){
     const operation=searchTail.catch(()=>{}).then(()=>token===generation?search(query,queryId,token,offset,limit):null)
     searchTail=operation;return operation
 }
+const searchYield=()=>new Promise(resolve=>setTimeout(resolve,0))
 async function search(query,queryId,token,offset=0,limit=200){
     const sourceView=view,sourcePdf=pdf
     offset=Number.isSafeInteger(offset)&&offset>=0?offset:0
@@ -1113,10 +1206,10 @@ async function search(query,queryId,token,offset=0,limit=200){
                         if(!current())return
                         match(()=>({anchor:textAnchor(sourceView.getCFI(index,item.range),index),...excerpt(item.excerptParts),reference:sourceView.getProgressOf(index,item.range).tocItem?.label??''}))
                         // A dense chapter must still yield for request cancellation.
-                        if(++count%1000===0){flush();await nextFrame();if(!current())return}
+                        if(++count%1000===0){flush();await searchYield();if(!current())return}
                     }
                 }
-                flush();result('searchProgress',{progress:(index+1)/sections.length});await nextFrame()
+                flush();result('searchProgress',{progress:(index+1)/sections.length});await searchYield()
             }
         }else if(sourcePdf)for(let i=0;i<sourcePdf.numPages;i++){
             if(!current())return
@@ -1125,9 +1218,9 @@ async function search(query,queryId,token,offset=0,limit=200){
             let count=0
             for(const range of literalRanges(data.text,query)){
                 match(()=>({anchor:{page:i,textOffset:data.positions[range.start],textLength:data.positions[range.end]-data.positions[range.start]},...excerpt(excerptParts(data.text,range)),reference:pdfReference(i)}))
-                if(++count%1000===0){flush();await nextFrame();if(!current())return}
+                if(++count%1000===0){flush();await searchYield();if(!current())return}
             }
-            flush();result('searchProgress',{progress:(i+1)/sourcePdf.numPages});await nextFrame()
+            flush();result('searchProgress',{progress:(i+1)/sourcePdf.numPages});await searchYield()
         }else throw Error('The publication reader is not ready')
         flush();result('searchDone',{total,offset,limit})
     }catch(error){flush();result('searchError',{message:String(error),total,offset,limit,incomplete:true})}
@@ -1172,15 +1265,11 @@ function keys(e){
     }
 }
 document.addEventListener('keydown',keys)
+observePublicationFocus(document)
 content.addEventListener('pointerdown',userNavigation,{passive:true})
 content.addEventListener('wheel',userNavigation,{passive:true})
 content.addEventListener('touchstart',userNavigation,{passive:true})
-new ResizeObserver(()=>{if(pdf){clearTimeout(window.pdfResizeTimer);window.pdfResizeTimer=setTimeout(()=>queueNavigation(async()=>{
-    // Layout itself changes scrollbars. Only rebuild for a new settled viewport,
-    // and let earlier navigation finish before capturing its current anchor.
-    if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight)return
-    await relayoutPdf(location.anchor)
-}).catch(error=>emit('navigationError',{message:String(error)})),150)}}).observe(content)
+new ResizeObserver(()=>{scheduleSelectionGeometry();if(pdf)schedulePdfResize()}).observe(content)
 function emitPassage(request,ignoreSelection=false){
     if(isComic()){emit('passage',{request,text:'',anchor:location.anchor,reference:location.reference,selected:false});return}
         let passage=ignoreSelection?null:selection
@@ -1197,6 +1286,25 @@ function queueNavigation(operation){
 async function dispatch(c){
     if(c.session!=null&&c.session!==session)return
     try{c=receiveCommand(c);if(!c)return}catch(error){emit('bridgeError',{direction:'command',message:String(error)});return}
+    // Pause is accepted before entering the navigation queue. This fences any
+    // resize callback that races the drain, and resume never waits behind work
+    // whose display frames require the newly visible native surface.
+    if(c.action==='layoutVisibility'){
+        try{return await layoutVisibility(c)}catch(error){emit('layoutVisibility',{request:c.request,revision:c.revision,visible:c.visible,message:String(error)});return}
+    }
+    if(pdf&&pdfLayoutPaused&&['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){
+        // Background speech can wait outside the render queue across a brief
+        // pane resize. Stop, expiry or a different renderer abandons its jump.
+        const resumed=c.action==='advanceSpeech'&&await waitForPdfResume()
+        if(c.session!=null&&c.session!==session)return
+        if(!resumed){
+            const message=strings.navigationInterrupted??'Publication navigation is unavailable'
+            if(c.action==='advanceSpeech')emit('passage',{request:c.request,text:'',message})
+            else if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message})
+            else emit('navigationError',{message})
+            return
+        }
+    }
     if((isComic()||fixedLayout||activeFormat==='pdf')&&['goto','back','forward','next','previous','advanceSpeech','appearance','cancelAppearance','flush'].includes(c.action)){
         return queueNavigation(()=>dispatchCommand(c))
     }
@@ -1225,7 +1333,7 @@ async function dispatchCommand(c){
         if(c.request!=null)emit('appearanceResult',{request:c.request,...(!applied?{cancelled:true,message:'Appearance change cancelled'}:{})})
         break
     }
-    case 'speaking':spokenAnchor=c.anchor;await paintSpeaking();break
+    case 'speaking':if(c.anchor==null){for(const cancel of pdfResumeWaiters)cancel(false);pdfResumeWaiters.clear()}spokenAnchor=c.anchor;await paintSpeaking();break
     case 'next':if(fixedLayout){const shown=fixedLayout.visibleContents().map(part=>part.index);await gotoEpub(isComic()?{page:Math.min(view.book.sections.length-1,Math.max(fixedLayout.activeIndex,...shown)+1)}:{index:Math.min(view.book.sections.length-1,Math.max(fixedLayout.activeIndex,...shown)+1)})}else if(view)await view.next();else await gotoPdf({page:Math.min(pdf.numPages-1,(location.anchor?.page??0)+(prefs.spread?2:1))});break
     case 'previous':if(fixedLayout){const shown=fixedLayout.visibleContents().map(part=>part.index),index=Math.max(0,Math.min(fixedLayout.activeIndex,...shown)-1);await gotoEpub(isComic()?{page:index}:{index})}else if(view)await view.prev();else await gotoPdf({page:Math.max(0,(location.anchor?.page??0)-(prefs.spread?2:1))});break
     case 'goto':{const owner=session;remember();if(view){await gotoEpub(c.anchor);if(fixedLayout)remember();}else {const usable=await gotoPdf(c.anchor);if(usable===false)throw Error(strings.navigationInterrupted);remember()}if(c.request!=null&&owner===session)emit('navigationResult',{request:c.request});break}
@@ -1240,7 +1348,7 @@ async function dispatchCommand(c){
     case 'outline':if(view)await enrichEpubOutline(view.book,session);else if(pdf)await enrichPdfOutline().catch(()=>emit('metadata',{outlineFailed:true}));break
     case 'thumbnailWindow':setThumbnailWindow(c.pages,c.request);break
     case 'thumbnail':if((pdf||isComic())&&validPage(c.page,pdf?.numPages??view.book.sections.length))queueThumbnail(c.page,c.request);break
-    case 'flush':await appearanceOperation;await annotationOperation;if(isComic())captureComicLocation();else if(pdf&&location.anchor?.page!=null){const index=location.anchor.page,p=pages[index];if(p)location={...location,anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight)}}emit('location',location);emit('flushed',{request:c.request});break
+    case 'flush':await appearanceOperation;await annotationOperation;if(isComic())captureComicLocation();else if(pdf)capturePdfLocation();emit('location',location);emit('flushed',{request:c.request});break
     }}catch(e){if(isComic()&&view?.book?.releaseExcept)view.book.releaseExcept(new Set(getContents(view).map(x=>x.index)));if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});if(e.cacheFailureReported||c.action==='open'&&cacheFailureReported)return;emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e),cacheFailure:c.action==='open'&&c.format!=='pdf'})}
 }
 const thumbnails=[],thumbnailPending=new Map(),thumbnailTasks=new Map();let thumbnailRunning=0,thumbnailEpoch=0,thumbnailRequest=0
@@ -1287,4 +1395,4 @@ window.busybooks={dispatch,contents:()=>getContents(view)};emit('ready')
 
 // Application appearance is resolved in Flutter, including system changes.
 
-window.addEventListener?.('pagehide',()=>{generation++;thumbnailEpoch++;for(const task of thumbnailTasks.values())task.cancel();cancelRegion();view?.close();view?.book?.destroy?.();pdf?.destroy()},{once:true})
+window.addEventListener?.('pagehide',()=>{generation++;selectionGeometryRevision++;thumbnailEpoch++;for(const task of thumbnailTasks.values())task.cancel();cancelRegion();view?.close();view?.book?.destroy?.();pdf?.destroy()},{once:true})

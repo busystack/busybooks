@@ -98,6 +98,15 @@ class _Reader {
           lessThanOrEqualTo(readerBridgeFrameBytes),
         );
         dispatches.add(command);
+        if (command['action'] == 'layoutVisibility') {
+          scheduleMicrotask(
+            () => event('layoutVisibility', {
+              'request': command['request'],
+              'revision': command['revision'],
+              'visible': command['visible'],
+            }),
+          );
+        }
         if (command['action'] == 'flush') {
           scheduleMicrotask(() async {
             if (failFlush) {
@@ -131,6 +140,11 @@ class _Reader {
 
   Future<void> usable() async {
     await event('ready');
+    // This standalone native fixture owns a visible, acknowledged reader pane.
+    await controller.updateViewport(
+      const Rect.fromLTWH(300, 48, 900, 650),
+      bookId: id,
+    );
     await event('opened');
     await controller.show(true);
     expect(controller.interactive, isTrue);

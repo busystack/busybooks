@@ -9,15 +9,15 @@ import * as searchUtilities from '../assets/reader/literal_search.mjs'
 import { validPage } from '../assets/reader/reading_geometry.mjs'
 const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('../assets/reader/reader.js',import.meta.url),'utf8'))
   .replace(/^import .*\r?\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
-function adapter(){
-  const events=[]
+function adapter(options={}){
+  const events=[],resizeObservers=[]
   const content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
-  const context=vm.createContext({readerContents,...typographyUtilities,...searchUtilities,AbortController,URL,console,Uint8Array,setTimeout,validPage,requestAnimationFrame:f=>f(),
-    pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},
+  const context=vm.createContext({readerContents,...typographyUtilities,...searchUtilities,AbortController,URL,console,Uint8Array,setTimeout:options.setTimeout??setTimeout,clearTimeout,validPage,requestAnimationFrame:options.requestAnimationFrame??(f=>f()),
+    pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{constructor(callback){resizeObservers.push(callback)}observe(){}},
     document:{querySelectorAll:()=>[],querySelector:()=>content,addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}},
     window:{location:{href:'https://busybooks.local/?session=test'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}}})
   vm.runInContext(source,context)
-  return {context,events}
+  return {context,events,content,resizeObservers}
 }
 for(const [items,query,expected] of [
   [[{str:'İABC'}],'ABC',[[1,3]]],
@@ -97,4 +97,64 @@ for(const format of ['epub','fb2']){
   assert.equal(events.some(e=>e.settled),false,'programmatic return does not open a selection popover')
   if(format==='fb2'){assert.equal(passage.anchor.kind,'fb2');assert.equal(passage.anchor.section,'body:0/part:0')}
 }
-console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated Go To outcomes and text assistance after returning from notes; controlled adapter APIs'}))
+// A hidden native view may stop display frames. Exercise the actual adapter's
+// pause/drain/resume queue with fresh application-owned controlled objects.
+{
+  const {context,events,content,resizeObservers}=adapter()
+  Object.assign(content,{clientWidth:700,clientHeight:600,scrollTop:120,scrollLeft:0})
+  let release,started=0
+  context.renderGate=new Promise(resolve=>{release=resolve})
+  context.layoutStarted=()=>{started++}
+  vm.runInContext(`activeFormat='pdf';pdf={numPages:1};pdfViewport=[900,600];location={anchor:{page:0,point:[4,120]},reference:'Page 1'};
+    pages=[{element:{offsetTop:0,offsetLeft:0,offsetHeight:600},viewport:{convertToPdfPoint:(x,y)=>[x,y]}}];
+    relayoutPdf=async()=>{layoutStarted();await renderGate;pdfViewport=[content.clientWidth,content.clientHeight]};
+    refreshSelectionGeometry=()=>{};scheduleSelectionGeometry=()=>{};
+    queueNavigation(()=>renderGate);schedulePdfResize()`,context)
+  // Let the resize timer join the already busy navigation queue.
+  await new Promise(resolve=>setTimeout(resolve,170))
+  const pause=vm.runInContext("dispatch({action:'layoutVisibility',session:'test',visible:false,revision:1,request:31})",context)
+  assert.equal(vm.runInContext('pdfLayoutPaused',context),true)
+  assert.equal(events.some(e=>e.type==='layoutVisibility'),false,'pause waits for the existing visible work')
+  content.clientWidth=500;content.clientHeight=0
+  resizeObservers[0]()
+  release();await pause
+  assert.equal(started,0,'a resize already queued before pause must revalidate before rendering')
+  assert.equal(events.find(e=>e.type==='layoutVisibility').request,31)
+  const retained=JSON.stringify(vm.runInContext('location.anchor',context))
+  await vm.runInContext("dispatch({action:'flush',session:'test',request:32})",context)
+  assert.equal(events.find(e=>e.type==='flushed').request,32,'hidden export can drain without a display frame')
+  assert.equal(JSON.stringify(events.find(e=>e.type==='location').anchor),retained,'hidden geometry cannot replace a settled PDF source')
+  await new Promise(resolve=>setTimeout(resolve,170))
+  assert.equal(started,0)
+  content.clientHeight=600
+  await vm.runInContext("dispatch({action:'layoutVisibility',session:'test',visible:true,revision:2,request:33})",context)
+  await new Promise(resolve=>setTimeout(resolve,170))
+  assert.equal(started,1,'resume coalesces the pending sizes into one visible layout')
+  await vm.runInContext("dispatch({action:'layoutVisibility',session:'test',visible:false,revision:1,request:34})",context)
+  assert.equal(vm.runInContext('pdfLayoutPaused',context),false,'an obsolete hide cannot pause the newer visible owner')
+}
+{
+  const {context,events}=adapter({requestAnimationFrame:()=>{}})
+  context.items=[{str:'hidden library'}]
+  const work=vm.runInContext("pdf={numPages:2,getPage:async()=>({getTextContent:async()=>({items})})};search('library',1,generation)",context)
+  let timer
+  try{
+    await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Search waited for a hidden display frame')),300)})])
+  }finally{clearTimeout(timer)}
+  assert.equal(events.find(e=>e.type==='searchDone').total,2)
+}
+for(const cancel of ['stop','expiry']){
+  const {context,events}=adapter({setTimeout:(callback,delay)=>setTimeout(callback,delay===10000?5:delay)})
+  let navigated=0
+  context.navigated=()=>{navigated++}
+  vm.runInContext("pdf={numPages:2};activeFormat='pdf';pdfLayoutPaused=true;location={anchor:{page:0}};gotoPdf=async()=>navigated();paintSpeaking=async()=>{}",context)
+  const passage=vm.runInContext("dispatch({action:'advanceSpeech',session:'test',request:41})",context)
+  if(cancel==='stop')await vm.runInContext("dispatch({action:'speaking',session:'test',anchor:null})",context)
+  await passage
+  assert.equal(events.find(e=>e.type==='passage').request,41)
+  assert.equal(typeof events.find(e=>e.type==='passage').message,'string')
+  vm.runInContext('pdfResizePending=false;pdfViewport=[content.clientWidth,content.clientHeight]',context)
+  await vm.runInContext("dispatch({action:'layoutVisibility',session:'test',visible:true,revision:2,request:42})",context)
+  assert.equal(navigated,0,`${cancel} cannot revive a background passage jump on reveal`)
+}
+console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated Go To outcomes and text assistance, hidden-PDF quiescence/source retention/resume and search without display frames; controlled adapter APIs'}))
