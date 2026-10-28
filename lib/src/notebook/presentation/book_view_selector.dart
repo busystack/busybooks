@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -98,6 +100,7 @@ Future<void> openReading(
   String? annotationId,
   bool Function()? canActivate,
   Future<bool> Function()? validateActivation,
+  void Function(ReaderJumpRequest)? onDeferred,
 }) async {
   final narrow =
       MediaQuery.sizeOf(context).width <
@@ -157,7 +160,75 @@ Future<void> openReading(
         }
       }
     }
-    reader.pendingJump = anchor;
+    if (anchor != null) {
+      final targetAnchor = jsonEncode(anchor);
+      final target = Uri(path: '/read/$id');
+      final routes = router.routeInformationProvider;
+      var arrived = origin == target;
+      ReaderJumpRequest? request;
+      bool ownsRoute() =>
+          routes.value.uri == (arrived ? target : origin) ||
+          (!arrived && routes.value.uri == target);
+      void routeChanged() {
+        if (!arrived && routes.value.uri == target) arrived = true;
+        if (!ownsRoute()) request?.cancel();
+      }
+
+      // The query/result validator survives an owned route through its deferred
+      // activation lease; source existence is checked again after readiness.
+      Future<bool> validateJump() async {
+        if (!ownsRoute() ||
+            !(canActivate?.call() ?? true) ||
+            !annotationAvailable()) {
+          return false;
+        }
+        if (annotationId != null) {
+          final notes = container.read(notebookControllerProvider);
+          final draft = notes.drafts[annotationId];
+          if (draft?.creating == true && draft?.creationWritten == false) {
+            final source = notes.sources[annotationId];
+            if (source?.bookId != id ||
+                jsonEncode(source?.anchor) != targetAnchor) {
+              return false;
+            }
+          } else {
+            try {
+              final stored =
+                  await container.read(readingDataStoreProvider).call(
+                        'annotation',
+                        {'id': annotationId, 'bookId': id},
+                      )
+                      as Map;
+              if (jsonEncode(stored['anchor']) != targetAnchor) {
+                return false;
+              }
+            } on Object {
+              return false;
+            }
+          }
+        }
+        return ownsRoute() &&
+            (canActivate?.call() ?? true) &&
+            annotationAvailable() &&
+            (validateActivation == null || await validateActivation()) &&
+            ownsRoute() &&
+            (canActivate?.call() ?? true) &&
+            annotationAvailable();
+      }
+
+      routes.addListener(routeChanged);
+      request = reader.deferJump(
+        bookId: id,
+        anchor: anchor,
+        isCurrent: () =>
+            ownsRoute() &&
+            container.read(workspaceControllerProvider).openedBook?.id == id &&
+            (canActivate?.call() ?? true),
+        validate: validateJump,
+        onReleased: () => routes.removeListener(routeChanged),
+      );
+      onDeferred?.call(request);
+    }
     router.go('/read/$id');
   });
 }

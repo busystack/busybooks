@@ -458,6 +458,10 @@ page cannot disable, cancel or switch search. A scanned PDF may finish without
 matches. Comics do not support Book Text. Reader readiness and suspension are
 separate states; a supported loading reader retains its query, while a suspended
 reader offers an explicit Reading action. Search does not start a hidden reader.
+For a renderer failure, Retry uses the existing reader recovery workflow and
+resumes Book Text with the retained query, including edits made during recovery,
+when the correct book's reader becomes ready. An ordinary search failure retries
+only the search operation.
 Literal matching is Unicode case-insensitive and non-overlapping, without regex
 syntax, accent folding, normalization or whitespace trimming. Exact offsets refer
 to original publication text; EPUB/FB2 matches can span inline markup and PDF
@@ -476,6 +480,13 @@ query generation, renderer ownership and route transitions are revalidated after
 asynchronous waits. A result's owned handoff is accepted; unrelated navigation
 invalidates pending work. Wide layouts retain cross-book search during handoff;
 narrow layouts dismiss the same overlay while keeping lightweight query memory.
+Deferred passage jumps bind the target book, claimed opening revision and
+activation ownership until dispatched or abandoned. Source records and anchors,
+query/scope and renderer ownership are checked again before the eventual `goto`,
+including after queued dispatch waits. A replacement, failed opening, close,
+suspension or unrelated navigation abandons the request, so another book cannot
+consume its anchor. Narrow dismissal preserves the owned activation until that
+request completes or is abandoned.
 
 Native visibility uses separate route/modal and workspace gates. Opening shared
 chrome captures transient input, dismisses without restoring publication focus,

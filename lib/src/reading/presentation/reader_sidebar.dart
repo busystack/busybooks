@@ -813,7 +813,9 @@ class _AnnotationsPanelState extends _RetainedPanelState<_AnnotationsPanel> {
                 height: _rowHeight(c) * (note.isEmpty ? 2 : 2.5),
                 onTap: () {
                   view.selectAnnotation(a.id);
-                  unawaited(_jump(context, ref, bookId, a.anchor));
+                  unawaited(
+                    _jump(context, ref, bookId, a.anchor, annotationId: a.id),
+                  );
                 },
                 child: Padding(
                   padding: const EdgeInsetsDirectional.only(
@@ -1115,5 +1117,12 @@ Future<void> _jump(
   BuildContext context,
   WidgetRef ref,
   String bookId,
-  Map<String, dynamic> anchor,
-) => openReading(context, ref, bookId, anchor: anchor);
+  Map<String, dynamic> anchor, {
+  String? annotationId,
+}) => openReading(
+  context,
+  ref,
+  bookId,
+  anchor: anchor,
+  annotationId: annotationId,
+);

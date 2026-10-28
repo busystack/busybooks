@@ -97,7 +97,7 @@ Future<void> _pumpUntil(
   final watch = Stopwatch()..start();
   while (!done()) {
     if (watch.elapsed > const Duration(seconds: 30)) {
-      fail('Popover transition did not complete');
+      fail('Expected widget transition did not complete');
     }
     await tester.pump();
     await tester.runAsync(
@@ -10178,4 +10178,121 @@ void _professionalWorkspaceTests() {
       }
     },
   );
+  for (final narrow in [false, true]) {
+    for (final removed in [false, true]) {
+      testWidgets(
+        'deferred cross-book bookmark validates exact annotation (narrow: $narrow, removed: $removed)',
+        (tester) async {
+          late _ReaderFixture f;
+          late String originId, targetId;
+          await _readerAction(tester, () async {
+            f = await _ReaderFixture.create(
+              'text.pdf',
+              windowControls: WindowControlService(
+                nativeWindow: _HeaderWindow(),
+              ),
+            );
+            originId = f.state.bookId!;
+            final file =
+                await File(
+                  p.join(f.directory.path, 'Deferred target.pdf'),
+                ).writeAsBytes([
+                  ...await File('test/fixtures/text.pdf').readAsBytes(),
+                  ...'\n% deferred target publication\n'.codeUnits,
+                ]);
+            final workspace = f.container.read(
+              workspaceControllerProvider.notifier,
+            );
+            await workspace.createCollection('Deferred navigation collection');
+            await workspace.addBooks([f.reader.book!.path, file.path]);
+            targetId = f.container
+                .read(workspaceControllerProvider)
+                .books
+                .firstWhere((b) => b.id != originId)
+                .id;
+            await f.store.call('putAnnotation', {
+              'id': 'annotation-deferred-crossbook',
+              'bookId': targetId,
+              'annotationKind': 'bookmark',
+              'text': '',
+              'note': 'pending passage',
+              'reference': 'Page 3',
+              'anchor': {'page': 2},
+              'color': 'yellow',
+              'created': 1,
+            });
+            await workspace.loadBook(originId, activate: true);
+          });
+          try {
+            await _mountHeaderApplication(tester, f, '/notebook/$originId');
+            tester.view.physicalSize = Size(narrow ? 540 : 1200, 850);
+            await tester.pumpAndSettle();
+            await _readerAction(
+              tester,
+              () => f.searchController.open(
+                category: BookSearchCategory.bookmarks,
+                query: 'pending passage',
+                scope: const BookSearchScope.all(),
+              ),
+            );
+            await tester.tap(
+              find.byKey(ValueKey('$targetId:annotation-deferred-crossbook')),
+            );
+            // Initialization begins before the native open request. Deliver
+            // readiness only after the mock owns the new renderer session.
+            await _pumpUntil(
+              tester,
+              () =>
+                  f.state.bookId == targetId &&
+                  f.state.phase == 'initializing' &&
+                  f.session == f.reader.sessionId,
+              settle: false,
+            );
+            expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
+            if (removed) {
+              await _readerAction(
+                tester,
+                () => f.container
+                    .read(workspaceControllerProvider.notifier)
+                    .deleteAnnotation('annotation-deferred-crossbook'),
+                settle: false,
+              );
+            }
+            await _readerAction(tester, () async {
+              await f.event('ready');
+              await f.event('opened');
+            }, settle: false);
+            // A cancelled deferred activation republishes changed repository
+            // rows after its debounce, using the real storage worker.
+            await tester.pump(const Duration(milliseconds: 150));
+            await _pumpUntil(tester, () => f.state.ready && !f.search.loading);
+            final jumps = f.dispatches
+                .where((d) => d['action'] == 'goto')
+                .toList();
+            if (removed) {
+              expect(jumps, isEmpty);
+            } else {
+              expect(jumps, hasLength(1));
+              expect(jumps.single['anchor'], {'page': 2});
+            }
+            expect(
+              f.container
+                  .read(appRouterProvider)
+                  .routeInformationProvider
+                  .value
+                  .uri
+                  .path,
+              '/read/$targetId',
+            );
+            expect(f.search.active, !narrow);
+            expect(f.search.query, 'pending passage');
+            expect(f.search.scope, const BookSearchScope.all());
+            expect(tester.takeException(), isNull);
+          } finally {
+            await _disposeHeaderApplication(tester, f);
+          }
+        },
+      );
+    }
+  }
 }

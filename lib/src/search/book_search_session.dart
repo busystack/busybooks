@@ -243,6 +243,7 @@ class _Activation {
   final String identity, originRoute;
   final String? targetRoute, targetBookId, originBookId;
   bool arrived = false, dismissed = false;
+  ReaderJumpRequest? deferredJump;
 }
 
 /// One window session. Only query/scope/identity memory survives dismissal;
@@ -255,6 +256,7 @@ class BookSearchController extends Notifier<BookSearchState> {
   ({String session, int revision, int generation})? _nativeRequest;
   Completer<void>? _nativeDone;
   Future<void>? _running;
+  _ReaderRecovery? _readerRecovery;
   String? _requestToken;
   Map<String, dynamic>? _cursor;
   int _serial = 0, _localCursor = 0;
@@ -298,6 +300,7 @@ class BookSearchController extends Notifier<BookSearchState> {
           }
         });
     ref.onDispose(() {
+      _activation?.deferredJump?.cancel();
       _timer?.cancel();
       _nativeDone?.complete();
       _nativeDone = null;
@@ -317,6 +320,13 @@ class BookSearchController extends Notifier<BookSearchState> {
         return;
       }
       final reader = ref.read(readerControllerProvider.notifier);
+      final recovery = _readerRecovery;
+      if (recovery != null && next.bookId == recovery.bookId) {
+        if (next.error == null) recovery.errorCleared = true;
+        // Closing the failed surface can publish visibility changes before
+        // retry creates its replacement. Those still belong to the old error.
+        if (!recovery.errorCleared && next.error == recovery.error) return;
+      }
       if (next.bookId == state.bookId && next.error != null) {
         if (state.unavailable != 'reader-error' || state.loading) {
           _readerFailed(next.error!);
@@ -434,6 +444,10 @@ class BookSearchController extends Notifier<BookSearchState> {
     final routeSource = ref.read(appRouterProvider).routeInformationProvider;
     void routeChanged() {
       final route = routeSource.value.uri.path;
+      final recovery = _readerRecovery;
+      if (recovery != null && route != recovery.route) {
+        recovery.abandoned = true;
+      }
       if ((!state.active && _activation == null) ||
           route == state.originRoute) {
         return;
@@ -607,6 +621,7 @@ class BookSearchController extends Notifier<BookSearchState> {
     Iterable<BookActionSearchResult>? actions,
   }) {
     if (!ref.mounted) return;
+    _cancelDeferredActivation();
     _activation = null;
     if (actions != null) setActions(actions);
     if (!state.active) _returnFocus = FocusManager.instance.primaryFocus;
@@ -751,6 +766,7 @@ class BookSearchController extends Notifier<BookSearchState> {
   }
 
   void _readerFailed(String message) {
+    _cancelDeferredActivation();
     _timer?.cancel();
     _timer = null;
     _nativeRequest = null;
@@ -774,6 +790,7 @@ class BookSearchController extends Notifier<BookSearchState> {
   }
 
   void _invalidate({bool incrementGeneration = true}) {
+    if (incrementGeneration) _cancelDeferredActivation();
     _timer?.cancel();
     _timer = null;
     _finishNative();
@@ -805,6 +822,7 @@ class BookSearchController extends Notifier<BookSearchState> {
   void close({bool restoreFocus = true}) {
     if (!state.active) {
       if (_activation != null) {
+        _cancelDeferredActivation();
         _activation = null;
         state = state.copy(generation: state.generation + 1);
       }
@@ -880,16 +898,29 @@ class BookSearchController extends Notifier<BookSearchState> {
                   ref.read(workspaceControllerProvider).workspace?.id ==
                       _actionWorkspaceId),
         ChapterSearchResult() =>
-          result.bookId == state.bookId &&
-              identical(
-                ref
-                    .read(bookSidebarProvider(result.bookId))
-                    .outline
-                    .byId[result.chapter.id],
-                result.chapter,
-              ),
+          result.bookId == state.bookId && _sameChapterSource(result),
         _ => true,
       };
+
+  bool _sameChapterSource(ChapterSearchResult result) {
+    final outline = ref.read(bookSidebarProvider(result.bookId)).outline;
+    final current = outline.byId[result.chapter.id], captured = result.chapter;
+    if (current == null ||
+        current.title != captured.title ||
+        current.depth != captured.depth ||
+        current.parentId != captured.parentId ||
+        current.pageLabel != captured.pageLabel ||
+        jsonEncode(current.destination) != jsonEncode(captured.destination)) {
+      return false;
+    }
+    final ancestors = <String>[];
+    var parent = outline.byId[current.parentId];
+    while (parent != null) {
+      ancestors.insert(0, parent.title);
+      parent = outline.byId[parent.parentId];
+    }
+    return jsonEncode(ancestors) == jsonEncode(result.ancestors);
+  }
 
   bool get _activationOwnsBook {
     final activation = _activation;
@@ -905,7 +936,11 @@ class BookSearchController extends Notifier<BookSearchState> {
     String? targetRoute,
     String? targetBookId,
   }) {
-    if (_activation != null || !accepts(result, generation)) return false;
+    // A later explicit activation supersedes a handoff still waiting for its
+    // renderer. Cancelling it must not release or refresh the new activation.
+    if (_activation != null && _activation!.deferredJump == null) return false;
+    if (!accepts(result, generation)) return false;
+    _cancelDeferredActivation(preserveRefresh: true);
     _activation = _Activation(
       generation,
       result.identity,
@@ -917,7 +952,41 @@ class BookSearchController extends Notifier<BookSearchState> {
     return true;
   }
 
+  void _cancelDeferredActivation({bool preserveRefresh = false}) {
+    final activation = _activation;
+    if (activation?.deferredJump == null) return;
+    _activation = null;
+    if (!preserveRefresh) _refreshAfterActivation = false;
+    activation!.deferredJump!.cancel();
+  }
+
+  /// Keep only this activation's ownership until its deferred passage jump is
+  /// sent or abandoned. A narrow dismissal may already have released the rows.
+  void retainDeferredActivation(ReaderJumpRequest request) {
+    final activation = _activation;
+    if (activation == null ||
+        activation.targetBookId != request.bookId ||
+        activation.generation != state.generation) {
+      request.cancel();
+      return;
+    }
+    activation.deferredJump?.cancel();
+    activation.deferredJump = request;
+    unawaited(
+      request.finished.then((_) {
+        if (!ref.mounted ||
+            !identical(_activation, activation) ||
+            !identical(activation.deferredJump, request)) {
+          return;
+        }
+        activation.deferredJump = null;
+        endActivation();
+      }),
+    );
+  }
+
   void endActivation() {
+    if (_activation?.deferredJump != null) return;
     _activation = null;
     if (_refreshAfterActivation) {
       _refreshAfterActivation = false;
@@ -1036,8 +1105,64 @@ class BookSearchController extends Notifier<BookSearchState> {
         : results.indexWhere((r) => r.identity == identity);
   }
 
-  void retry() {
-    if (ref.mounted && state.active && ownsRoute) _schedule(immediate: true);
+  Future<void> retry() async {
+    if (!ref.mounted || !state.active || !ownsRoute) return;
+    final reader = ref.read(readerControllerProvider.notifier);
+    final renderer = ref.read(readerControllerProvider);
+    final id = state.bookId, route = _route;
+    final pending = _readerRecovery;
+    if (state.category == BookSearchCategory.bookText &&
+        pending?.bookId == id &&
+        pending?.route == route) {
+      return;
+    }
+    if (state.category != BookSearchCategory.bookText ||
+        id == null ||
+        renderer.bookId != id ||
+        renderer.error == null) {
+      _schedule(immediate: true);
+      return;
+    }
+    // A renderer recovery is owned by the visible publication, independently
+    // of query edits. Its readiness listener always submits the latest query.
+    // A suspended Notebook reader still requires the explicit Reading action.
+    if (route != '/read/$id' || reader.suspended) {
+      state = state.copy(
+        loading: false,
+        clearError: true,
+        unavailable: 'needs-reading',
+      );
+      return;
+    }
+    final recovery = _ReaderRecovery(id, route, renderer.error!);
+    _readerRecovery = recovery;
+    bool current() =>
+        ref.mounted &&
+        !recovery.abandoned &&
+        _route == route &&
+        ref.read(workspaceControllerProvider).openedBook?.id == id;
+    if (!current()) {
+      _readerRecovery = null;
+      return;
+    }
+    _invalidate();
+    state = state.copy(
+      loading: true,
+      clearError: true,
+      unavailable: 'reader-loading',
+    );
+    try {
+      await reader.retry(id, isCurrent: current);
+    } catch (error) {
+      if (current() &&
+          state.active &&
+          state.category == BookSearchCategory.bookText &&
+          state.bookId == id) {
+        _readerFailed(error.toString());
+      }
+    } finally {
+      if (identical(_readerRecovery, recovery)) _readerRecovery = null;
+    }
   }
 
   ReadingDataStore _observeRepository() {
@@ -1402,6 +1527,12 @@ int? _commandRank(BookActionSearchResult action, String query) {
       '$title ${action.category.toLowerCase()} ${action.description?.toLowerCase() ?? ''}';
   if (tokens.every(metadata.contains)) return 4;
   return action.identity.toLowerCase().contains(q) ? 5 : null;
+}
+
+class _ReaderRecovery {
+  _ReaderRecovery(this.bookId, this.route, this.error);
+  final String bookId, route, error;
+  bool errorCleared = false, abandoned = false;
 }
 
 final bookSearchSessionProvider =

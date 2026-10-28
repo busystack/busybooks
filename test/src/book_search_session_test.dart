@@ -1,14 +1,20 @@
 import 'dart:async';
+import 'package:busybooks/l10n/generated/app_localizations.dart';
 import 'package:busybooks/src/app/app_router.dart';
+import 'package:busybooks/src/app/app_theme.dart';
+import 'package:busybooks/src/app/busybooks_design.dart';
 import 'package:busybooks/src/book_workspace/application/book_sidebar_controller.dart';
 import 'package:busybooks/src/app/command_registry.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/domain/book.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
+import 'package:busybooks/src/reading/domain/publication_outline.dart';
 import 'package:busybooks/src/search/book_search_session.dart';
+import 'package:busybooks/src/search/book_search_widgets.dart';
 import 'package:busybooks/src/workspace/workspace_controller.dart';
 import 'package:busybooks/src/workspace/workspace_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _first =
@@ -37,7 +43,22 @@ class _Sidebar extends BookSidebarController {
   _Sidebar(super.bookId);
   @override
   BookSidebarState build() => const BookSidebarState();
+  void replaceOutline(PublicationOutline outline) =>
+      state = state.copy(outline: outline, outlineStatus: 'ready');
 }
+
+Map<String, dynamic> _passageRow({String id = 'target', int page = 1}) => {
+  'book': _book(_second).data,
+  'annotation': {
+    'id': id,
+    'bookId': _second,
+    'annotationKind': 'bookmark',
+    'text': 'needle',
+    'note': '',
+    'anchor': {'page': page},
+  },
+  'sourceDigest': id,
+};
 
 class _OccurrenceReader extends _Reader {
   int revision = 0, total = 1201;
@@ -86,12 +107,41 @@ class _OccurrenceReader extends _Reader {
 }
 
 class _LoadingReader extends _OccurrenceReader {
+  final retried = <String>[];
+  Completer<void>? retryGate;
+  Completer<void>? recovered;
   @override
   ReaderState build() => const ReaderState(bookId: _first);
   @override
   bool get canSearch => state.ready && state.error == null;
   void fail() => state = state.copy(error: 'Renderer startup failed');
   void ready() => state = const ReaderState(bookId: _first, ready: true);
+  @override
+  Future<void> retry(String id, {bool Function()? isCurrent}) async {
+    if (!(isCurrent?.call() ?? true)) return;
+    retried.add(id);
+    state = ReaderState(bookId: id);
+    final gate = retryGate;
+    if (gate != null) await gate.future;
+    if (isCurrent?.call() ?? true) ready();
+    recovered?.complete();
+  }
+}
+
+class _SearchFailureReader extends _LoadingReader {
+  bool failSearch = true;
+  @override
+  ReaderState build() => const ReaderState(bookId: _first, ready: true);
+  @override
+  void search(String query, {int offset = 0, int limit = 200}) {
+    if (!failSearch) {
+      super.search(query, offset: offset, limit: limit);
+      return;
+    }
+    revision++;
+    dispatched.add(query);
+    state = state.copy(query: query, searchStatus: 'error');
+  }
 }
 
 class _SearchStore implements ReadingDataStore {
@@ -164,6 +214,31 @@ class _Fixture {
     container.dispose();
     await store.close();
   }
+}
+
+Future<void> _mountSearch(WidgetTester tester, _Fixture fixture) async {
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: fixture.container,
+      child: MaterialApp(
+        theme: buildBusyBooksTheme(
+          brightness: Brightness.light,
+          accentColor: Colors.orange,
+        ),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(
+          body: Column(
+            children: [
+              BookSearchHeaderField(),
+              Expanded(child: BookSearchSidebar()),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 BookActionSearchResult _action(
@@ -568,7 +643,7 @@ void main() {
     },
   );
   test(
-    'Book Text renderer loading failure stops progress and preserves query for retry',
+    'Book Text renderer loading failure recovers through reader retry and retains query',
     () async {
       final reader = _LoadingReader();
       final f = _Fixture(
@@ -591,16 +666,479 @@ void main() {
       expect(f.state.error, isNotNull);
       expect(f.state.unavailable, 'reader-error');
       expect(f.state.query, '  intended query  ');
-      f.search.retry();
-      expect(await f.search.submit(), false);
-      expect(f.state.loading, false);
-      expect(f.state.error, isNotNull);
-      expect(reader.dispatched, isEmpty);
-      reader.ready();
+      await f.search.retry();
+      expect(reader.retried, [_first]);
       expect(await f.search.submit(), true);
       expect(reader.dispatched, ['  intended query  ']);
       expect(f.state.error, isNull);
       expect(f.state.unavailable, isNull);
+    },
+  );
+  testWidgets(
+    'the search banner Retry restarts the failed reader and resubmits its literal query',
+    (tester) async {
+      final reader = _LoadingReader()
+        ..total = 1
+        ..retryGate = Completer<void>()
+        ..recovered = Completer<void>();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      try {
+        f.container.read(appRouterProvider).go('/read/$_first');
+        reader.fail();
+        await f.search.open(
+          category: BookSearchCategory.bookText,
+          query: '  saved query  ',
+        );
+        await _mountSearch(tester, f);
+        final retry = find.descendant(
+          of: find.byType(BusyBooksBanner),
+          matching: find.text('Retry'),
+        );
+        expect(retry, findsOneWidget);
+        await tester.tap(retry);
+        await tester.pump();
+        expect(reader.retried, [_first]);
+        expect(f.state.query, '  saved query  ');
+        expect(f.state.loading, true);
+        expect(f.state.error, isNull);
+        expect(reader.dispatched, isEmpty);
+        await tester.runAsync(() async {
+          reader.retryGate!.complete();
+          await reader.recovered!.future;
+          expect(await f.search.submit(), true);
+        });
+        await tester.pumpAndSettle();
+        expect(reader.dispatched, ['  saved query  ']);
+        expect(f.state.error, isNull);
+        expect(f.state.results, hasLength(1));
+        expect(retry, findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!reader.retryGate!.isCompleted) reader.retryGate!.complete();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await f.close();
+      }
+    },
+  );
+  testWidgets(
+    'the search banner Retry keeps ordinary search failures search-only',
+    (tester) async {
+      final reader = _SearchFailureReader()..total = 1;
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      try {
+        f.container.read(appRouterProvider).go('/read/$_first');
+        await f.search.open(
+          category: BookSearchCategory.bookText,
+          query: 'needle',
+        );
+        await _mountSearch(tester, f);
+        expect(f.state.error, 'text-search');
+        reader.failSearch = false;
+        await tester.tap(
+          find.descendant(
+            of: find.byType(BusyBooksBanner),
+            matching: find.text('Retry'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(reader.retried, isEmpty);
+        expect(reader.dispatched, ['needle', 'needle']);
+        expect(f.state.results, hasLength(1));
+        expect(f.state.error, isNull);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await f.close();
+      }
+    },
+  );
+  test(
+    'reader retry resumes the latest query after edits during recovery',
+    () async {
+      final reader = _LoadingReader()
+        ..total = 1
+        ..retryGate = Completer<void>();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      addTearDown(f.close);
+      f.container.read(appRouterProvider).go('/read/$_first');
+      reader.fail();
+      await f.search.open(category: BookSearchCategory.bookText, query: 'old');
+      final retry = f.search.retry();
+      f.search.query('  latest query  ');
+      reader.retryGate!.complete();
+      await retry;
+      expect(await f.search.submit(), true);
+      expect(reader.retried, [_first]);
+      expect(reader.dispatched, ['  latest query  ']);
+    },
+  );
+  test(
+    'reader retry cannot recover its old target after unrelated navigation',
+    () async {
+      final reader = _LoadingReader()..retryGate = Completer<void>();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      addTearDown(f.close);
+      f.container.read(appRouterProvider).go('/read/$_first');
+      reader.fail();
+      await f.search.open(category: BookSearchCategory.bookText, query: 'old');
+      final retry = f.search.retry();
+      f.container.read(appRouterProvider).go('/notebook/$_second');
+      reader.retryGate!.complete();
+      await retry;
+      expect(f.state.active, false);
+      expect(reader.canSearch, false);
+      expect(reader.dispatched, isEmpty);
+    },
+  );
+  test('reader retry stays abandoned after navigating away and back', () async {
+    final reader = _LoadingReader()..retryGate = Completer<void>();
+    final f = _Fixture(
+      reader: reader,
+      state: WorkspaceState(
+        openedBook: _book(_first),
+        readingData: {_first: _book(_first)},
+      ),
+    );
+    addTearDown(f.close);
+    final router = f.container.read(appRouterProvider);
+    router.go('/read/$_first');
+    reader.fail();
+    await f.search.open(category: BookSearchCategory.bookText, query: 'old');
+    final retry = f.search.retry();
+    router.go('/notebook/$_second');
+    router.go('/read/$_first');
+    reader.retryGate!.complete();
+    await retry;
+    expect(reader.retried, [_first]);
+    expect(f.state.active, false);
+    expect(reader.canSearch, false);
+    expect(reader.dispatched, isEmpty);
+  });
+  for (final narrow in [false, true]) {
+    test(
+      'deferred passage retains ${narrow ? 'dismissed' : 'visible'} search ownership through its own route handoff',
+      () async {
+        final reader = _Reader();
+        final f = _Fixture(
+          reader: reader,
+          state: WorkspaceState(
+            openedBook: _book(_first),
+            readingData: {_first: _book(_first), _second: _book(_second)},
+          ),
+        );
+        addTearDown(f.close);
+        final router = f.container.read(appRouterProvider);
+        router.go('/notebook/$_first');
+        f.store.rows = [_passageRow()];
+        await f.search.open(
+          category: BookSearchCategory.bookmarks,
+          scope: const BookSearchScope.all(),
+          query: 'needle',
+        );
+        final result = f.state.results.single, generation = f.state.generation;
+        expect(
+          f.search.beginActivation(
+            result,
+            generation,
+            targetBookId: _second,
+            targetRoute: '/read/$_second',
+          ),
+          true,
+        );
+        final request = reader.deferJump(
+          bookId: _second,
+          anchor: const {'page': 1},
+        );
+        f.search.retainDeferredActivation(request);
+        if (narrow) f.search.dismissForActivation();
+        router.go('/read/$_second');
+        f.search.endActivation();
+        expect(f.state.active, !narrow);
+        expect(f.state.query, 'needle');
+        expect(f.state.scope, const BookSearchScope.all());
+        expect(f.search.accepts(result, generation), true);
+        expect(await f.search.validateResult(result, generation), true);
+        request.cancel();
+        await request.finished;
+        await f.container.pump();
+        if (narrow) {
+          expect(f.search.accepts(result, generation), false);
+        } else {
+          expect(
+            f.search.beginActivation(
+              result,
+              generation,
+              targetBookId: _second,
+              targetRoute: '/read/$_second',
+            ),
+            true,
+          );
+          f.search.endActivation();
+        }
+      },
+    );
+  }
+  for (final invalidation in ['query', 'category', 'scope', 'close', 'route']) {
+    test(
+      '$invalidation changes cancel a passage still waiting for its renderer',
+      () async {
+        final reader = _Reader();
+        final f = _Fixture(
+          reader: reader,
+          state: WorkspaceState(
+            openedBook: _book(_first),
+            readingData: {_first: _book(_first), _second: _book(_second)},
+          ),
+        );
+        addTearDown(f.close);
+        final router = f.container.read(appRouterProvider);
+        router.go('/notebook/$_first');
+        f.store.rows = [_passageRow()];
+        await f.search.open(
+          category: BookSearchCategory.bookmarks,
+          scope: const BookSearchScope.all(),
+          query: 'needle',
+        );
+        final result = f.state.results.single, generation = f.state.generation;
+        expect(
+          f.search.beginActivation(
+            result,
+            generation,
+            targetBookId: _second,
+            targetRoute: '/read/$_second',
+          ),
+          true,
+        );
+        var released = false;
+        final request = reader.deferJump(
+          bookId: _second,
+          anchor: const {'page': 1},
+          onReleased: () => released = true,
+        );
+        f.search.retainDeferredActivation(request);
+        router.go('/read/$_second');
+        f.search.endActivation();
+        switch (invalidation) {
+          case 'query':
+            f.search.query('new query');
+          case 'category':
+            await f.search.open(category: BookSearchCategory.books);
+          case 'scope':
+            f.search.setScope(
+              f.search.scopes.firstWhere(
+                (scope) => scope.kind == BookSearchScopeKind.thisBook,
+              ),
+            );
+          case 'close':
+            f.search.close(restoreFocus: false);
+          case 'route':
+            router.go('/');
+        }
+        expect(released, true);
+        expect(f.search.accepts(result, generation), false);
+        await request.finished;
+      },
+    );
+  }
+  test(
+    'a deleted annotation fails deferred validation before source refresh runs',
+    () async {
+      final reader = _Reader();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first), _second: _book(_second)},
+        ),
+      );
+      addTearDown(f.close);
+      final router = f.container.read(appRouterProvider);
+      router.go('/notebook/$_first');
+      f.store.rows = [_passageRow()];
+      await f.search.open(
+        category: BookSearchCategory.bookmarks,
+        scope: const BookSearchScope.all(),
+        query: 'needle',
+      );
+      final result = f.state.results.single, generation = f.state.generation;
+      expect(
+        f.search.beginActivation(
+          result,
+          generation,
+          targetBookId: _second,
+          targetRoute: '/read/$_second',
+        ),
+        true,
+      );
+      final request = reader.deferJump(
+        bookId: _second,
+        anchor: const {'page': 1},
+      );
+      f.search.retainDeferredActivation(request);
+      router.go('/read/$_second');
+      f.search.endActivation();
+      f.store.rows = [];
+      f.store.changed();
+      expect(f.state.generation, generation);
+      expect(await f.search.validateResult(result, generation), false);
+      request.cancel();
+      await request.finished;
+      await f.search.submit();
+      expect(f.state.results, isEmpty);
+    },
+  );
+  test(
+    'a superseded deferred completion cannot release the newer passage ownership',
+    () async {
+      final reader = _Reader();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first), _second: _book(_second)},
+        ),
+      );
+      addTearDown(f.close);
+      final router = f.container.read(appRouterProvider);
+      router.go('/notebook/$_first');
+      f.store.rows = [_passageRow(), _passageRow(id: 'later', page: 2)];
+      await f.search.open(
+        category: BookSearchCategory.bookmarks,
+        scope: const BookSearchScope.all(),
+        query: 'needle',
+      );
+      final first = f.state.results.first,
+          next = f.state.results.last,
+          generation = f.state.generation;
+      expect(
+        f.search.beginActivation(
+          first,
+          generation,
+          targetBookId: _second,
+          targetRoute: '/read/$_second',
+        ),
+        true,
+      );
+      var firstReleased = false;
+      final firstRequest = reader.deferJump(
+        bookId: _second,
+        anchor: const {'page': 1},
+        onReleased: () => firstReleased = true,
+      );
+      f.search.retainDeferredActivation(firstRequest);
+      router.go('/read/$_second');
+      f.search.endActivation();
+      f.store.changed();
+      expect(
+        f.search.beginActivation(
+          next,
+          generation,
+          targetBookId: _second,
+          targetRoute: '/read/$_second',
+        ),
+        true,
+      );
+      expect(firstReleased, true);
+      final nextRequest = reader.deferJump(
+        bookId: _second,
+        anchor: const {'page': 2},
+      );
+      f.search.retainDeferredActivation(nextRequest);
+      f.search.endActivation();
+      await firstRequest.finished;
+      await f.container.pump();
+      f.search.dismissForActivation();
+      expect(f.state.active, false);
+      expect(f.state.generation, generation);
+      expect(f.search.accepts(next, generation), true);
+      nextRequest.cancel();
+      await nextRequest.finished;
+      await f.container.pump();
+      expect(f.search.accepts(next, generation), false);
+    },
+  );
+  test(
+    'deferred chapter navigation accepts an equivalent outline reload and rejects changed destinations',
+    () async {
+      final reader = _Reader();
+      final f = _Fixture(
+        reader: reader,
+        state: WorkspaceState(
+          openedBook: _book(_first),
+          readingData: {_first: _book(_first)},
+        ),
+      );
+      addTearDown(f.close);
+      f.container.read(appRouterProvider).go('/notebook/$_first');
+      final subscription = f.container.listen(
+        bookSidebarProvider(_first),
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+      final sidebar =
+          f.container.read(bookSidebarProvider(_first).notifier) as _Sidebar;
+      PublicationOutline outline(int page) => PublicationOutline.fromRecords([
+        {'id': 'parent', 'label': 'Part', 'depth': 0},
+        {
+          'id': 'chapter',
+          'label': 'needle',
+          'depth': 1,
+          'anchor': {'page': page},
+        },
+      ], pdf: true);
+      sidebar.replaceOutline(outline(1));
+      await f.search.open(
+        category: BookSearchCategory.chapters,
+        query: 'needle',
+      );
+      final result = f.state.results.single, generation = f.state.generation;
+      expect(
+        f.search.beginActivation(
+          result,
+          generation,
+          targetBookId: _first,
+          targetRoute: '/read/$_first',
+        ),
+        true,
+      );
+      final request = reader.deferJump(
+        bookId: _first,
+        anchor: const {'page': 1},
+      );
+      f.search.retainDeferredActivation(request);
+      f.container.read(appRouterProvider).go('/read/$_first');
+      f.search.endActivation();
+      sidebar.replaceOutline(outline(1));
+      expect(f.state.generation, generation);
+      expect(f.search.accepts(result, generation), true);
+      sidebar.replaceOutline(outline(2));
+      expect(f.search.accepts(result, generation), false);
+      request.cancel();
+      await request.finished;
     },
   );
 }

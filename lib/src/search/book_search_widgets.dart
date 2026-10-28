@@ -188,6 +188,7 @@ Future<void> _activate(
             anchor: result.anchor,
             canActivate: current,
             validateActivation: () => search.validateResult(result, generation),
+            onDeferred: search.retainDeferredActivation,
           );
           if (current()) search.didActivateResult(result);
         case ChapterSearchResult():
@@ -200,6 +201,7 @@ Future<void> _activate(
               canActivate: current,
               validateActivation: () =>
                   search.validateResult(result, generation),
+              onDeferred: search.retainDeferredActivation,
             );
           }
         case AnnotationSearchResult():
@@ -213,6 +215,7 @@ Future<void> _activate(
               canActivate: current,
               validateActivation: () =>
                   search.validateResult(result, generation),
+              onDeferred: search.retainDeferredActivation,
             );
           } else {
             await openNotebook(

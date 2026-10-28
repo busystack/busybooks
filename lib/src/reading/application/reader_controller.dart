@@ -41,6 +41,37 @@ class _NoteDeliveryFailure implements Exception {
   String toString() => cause.toString();
 }
 
+/// One passage activation, claimed by exactly one publication opening. The
+/// source validator remains live until dispatch, including across route handoff.
+class ReaderJumpRequest {
+  ReaderJumpRequest._(
+    this.bookId,
+    Map<String, dynamic> anchor,
+    this._isCurrent,
+    this._validate,
+    this._onReleased,
+  ) : _anchor = Map.unmodifiable(
+        jsonDecode(jsonEncode(anchor)) as Map<String, dynamic>,
+      );
+
+  final String bookId;
+  final Map<String, dynamic> _anchor;
+  final bool Function()? _isCurrent;
+  final Future<bool> Function()? _validate;
+  final VoidCallback _onReleased;
+  final _finished = Completer<void>();
+  int? _openingRevision;
+  String? _session;
+  bool _consuming = false;
+  Future<void> get finished => _finished.future;
+  bool get _live => !_finished.isCompleted && (_isCurrent?.call() ?? true);
+  void cancel() {
+    if (_finished.isCompleted) return;
+    _onReleased();
+    _finished.complete();
+  }
+}
+
 /// Captured before a native selection can collapse or its popover can close.
 class ReaderSelectionTarget {
   const ReaderSelectionTarget(
@@ -367,7 +398,95 @@ class ReaderController extends Notifier<ReaderState> {
       _routeVisible &&
       _workspaceVisible &&
       !_suspended;
-  Map<String, dynamic>? pendingJump;
+  ReaderJumpRequest? _pendingJump;
+
+  ReaderJumpRequest deferJump({
+    required String bookId,
+    required Map<String, dynamic> anchor,
+    bool Function()? isCurrent,
+    Future<bool> Function()? validate,
+    VoidCallback? onReleased,
+  }) {
+    _pendingJump?.cancel();
+    late final ReaderJumpRequest request;
+    request = ReaderJumpRequest._(bookId, anchor, isCurrent, validate, () {
+      if (identical(_pendingJump, request)) _pendingJump = null;
+      onReleased?.call();
+    });
+    _pendingJump = request;
+    // Routing to an already-loading /read/id does not create another widget
+    // opening. Attach to that existing request instead of waiting for a new one.
+    if (state.bookId == bookId &&
+        !_suspended &&
+        !state.ready &&
+        state.error == null &&
+        const ['verifying', 'initializing', 'opening'].contains(state.phase)) {
+      request._openingRevision = _openRevision;
+      if (state.phase != 'verifying') request._session = _session;
+    }
+    if (state.bookId == bookId && state.error != null && !_suspended) {
+      request.cancel();
+    }
+    return request;
+  }
+
+  void _claimPendingJump(String id, int revision) {
+    final request = _pendingJump;
+    if (request == null) return;
+    if (!request._live ||
+        request.bookId != id ||
+        request._openingRevision != null) {
+      request.cancel();
+    } else {
+      request._openingRevision = revision;
+    }
+  }
+
+  Future<void> _consumePendingJump(String id, int revision) async {
+    final request = _pendingJump;
+    if (request == null || request._consuming) return;
+    // An old surface's visibility can finish while the target is preparing.
+    // Only the opening that claimed this request may consume or abandon it.
+    if (request.bookId != id ||
+        request._openingRevision == null ||
+        request._session == null) {
+      return;
+    }
+    final session = _session;
+    bool owned() =>
+        ref.mounted &&
+        identical(_pendingJump, request) &&
+        request._live &&
+        request.bookId == id &&
+        state.bookId == id &&
+        request._openingRevision == revision &&
+        _openRevision == revision &&
+        request._session == session &&
+        _session == session &&
+        state.error == null &&
+        !_suspended;
+    if (!owned()) {
+      request.cancel();
+      return;
+    }
+    // Visibility can settle after opened, especially after a narrow dismissal.
+    // Keep the intent until the owned surface becomes interactive.
+    if (!interactive) return;
+    request._consuming = true;
+    try {
+      if (request._validate != null && !await request._validate()) return;
+      if (!owned() || !interactive) return;
+      await _send(
+        'goto',
+        {'anchor': request._anchor},
+        isCurrent: () => owned() && interactive,
+        validateNavigation: request._validate,
+      );
+    } finally {
+      request.cancel();
+    }
+  }
+
   bool _suspended = false;
   bool _workspaceVisible = true;
   bool get suspended => _suspended;
@@ -381,6 +500,7 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> suspend() async {
+    _pendingJump?.cancel();
     if (state.bookId == null) {
       _suspended = true;
       _routeVisible = false;
@@ -514,6 +634,9 @@ class ReaderController extends Notifier<ReaderState> {
   @override
   ReaderState build() {
     listenSelf((previous, next) {
+      if (next.error != null && _pendingJump?.bookId == next.bookId) {
+        _pendingJump?.cancel();
+      }
       if (previous?.error != next.error) unawaited(_applyVisibility());
     });
     readerChannel.setMethodCallHandler((call) async {
@@ -594,6 +717,7 @@ class ReaderController extends Notifier<ReaderState> {
       }
     });
     ref.onDispose(() {
+      _pendingJump?.cancel();
       _finishSearchWaiters(false);
       _invalidateLookup();
       for (final pending in _appearanceResults.values) {
@@ -667,9 +791,16 @@ class ReaderController extends Notifier<ReaderState> {
     return lookupAppLocalizations(Locale(tag == 'de' ? 'de' : 'en'));
   }
 
-  Future<void> retry(String id) async {
+  Future<void> retry(String id, {bool Function()? isCurrent}) async {
+    if (state.bookId != id || !(isCurrent?.call() ?? true)) return;
+    final closingRevision = _openRevision + 1;
     await close();
-    await _open(id, force: true);
+    if (!ref.mounted ||
+        _openRevision != closingRevision ||
+        !(isCurrent?.call() ?? true)) {
+      return;
+    }
+    await _open(id, force: true, isCurrent: isCurrent);
   }
 
   Future<void> open(String id) => _open(id);
@@ -678,21 +809,29 @@ class ReaderController extends Notifier<ReaderState> {
     String id, {
     bool force = false,
     bool cacheRecovery = false,
+    bool Function()? isCurrent,
   }) async {
     if (!cacheRecovery) _cacheRecoveryAttempted = false;
     _suspended = false;
     final current = ref.read(workspaceControllerProvider).bookById(id);
-    if (current == null) return;
+    if (current == null || !(isCurrent?.call() ?? true)) {
+      _pendingJump?.cancel();
+      return;
+    }
     final revision = ++_openRevision;
+    _claimPendingJump(id, revision);
+    bool ownedOpening() =>
+        ref.mounted && revision == _openRevision && (isCurrent?.call() ?? true);
     final replacing = state.bookId != id || !state.ready;
     try {
       // Capture while the old session still owns the book and passage. The
       // preparing phase below intentionally invalidates old native callbacks.
       await _capturePopoverDraft(seal: replacing);
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       if (replacing) _popoverActive = false;
     } catch (error) {
-      if (revision == _openRevision) {
+      if (_pendingJump?._openingRevision == revision) _pendingJump?.cancel();
+      if (ownedOpening()) {
         state = state.copy(warning: error.toString());
         events.add({'type': 'feedback', 'message': error.toString()});
       }
@@ -702,6 +841,7 @@ class ReaderController extends Notifier<ReaderState> {
       _invalidateLookup();
       _invalidateAppearanceWork();
       if (state.ready) await send('cancelAppearance');
+      if (!ownedOpening()) return;
       _session = 'preparing:${++_generation}';
       _failedPopover = null;
       state = ReaderState(bookId: id, phase: 'verifying');
@@ -717,35 +857,35 @@ class ReaderController extends Notifier<ReaderState> {
         'validationToken': current.data['validationToken'],
         'force': force,
       });
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       if (state.bookId == id && state.ready && _sourcePath == path) {
         await _appearanceTail;
         final value = await _resolveAppearance(
           appearance,
           capabilities: typographyCapabilities,
         );
-        if (revision != _openRevision) return;
+        if (!ownedOpening()) return;
+        if (_pendingJump?._openingRevision == revision) {
+          _pendingJump?._session = _session;
+        }
         await send('appearance', {'value': value});
         await syncAnnotations();
         await _applyVisibility();
-        if (pendingJump != null) {
-          final jump = pendingJump;
-          pendingJump = null;
-          await send('goto', {'anchor': jump});
-        }
-        if (revision == _openRevision && _routeVisible && state.ready) {
+        await _consumePendingJump(id, revision);
+        if (ownedOpening() && _routeVisible && state.ready) {
           events.add({'type': 'focusBook'});
         }
         return;
       }
       await flush();
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       await _fileWatch?.cancel();
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       _fileCheck?.cancel();
       _filePoll?.cancel();
       _filePoll = null;
       await ref.read(narrationControllerProvider.notifier).stop();
+      if (!ownedOpening()) return;
       _finishSearchWaiters(false);
       _searchRevision++;
       _revealOnLocation = false;
@@ -763,9 +903,12 @@ class ReaderController extends Notifier<ReaderState> {
       _sourcePath = path;
       _session = '$_sessionPrefix${++_generation}';
       final session = _session;
+      if (_pendingJump?._openingRevision == revision) {
+        _pendingJump?._session = session;
+      }
       _bridgeFailure = null;
       await _watchOriginal(path!, id, revision, descriptor as Map);
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       _startupTimer?.cancel();
       _startupTimer = Timer(ref.read(readerStartupTimeoutProvider), () {
         if (session == _session) {
@@ -777,13 +920,14 @@ class ReaderController extends Notifier<ReaderState> {
         'session': _session,
         'loadingQuery': Uri.encodeQueryComponent(_labels.loadingBook),
       });
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       await _applyVisibility();
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
     } catch (error) {
+      if (_pendingJump?._openingRevision == revision) _pendingJump?.cancel();
       // A native initialization result can arrive after another open/close.
       // Its error belongs to the superseded surface, not the current book.
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       if (error is _NoteDeliveryFailure) {
         // Opening another book must not tear down the only owner of input
         // whose handoff failed. Keep the old session/passage and show recovery.
@@ -795,12 +939,12 @@ class ReaderController extends Notifier<ReaderState> {
       _fileCheck?.cancel();
       _filePoll?.cancel();
       await _fileWatch?.cancel();
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       _sourcePath = null;
       _session = 'closed:${++_generation}';
       _failedPopover = null;
       await readerChannel.invokeMethod<void>('close');
-      if (revision != _openRevision) return;
+      if (!ownedOpening()) return;
       state = ReaderState(
         bookId: id,
         error: error.toString(),
@@ -1021,10 +1165,15 @@ class ReaderController extends Notifier<ReaderState> {
               ? TypographyCapabilities.fromJson(event['typography'])
               : state.typography,
         );
-        if (pendingJump != null) {
-          final jump = pendingJump;
-          pendingJump = null;
-          await send('goto', {'anchor': jump});
+        final openedBook = state.bookId!,
+            openedRevision = _openRevision,
+            openedSession = _session;
+        await _consumePendingJump(openedBook, openedRevision);
+        if (!ref.mounted ||
+            state.bookId != openedBook ||
+            _openRevision != openedRevision ||
+            _session != openedSession) {
+          return;
         }
         await ref
             .read(workspaceControllerProvider.notifier)
@@ -1384,11 +1533,18 @@ class ReaderController extends Notifier<ReaderState> {
     events.add(event);
   }
 
-  Future<void> send(
-    String action, [
-    Map<String, dynamic> args = const {},
-  ]) async {
+  Future<void> send(String action, [Map<String, dynamic> args = const {}]) =>
+      _send(action, args);
+
+  Future<void> _send(
+    String action,
+    Map<String, dynamic> args, {
+    bool Function()? isCurrent,
+    Future<bool> Function()? validateNavigation,
+  }) async {
     final session = _session;
+    bool current() =>
+        ref.mounted && session == _session && (isCurrent?.call() ?? true);
     if ([
           'goto',
           'back',
@@ -1405,15 +1561,19 @@ class ReaderController extends Notifier<ReaderState> {
         ref.read(narrationControllerProvider).active) {
       await ref.read(narrationControllerProvider.notifier).stop();
     }
-    if (session != _session) return;
+    if (!current()) return;
     if (action == 'focus') {
       if (!_routeVisible || !state.ready) return;
       await readerChannel.invokeMethod<void>('focus');
-      if (session != _session) return;
+      if (!current()) return;
     }
-    if (['goto', 'back', 'forward', 'next', 'previous'].contains(action)) {
-      _revealOnLocation = true;
-    }
+    final navigation = [
+      'goto',
+      'back',
+      'forward',
+      'next',
+      'previous',
+    ].contains(action);
     final frames = readerBridgeFrames(
       {'action': action, ...args, 'session': session},
       ++_bridgeRevision,
@@ -1422,6 +1582,12 @@ class ReaderController extends Notifier<ReaderState> {
     // Ordinary commands retain immediate submission. Only a multi-frame
     // transfer owns the channel until all of its frames have been submitted.
     if (frames.length == 1 && _commandTail == null) {
+      if (validateNavigation != null &&
+          (!await validateNavigation() || !current())) {
+        return;
+      }
+      if (!current()) return;
+      if (navigation) _revealOnLocation = true;
       await readerChannel.invokeMethod<void>(
         'dispatch',
         jsonEncode(frames.single),
@@ -1429,8 +1595,14 @@ class ReaderController extends Notifier<ReaderState> {
       return;
     }
     Future<void> deliver() async {
+      if (!current()) return;
+      if (validateNavigation != null &&
+          (!await validateNavigation() || !current())) {
+        return;
+      }
       for (final frame in frames) {
-        if (session != _session) return;
+        if (!current()) return;
+        if (navigation) _revealOnLocation = true;
         await readerChannel.invokeMethod<void>('dispatch', jsonEncode(frame));
       }
     }
@@ -1516,6 +1688,12 @@ class ReaderController extends Notifier<ReaderState> {
         visible == _surfaceVisible &&
         state.surfaceVisible != visible) {
       state = state.copy(surfaceVisible: visible);
+    }
+    if (ref.mounted &&
+        session == _session &&
+        interactive &&
+        state.bookId != null) {
+      await _consumePendingJump(state.bookId!, _openRevision);
     }
   }
 
@@ -2349,34 +2527,48 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> close() async {
+    _pendingJump?.cancel();
     final revision = ++_openRevision;
+    final session = _session, presentation = _presentation;
+    bool ownsClosing() =>
+        ref.mounted && revision == _openRevision && session == _session;
     if (_preparationOwner != null) {
       await ref.read(readingDataStoreProvider).call('cancelPrepare');
+      if (!ownsClosing()) return;
     }
     requestThumbnailWindow(const []);
-    final session = _session, presentation = _presentation;
     _startupTimer?.cancel();
     await ref.read(narrationControllerProvider.notifier).stop();
+    if (!ownsClosing()) return;
     try {
       await _capturePopoverDraft(seal: true);
+      if (!ownsClosing()) return;
       _invalidateAppearanceWork();
       if (state.ready) await send('cancelAppearance');
+      if (!ownsClosing()) return;
       await flush();
+      if (!ownsClosing()) return;
       await _eventTail;
+      if (!ownsClosing()) return;
       await ref.read(notebookControllerProvider.notifier).flush();
+      if (!ownsClosing()) return;
       do {
         await _save();
+        if (!ownsClosing()) return;
       } while (_pendingLocations.isNotEmpty);
       await readerChannel.invokeMethod<void>('visible', false);
     } catch (error) {
+      if (!ownsClosing()) return;
       await readerChannel.invokeMethod<void>('popoverResult', {
         'session': session,
         'presentation': presentation,
         'captureError': error.toString(),
       });
+      if (!ownsClosing()) return;
       await _applyVisibility();
       rethrow;
     }
+    if (!ownsClosing()) return;
     _finishSearchWaiters(false);
     _searchRevision++;
     if (revision != _openRevision) return;
