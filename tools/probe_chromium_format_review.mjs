@@ -13,6 +13,7 @@ const browser=spawn(process.env.BUSYBOOKS_CHROMIUM_BIN??'/usr/bin/google-chrome'
     '--headless','--no-sandbox','--no-first-run','--no-default-browser-check','--disable-background-networking',
     '--remote-debugging-port=0','--user-data-dir='+path.join(owned,'browser'),'about:blank',
 ],{stdio:['ignore','ignore','pipe']})
+const browserClosed=new Promise(resolve=>browser.once('close',resolve))
 let socket
 try{
     const endpoint=await new Promise((resolve,reject)=>{
@@ -89,6 +90,14 @@ try{
     }
 }finally{
     socket?.close();browser.kill('SIGTERM')
-    if(browser.exitCode===null)await new Promise(resolve=>{browser.once('exit',resolve);setTimeout(()=>{browser.kill('SIGKILL');resolve()},3000).unref()})
-    fs.rmSync(owned,{recursive:true,force:true})
+    const forceStop=setTimeout(()=>browser.kill('SIGKILL'),3000)
+    let deadline
+    try{
+        await Promise.race([
+            browserClosed,
+            new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('Chromium did not close after SIGKILL')),6000)}),
+        ])
+    }finally{clearTimeout(forceStop);clearTimeout(deadline)}
+    // Chrome's profile writers can settle just after the parent process closes.
+    fs.rmSync(owned,{recursive:true,force:true,maxRetries:10,retryDelay:100})
 }
