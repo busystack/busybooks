@@ -64,6 +64,10 @@ if ($version.frameworkVersion -ne '3.47.5' -or $version.dartSdkVersion -notlike 
 }
 $report.toolchain = $version
 $lockBefore = (Get-FileHash pubspec.lock -Algorithm SHA256).Hash
+if (!(Invoke-Check 'upstream-source' 'python.exe' @('tools/verify_vendor.py') | Select-Object -Last 1)) {
+    throw 'Upstream dependency verification failed'
+}
+$null = Invoke-Check 'upstream-verifier-tests' 'python.exe' @('-m', 'unittest', 'discover', '-s', 'test/tools', '-p', '*_test.py')
 $null = Invoke-Check 'doctor' $flutter @('doctor', '-v')
 $null = Invoke-Check 'devices' $flutter @('devices')
 if (!(Invoke-Check 'dependencies' $flutter @('pub', 'get', '--enforce-lockfile') | Select-Object -Last 1)) {
@@ -79,6 +83,7 @@ foreach ($probe in 'storage', 'cache', 'annotation_order') {
 $build = Invoke-Check 'windows-release' $flutter @('build', 'windows', '--release') | Select-Object -Last 1
 if ($build) {
     $release = Join-Path $source 'build\windows\x64\runner\Release'
+    $null = Invoke-Check 'upstream-release' 'python.exe' @('tools/verify_vendor.py', '--platform', 'windows', '--bundle', $release, '--build-tree', 'build/windows/x64')
     $env:BUSYBOOKS_COMIC_DECODER = Join-Path $release 'busybooks_comic_archive.exe'
     $null = Invoke-Check 'rar' 'python.exe' @('tools/qualify_rar.py', $env:BUSYBOOKS_COMIC_DECODER)
     $null = Invoke-Check 'formats' $dart @('run', 'tools/format_probe.dart')

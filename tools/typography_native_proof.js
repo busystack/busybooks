@@ -6,7 +6,7 @@
     window.busybooksProbe=event=>events.push(event)
     const font=(index,publisher=false)=>({publisher,font:nativeFontData[index].choice,resolvedFont:nativeFontData[index].resolved,size:20,weight:400,line:1.5,flow:'paginated',margin:32,width:720})
     const apply=(index,publisher=false,request=1)=>busybooks.dispatch({action:'appearance',value:font(index,publisher),request})
-    const doc=()=>view.renderer.getContents()[0].doc
+    const doc=()=>busybooks.contents()[0].doc
     const style=node=>node.ownerDocument.defaultView.getComputedStyle(node)
     const family=()=>style(doc().querySelector('#typography')).fontFamily
     const pixels=(family,variant='')=>{
@@ -46,13 +46,13 @@
         assert(rect.right>=0&&rect.left<=frame.width,'Durable passage stays on the displayed page')
         assert(JSON.stringify(historyBefore)===JSON.stringify([view.history.canGoBack,view.history.canGoForward]),'Typography does not create history entries')
         const anchor=await view.resolveNavigation(highlight),marked=anchor.anchor(doc()),box=[...marked.getClientRects()].find(r=>r.width>0&&r.height>0)
-        const hit=view.renderer.getContents()[0].overlayer.hitTest({x:box.left+box.width/2,y:box.top+box.height/2})
+        const hit=busybooks.contents()[0].overlayer.hitTest({x:box.left+box.width/2,y:box.top+box.height/2})
         assert(hit[0]===highlight&&hit[1].toString()===selectedText,'Highlight remains attached to its text after reflow')
         assert(doc().getSelection().toString()===selectedText,'Existing text selection survives font reflow')
         checks.push('loaded-rendered-family-'+i)
     }
     await busybooks.dispatch({action:'speaking',anchor:{cfi:highlight,index:0}})
-    assert(view.renderer.getContents()[0].overlayer.element.querySelectorAll('g').length>=2,'Read-aloud underline and highlight repaint after reflow')
+    assert(busybooks.contents()[0].overlayer.element.querySelectorAll('g').length>=2,'Read-aloud underline and highlight repaint after reflow')
     await busybooks.dispatch({action:'speaking',anchor:null})
     await busybooks.dispatch({action:'search',query:'library',queryId:77})
     assert(events.some(e=>e.type==='matches'&&e.items.length),'Search still finds publication text after reflow')
@@ -69,7 +69,7 @@
     const nextDoc=await view.book.sections[1].createDocument(),r=nextDoc.createRange();r.selectNodeContents(nextDoc.querySelector('#p4'));r.collapse(true)
     const target=view.getCFI(1,r)
     await Promise.all([apply(1,false,30),busybooks.dispatch({action:'goto',anchor:{cfi:target}})])
-    assert(view.renderer.getContents()[0].index===1,'Navigation during font work is not undone')
+    assert(busybooks.contents()[0].index===1,'Navigation during font work is not undone')
     assert(doc().documentElement.dir==='rtl','Publication direction survives')
     assert(style(doc().querySelector('#typography')).fontFamily.includes('busybooks-local-'),'New chapter has selected family')
     checks.push('navigation-chapter-direction-and-multilingual')

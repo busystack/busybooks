@@ -25,7 +25,8 @@ Run Dart tools with `dart run tools/NAME.dart`, Python tools with `python3 tools
 The JavaScript entry imports `fixed_layout_probe.mjs`, `reader_startup_probe.mjs`,
 `reader_defects_probe.mjs`, `reader_review_regressions.mjs`,
 `reader_sidebar_probe.mjs`, `typography_probe.mjs` and
-`comic_interaction_probe.mjs` and `literal_search_probe.mjs`. These execute actual adapter/renderer logic with
+`comic_interaction_probe.mjs`, `literal_search_probe.mjs` and
+`epub_integration_probe.mjs`. These execute actual adapter/renderer logic with
 controlled APIs; they do not establish native layout, selection or focus.
 
 Build the application first for the bundled RAR decoder. Set
@@ -60,6 +61,11 @@ provide its WebSocket API (use `--experimental-websocket` when required).
 `BUSYBOOKS_REVIEW_PROOF` selects an alternate proof such as
 `review_native_proof.js` or `hardening_native_proof.js`.
 `BUSYBOOKS_REVIEW_ANNOTATIONS` supplies saved annotations where applicable.
+`BUSYBOOKS_REVIEW_REMOVE_RESOURCE` removes one exact resource-map key only from
+the probe's disposable prepared index. Pair it with
+`BUSYBOOKS_EXPECT_OPEN_ERROR` to require an opening failure containing the
+expected message. This exercises required-document failure without altering an
+original publication or third-party implementation.
 `probe_chromium_typography.mjs` is the optional Chromium counterpart invoked by
 the Linux typography script with generated native font-resolution JSON.
 Chromium behavior does not establish WebView2 acceptance.
@@ -157,9 +163,51 @@ and [reading-data provenance](../test/fixtures/reading-data/PROVENANCE.md).
 - `make_windows_icon.py`: regenerates the Windows ICO from the owned SVG on Linux
   using gdk-pixbuf/librsvg and C++ tools.
 
-`vendor-manifest.json` is maintained provenance and content hashes for pinned
-third-party inputs, not execution output. Preserve all vendor licenses. See
-[local vendor modifications](../docs/development/readers.md#local-vendor-modifications).
+## Upstream integrity
+
+`vendor-manifest.json` records verified official sources, immutable revisions or
+releases, upstream paths and checksums. It permits no modified vendor files or
+patch exceptions. Preserve all upstream license/notice bytes. See
+[dependency provenance](../docs/development/readers.md#dependency-provenance).
+Git-sourced repository files must match both the recorded SHA-256 and Git blob
+identity, so recalculating only a local file hash cannot bless an edit.
+
+Run the offline inventory/checksum verification and its application-owned
+synthetic-fixture tests from the repository root:
+
+```sh
+python3 tools/verify_vendor.py
+python3 -m unittest discover -s test/tools -p '*_test.py'
+python3 tools/verify_vendor.py --platform linux --bundle build/linux/x64/release/bundle --build-tree build/linux/x64/release
+```
+
+On Windows use `python`, `--platform windows`, bundle
+`build/windows/x64/runner/Release` and build tree `build/windows/x64`.
+Bundle verification checks the actual reader vendor tree and copied UnRAR/
+WebView2 SDK notices. Build-tree verification compares extracted native source
+and SDK files against verified archives. A mismatch, missing/unexpected file or
+source rewrite fails verification. CI and both packaging scripts run these
+checks before releasing a bundle; Windows staging is checked again after copy.
+
+For an independent authoritative comparison when establishing or changing a
+baseline, obtain these exact official inputs and supply their paths:
+
+```sh
+python3 tools/verify_vendor.py \
+  --upstream foliate=/path/to/foliate-js \
+  --upstream pdfjs-dist=/path/to/pdfjs-5.5.207-dist.zip \
+  --upstream pdfjs-source=/path/to/pdf.js \
+  --upstream unrar=/path/to/unrarsrc-7.2.6.tar.gz \
+  --upstream webview2=/path/to/Microsoft.Web.WebView2.1.0.3537.50.nupkg
+```
+
+Git checkouts must contain the pinned commit objects. Release archives must
+match the immutable digest recorded with their official URL. This checks
+upstream contents independently of repository copies and catches a locally
+modified tree even if someone recalculates its file hashes. The verifier does
+not fetch inputs or rewrite the manifest. Do not modify dependency files for
+test setup; verifier tests create only application-owned synthetic fixtures.
+
 `package_linux.sh` and `package_windows.ps1` retain clean build/package procedures;
 Windows packaging and qualification are described in the Windows guide. Linux
 packaging writes the reproducible tarball and SHA-256 sidecar under

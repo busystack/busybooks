@@ -20,7 +20,7 @@ const img=new Target(),doc=new Target(),body=new Target()
 Object.assign(img,{offsetLeft:0,offsetTop:0,clientWidth:600,clientHeight:900,getBoundingClientRect:()=>({left:0,top:0,width:600,height:900})})
 body.append=mark=>marks.push(mark)
 Object.assign(doc,{body,querySelector:()=>img,querySelectorAll:()=>[...marks],createElement:()=>new Target()})
-const context=vm.createContext({doc,strings:{},keys(){},isComic:()=>true,regionSelection:null,view:{renderer:{getContents:()=>[{doc,index:0}],scrollBy:delta=>scroll.push(delta)},book:{sections:[{pageId:'a'.repeat(64)}]}},annotations:[{id:'saved-region',annotationKind:'region',anchor:{page:0,pageId:'a'.repeat(64),region:[.1,.2,.3,.4]},color:'blue'}],colors:{blue:'blue'},regionPopoverRect:()=>({x:20,y:30,width:1,height:1}),emit:(type,data)=>events.push({type,...data}),setTimeout})
+const context=vm.createContext({getContents:publication=>publication.renderer.getContents(),doc,strings:{},keys(){},isComic:()=>true,regionSelection:null,view:{renderer:{getContents:()=>[{doc,index:0}],scrollBy:delta=>scroll.push(delta)},book:{sections:[{pageId:'a'.repeat(64)}]}},annotations:[{id:'saved-region',annotationKind:'region',anchor:{page:0,pageId:'a'.repeat(64),region:[.1,.2,.3,.4]},color:'blue'}],colors:{blue:'blue'},regionPopoverRect:()=>({x:20,y:30,width:1,height:1}),emit:(type,data)=>events.push({type,...data}),setTimeout})
 vm.runInContext(source.slice(source.indexOf('function setupComicPage'),source.indexOf('function beginRegion'))+source.slice(source.indexOf('function paintRegions'),source.indexOf('async function mountFoliate'))+';setupComicPage(doc,0)',context)
 const mark=marks[0]
 doc.fire('pointerdown',{target:mark})

@@ -9,14 +9,14 @@
     bridge.postMessage=json=>{frames.push(json);post(json)}
     const view=document.querySelector('foliate-view'),book=view?.book
     if(book?.comic){
-        const section=book.sections[0],doc=view.renderer.getContents()[0]?.doc,img=doc?.querySelector('img')
+        const section=book.sections[0],doc=busybooks.contents()[0]?.doc,img=doc?.querySelector('img')
         await img?.decode()
         assert(section.width===900&&section.height===600&&section.pageSpread==='center','Oriented comic descriptor is landscape and centered')
         assert(img?.naturalWidth===900&&img.naturalHeight===600,'Native JPEG decoder displays EXIF-oriented geometry despite marker fill')
         checks.push('F22-oriented-marker-fill-comic')
     }else{
         const text=view?'📚'.repeat(300000):'x'.repeat(525000)
-        const doc=view?view.renderer.getContents()[0]?.doc:document
+        const doc=view?busybooks.contents()[0]?.doc:document
         const host=view?doc.body:document.querySelector('.textLayer span')
         assert(host,'A real rendered text document exists')
         const node=doc.createTextNode(text)

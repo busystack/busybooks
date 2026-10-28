@@ -41,4 +41,3 @@ export const textWalker = function* (x, func, filterFunc) {
     }
     for (const match of func(strs, makeRange)) yield match
 }
-

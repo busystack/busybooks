@@ -5,6 +5,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - run: python3 tools/verify_vendor.py
+      - run: python3 -m unittest discover -s test/tools -p '*_test.py'
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libhandy-1-dev libwebkit2gtk-4.1-dev libspeechd2 speech-dispatcher-espeak-ng libxtst6 libxml2-utils xvfb dbus-x11
       - uses: subosito/flutter-action@v2
         with:
@@ -26,6 +28,7 @@ jobs:
       - run: dart run tools/cache_probe.dart
       - run: dart run tools/annotation_order_probe.dart
       - run: flutter build linux --release
+      - run: python3 tools/verify_vendor.py --platform linux --bundle build/linux/x64/release/bundle --build-tree build/linux/x64/release
       - run: python3 tools/probe_linux_mime.py build/linux/x64/release/bundle/share/mime
       - run: python3 tools/qualify_rar.py build/linux/x64/release/bundle/busybooks_comic_archive
       - run: dart run tools/format_probe.dart
@@ -54,6 +57,8 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7
+      - run: python tools/verify_vendor.py
+      - run: python -m unittest discover -s test/tools -p '*_test.py'
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -66,6 +71,7 @@ jobs:
       - run: dart run tools/cache_probe.dart
       - run: dart run tools/annotation_order_probe.dart
       - run: flutter build windows --release
+      - run: python tools/verify_vendor.py --platform windows --bundle build/windows/x64/runner/Release --build-tree build/windows/x64
       - run: python tools/qualify_rar.py build/windows/x64/runner/Release/busybooks_comic_archive.exe
       - run: dart run tools/format_probe.dart
         env:

@@ -3,6 +3,7 @@
 
 #include "gtk_header_icons.h"
 #include "gtk_window_preferences.h"
+#include "gtk_window_menu.h"
 
 #include <cstring>
 
@@ -17,6 +18,7 @@ struct BusyBooksLinuxChromeHost {
   FlEventChannel* icons_changed_channel;
   BusyBooksGtkWindowPreferencesWatcher* preferences;
   BusyBooksGtkHeaderIcons* icons;
+  BusyBooksGtkWindowMenu* window_menu;
   gulong animation_signal = 0;
   bool preferences_listening = false;
   bool animations_listening = false;
@@ -94,6 +96,8 @@ static void settings_call(FlMethodChannel*, FlMethodCall* call, gpointer data) {
   } else if (strcmp(method, "lowerWindow") == 0) {
     GdkWindow* window = gtk_widget_get_window(GTK_WIDGET(host->window));
     if (window != nullptr) gdk_window_lower(window);
+  } else if (strcmp(method, "showWindowMenu") == 0) {
+    result = fl_value_new_bool(host->window_menu->Show());
   } else if (strcmp(method, "setPreferDark") == 0) {
     FlValue* value = fl_method_call_get_args(call);
     if (value == nullptr || fl_value_get_type(value) != FL_VALUE_TYPE_BOOL) {
@@ -262,6 +266,7 @@ BusyBooksLinuxChromeHost* busybooks_linux_chrome_host_new(
   host->set_theme = set_theme;
   host->preferences = new BusyBooksGtkWindowPreferencesWatcher(host->settings);
   host->icons = new BusyBooksGtkHeaderIcons(GTK_WIDGET(view));
+  host->window_menu = new BusyBooksGtkWindowMenu(GTK_WIDGET(view), window);
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   FlBinaryMessenger* messenger = fl_engine_get_binary_messenger(fl_view_get_engine(view));
   host->settings_channel = fl_method_channel_new(messenger, "com.busybooks.app/linux_chrome", FL_METHOD_CODEC(codec));
@@ -292,6 +297,7 @@ void busybooks_linux_chrome_host_free(BusyBooksLinuxChromeHost* host) {
   }
   delete host->preferences;
   delete host->icons;
+  delete host->window_menu;
   g_clear_object(&host->settings_channel);
   g_clear_object(&host->icons_channel);
   g_clear_object(&host->preferences_channel);

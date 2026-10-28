@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import vm from 'node:vm'
+import { readerContents } from '../assets/reader/fixed_layout_integration.mjs'
 import * as typographyUtilities from '../assets/reader/typography.mjs'
 import * as searchUtilities from '../assets/reader/literal_search.mjs'
 import { validPage } from '../assets/reader/reading_geometry.mjs'
@@ -11,7 +12,7 @@ const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('..
 function adapter(){
   const events=[]
   const content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
-  const context=vm.createContext({...typographyUtilities,...searchUtilities,AbortController,URL,console,Uint8Array,setTimeout,validPage,requestAnimationFrame:f=>f(),
+  const context=vm.createContext({readerContents,...typographyUtilities,...searchUtilities,AbortController,URL,console,Uint8Array,setTimeout,validPage,requestAnimationFrame:f=>f(),
     pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},
     document:{querySelectorAll:()=>[],querySelector:()=>content,addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}},
     window:{location:{href:'https://busybooks.local/?session=test'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}}})

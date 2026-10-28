@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import vm from 'node:vm'
+import { readerContents } from '../assets/reader/fixed_layout_integration.mjs'
 import * as typographyUtilities from '../assets/reader/typography.mjs'
 import { TOCProgress } from '../assets/reader/vendor/foliate/progress.js'
 import { validPage } from '../assets/reader/reading_geometry.mjs'
@@ -12,7 +13,7 @@ const normalize=value=>JSON.parse(JSON.stringify(value))
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}}
 function adapter(extra={}) {
   const events=[],content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
-  const context=vm.createContext({...typographyUtilities,AbortController,URL,Uint8Array,console,validPage,setTimeout,clearTimeout,requestAnimationFrame:f=>f(),
+  const context=vm.createContext({readerContents,...typographyUtilities,AbortController,URL,Uint8Array,console,validPage,setTimeout,clearTimeout,requestAnimationFrame:f=>f(),
     pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},
     document:{querySelector:()=>content,querySelectorAll:()=>[],addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}},
     window:{location:{href:'https://busybooks.local/?session=sidebar'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}},...extra})

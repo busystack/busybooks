@@ -595,4 +595,3 @@ export class View extends HTMLElement {
 }
 
 customElements.define('foliate-view', View)
-

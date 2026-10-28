@@ -10,7 +10,7 @@
         const result=events.find(event=>event.type==='navigationResult'&&event.request===id)
         assert(result&&!result.message,'Navigation acknowledged: '+JSON.stringify(result))
     }
-    const part=index=>view.renderer.getContents().find(item=>item.index===index)
+    const part=index=>busybooks.contents().find(item=>item.index===index)
     const typed=(cfi,index)=>book.sections[index].identity
         ?{kind:'fb2',version:1,section:book.sections[index].identity,index,cfi}:{cfi,index}
     const finish=data=>{
@@ -97,13 +97,17 @@
         }
         checks.push('idless-distinct-outline-destinations','distinct-typed-outline-cfis','cache-rebuild-stable-outline')
     }else{
-        const resource=book.resources.getItemByID('pdf-start')
-        assert(resource&&book.resources.resolveFallback(resource).id==='raster','Embedded resource resolution may use PNG')
-        assert(book.resources.resolveSpineFallback(resource).id==='first','Spine resolution continues PDF through PNG to XHTML')
         assert(book.sections[1].sourceHref==='OPS/start.pdf'&&book.sections[1].contentHref==='OPS/first.xhtml','Original spine identity and resolved content stay separate')
+        await view.goTo(1)
+        const embedded=part(1).doc.querySelector('img')
+        await embedded?.decode()
+        assert(embedded?.naturalWidth===240&&embedded?.naturalHeight===320,'Embedded resource resolution retains the actual PNG while spine content resolves to XHTML')
         for(const href of ['OPS/start.pdf#passage','OPS/raster.png#passage','OPS/first.xhtml#passage']){
-            const target=await view.resolveNavigation(href);assert(target.index===1,'All fallback aliases navigate to original spine slot')
+            const target=await view.resolveNavigation(href);assert(target.index===1&&target.anchor(part(1).doc)?.id==='passage','All fallback aliases navigate to the exact passage in the original spine slot')
         }
+        const nested=book.toc?.[0]?.subitems?.find(row=>row.label==='Nested passage')
+        const nestedTarget=await view.resolveNavigation(nested?.href)
+        assert(nestedTarget?.index===1&&nestedTarget.anchor(part(1).doc)?.id==='passage','NCX destinations preserve their original fragment through content fallback')
         checks.push('pdf-png-xhtml-spine-chain','embedded-raster-kept','original-spine-and-alias-navigation')
     }
     const index=book.sections[0].identity?0:1

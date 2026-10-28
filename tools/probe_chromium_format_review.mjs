@@ -55,6 +55,13 @@ try{
         const prepared=spawnSync(process.env.BUSYBOOKS_DART_BIN??'dart',['run','tools/prepare_format_acceptance.dart',profile,original],{cwd:root,encoding:'utf8',env:{...process.env,BUSYBOOKS_COMIC_DECODER:process.env.BUSYBOOKS_COMIC_DECODER??path.join(root,'build/linux/x64/release/bundle/busybooks_comic_archive')}})
         assert.equal(prepared.status,0,prepared.stderr)
         const publication=JSON.parse(prepared.stdout)
+        if(process.env.BUSYBOOKS_REVIEW_REMOVE_RESOURCE){
+            const resource=process.env.BUSYBOOKS_REVIEW_REMOVE_RESOURCE,indexFile=publication.cacheDirectory+'.json'
+            assert(path.resolve(indexFile).startsWith(owned+path.sep),'Only the probe-owned cache may be changed')
+            const index=JSON.parse(fs.readFileSync(indexFile,'utf8'))
+            assert(Object.hasOwn(index.resources,resource),'The negative fixture must contain its required resource')
+            delete index.resources[resource];fs.writeFileSync(indexFile,JSON.stringify(index))
+        }
         const {targetId}=await send('Target.createTarget',{url:'about:blank'})
         const {sessionId}=await send('Target.attachToTarget',{targetId,flatten:true})
         publications.set(sessionId,publication)

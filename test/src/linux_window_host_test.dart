@@ -22,8 +22,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const yaruWindowChannel = MethodChannel('yaru_window');
+  const chromeChannel = MethodChannel('com.busybooks.app/linux_chrome');
   const yaruEventsChannel = EventChannel('yaru_window/events');
   late List<MethodCall> windowCalls;
+  late List<MethodCall> chromeCalls;
   late Map<String, Object?> nativeState;
   late MockStreamHandlerEventSink eventSink;
   late int eventListenCount;
@@ -31,6 +33,7 @@ void main() {
 
   setUp(() {
     windowCalls = [];
+    chromeCalls = [];
     nativeState = <String, Object?>{};
     eventListenCount = 0;
     eventCancelCount = 0;
@@ -39,6 +42,10 @@ void main() {
     messenger.setMockMethodCallHandler(yaruWindowChannel, (call) async {
       windowCalls.add(call);
       return call.method == 'state' ? nativeState : null;
+    });
+    messenger.setMockMethodCallHandler(chromeChannel, (call) async {
+      chromeCalls.add(call);
+      return call.method == 'showWindowMenu' ? true : null;
     });
     messenger.setMockStreamHandler(
       yaruEventsChannel,
@@ -58,6 +65,7 @@ void main() {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(yaruWindowChannel, null);
+    messenger.setMockMethodCallHandler(chromeChannel, null);
     messenger.setMockStreamHandler(yaruEventsChannel, null);
   });
 
@@ -275,6 +283,10 @@ void main() {
 
       expect(find.byIcon(BusyBooksGlyphs.menuVertical), findsNothing);
       expect(windowCalls.where((call) => call.method == 'showMenu'), isEmpty);
+      expect(
+        chromeCalls.where((call) => call.method == 'showWindowMenu'),
+        isEmpty,
+      );
       final metrics = LinuxWindowMetricsScope.of(
         tester.element(find.byKey(const ValueKey('metrics-probe'))),
       );
@@ -287,9 +299,10 @@ void main() {
       await tester.pump();
 
       expect(
-        windowCalls.where((call) => call.method == 'showMenu'),
+        chromeCalls.where((call) => call.method == 'showWindowMenu'),
         hasLength(1),
       );
+      expect(windowCalls.where((call) => call.method == 'showMenu'), isEmpty);
     },
   );
 

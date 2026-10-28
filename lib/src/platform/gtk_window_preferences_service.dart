@@ -166,6 +166,17 @@ class GtkWindowPreferencesService {
     }
   }
 
+  Future<bool> showWindowMenu() async {
+    try {
+      return await _channel.invokeMethod<bool>('showWindowMenu') ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      // A compositor can decline its system menu. Keep dependency code intact.
+      return false;
+    }
+  }
+
   Future<void> setPreferDark(bool dark) async {
     try {
       await _channel.invokeMethod<void>('setPreferDark', dark);

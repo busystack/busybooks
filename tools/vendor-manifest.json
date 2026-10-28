@@ -1,28 +1,68 @@
 {
+  "schemaVersion": 2,
   "foliateRevision": "78914aef4466eb960965702401634c2cb348e9b1",
   "pdfjsVersion": "5.5.207",
-  "pdfjsRevision": "527964698",
-  "modifiedVendorFiles": [
-    "assets/reader/vendor/foliate/epub.js",
-    "assets/reader/vendor/foliate/fixed-layout.js",
-    "assets/reader/vendor/foliate/paginator.js",
-    "assets/reader/vendor/foliate/search.js"
+  "pdfjsRevision": "5279646985f4744386a9fe3cf61b28bf1ff88d6e",
+  "unrarVersion": "7.21",
+  "vendorRoots": [
+    "assets/reader/vendor",
+    "native/vendor/unrar"
   ],
+  "sources": {
+    "foliate": {
+      "kind": "git",
+      "url": "https://github.com/johnfactotum/foliate-js",
+      "revision": "78914aef4466eb960965702401634c2cb348e9b1",
+      "tree": "72c695f2511bcfc0e3dc37385b81daa5f6fe6930",
+      "license": "MIT"
+    },
+    "pdfjs-dist": {
+      "kind": "zip",
+      "url": "https://github.com/mozilla/pdf.js/releases/download/v5.5.207/pdfjs-5.5.207-dist.zip",
+      "repository": "https://github.com/mozilla/pdf.js",
+      "release": "v5.5.207",
+      "revision": "5279646985f4744386a9fe3cf61b28bf1ff88d6e",
+      "sha256": "b37ad762eb7c16fccbf09452c4386e910cc86c9cb736843b77440ac373c6f046",
+      "license": "Apache-2.0 and bundled resource notices"
+    },
+    "pdfjs-source": {
+      "kind": "git",
+      "url": "https://github.com/mozilla/pdf.js",
+      "revision": "5279646985f4744386a9fe3cf61b28bf1ff88d6e",
+      "license": "Apache-2.0"
+    },
+    "unrar": {
+      "kind": "tar.gz",
+      "url": "https://www.rarlab.com/rar/unrarsrc-7.2.6.tar.gz",
+      "release": "7.21",
+      "sha256": "d1afa67ef4121ebc5986815699e05db0ce8648499e5dca854f282a4c3f72c003",
+      "license": "UnRAR (RAR decoding and redistribution permitted; RAR-compatible compression prohibited)"
+    }
+  },
+  "buildInputs": {
+    "webview2": {
+      "kind": "zip",
+      "url": "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.3537.50",
+      "release": "1.0.3537.50",
+      "sha256": "5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa",
+      "license": "Microsoft WebView2 SDK license"
+    }
+  },
   "sha256": {
-    "assets/reader/vendor/foliate/LICENSE": "e1f89c849cd60c2a9beb044784a30a2d6e11813800d44099915fcd9eca63dfe4",
-    "assets/reader/vendor/foliate/README.md": "05cac7af6cb29881708883997b8b5f91924b85b595ed098ae0b6ef5b8afaea63",
-    "assets/reader/vendor/foliate/epub.js": "0f69ae0c84586c907cf027fa9cf62276aa02d8c25cc2409948237f6306d1dc77",
-    "assets/reader/vendor/foliate/epubcfi.js": "a95b746fa484590691ea9d82f520ac079773584e243b9bd910aaa3b2c8f00a06",
-    "assets/reader/vendor/foliate/fixed-layout.js": "1eca49a8da69707b079c96b7261efb8f3a91e6b519ba693b3b51f7280751098e",
-    "assets/reader/vendor/foliate/overlayer.js": "5377b9c1c7840e00d1df886913d4b295a7db10e0f52107aa320292612a4cafec",
-    "assets/reader/vendor/foliate/paginator.js": "aff9fe1e1a08727171123d36ac74ba152c5355da437d1eddc8178160fee3fc8b",
-    "assets/reader/vendor/foliate/progress.js": "84b0bbd3bc5b036d24cb54e6b0bf4f9c5393bab319cee37d00d71d6b2e10a2a7",
-    "assets/reader/vendor/foliate/search.js": "8f4cdd61263904e01b23fe203f297b211aec34645d1594b471a2d8bab65ab074",
-    "assets/reader/vendor/foliate/text-walker.js": "1112fee10fb142d3740d604ace067b39424b46e85c2b6447f6dcb3c28c8be3e2",
-    "assets/reader/vendor/foliate/tts.js": "c80c7d0baabbc810fcfd482185672bcd9320a21ce4b0acaaa0f69359d9bb5b06",
-    "assets/reader/vendor/foliate/view.js": "52a2cc975d54d25852b5f3b75f220dd0058d551478c72b0bd0d57b282aa99569",
-    "assets/reader/vendor/pdfjs/LICENSE": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0",
-    "assets/reader/vendor/pdfjs/annotation_layer_builder.css": "11af8884a85a2c16afddf254b3aa2e0860ea51e166a7ddaecb5fee7fdbe2eacf",
+    "assets/reader/vendor/foliate/LICENSE": "b621ffc351fe263bc9b09dd0bc1c9332fda9c462a3904c1e4f0b4d3236b9c28c",
+    "assets/reader/vendor/foliate/README.md": "56f46064f70484ac8c0014c04352a8f093091822ae1f682c5d3af76647f1f0dd",
+    "assets/reader/vendor/foliate/epub.js": "dfe347495039e9b5991478986ec6b7713cf9efbcd8f475a77ef7b967c5176298",
+    "assets/reader/vendor/foliate/epubcfi.js": "e1a688ad5c84bf31f33cef467f92c7a6d060a0f17ec37c1d3c048e9c7b1cf645",
+    "assets/reader/vendor/foliate/fixed-layout.js": "7aee1d15d8e0479b8a6c59a20304b250dafc4c7dc158147a2b2c6bed9e180b4c",
+    "assets/reader/vendor/foliate/overlayer.js": "d3d3396e3083277ccbd4f17c407621159b22a407107e43ce75ca3014578094fb",
+    "assets/reader/vendor/foliate/paginator.js": "51cec81572d5d182e231fe68ce9c3b5489a0976b36172060516336ba893565ea",
+    "assets/reader/vendor/foliate/progress.js": "544f5e90babc0cb31c5caf971a5f06dd6249ec06600cb62f672fa7179811fde1",
+    "assets/reader/vendor/foliate/search.js": "31e846bdc095a645de0e94f7baa2c9e136561a363a2f774d4032e72cfa1fb0ef",
+    "assets/reader/vendor/foliate/text-walker.js": "4ad740ab6142b5be428700ef4d270253cef6649cf6e047ae7d2698a7aec65e92",
+    "assets/reader/vendor/foliate/tts.js": "530d34605b758a5e2260438964a85bb9909bcb49e8848e303fe22cac63859026",
+    "assets/reader/vendor/foliate/view.js": "e0093af921feb03bb58fb51aeedc321fa108a4158d215f6913ecf7925415c945",
+    "assets/reader/vendor/pdfjs/LICENSE": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "assets/reader/vendor/pdfjs/annotation_layer_builder.css": "d0b814831f57d907830427eaac02654ba652a423e07c894888e1095b0a63e7a9",
     "assets/reader/vendor/pdfjs/cmaps/78-EUC-H.bcmap": "d92a261336dc18b8c03a46eb4d462382d33f4338fa195d303256b2031434c874",
     "assets/reader/vendor/pdfjs/cmaps/78-EUC-V.bcmap": "61670bebc4e4827b67230c054fd0d820d6e30c3584d02e386804e62bbedc032a",
     "assets/reader/vendor/pdfjs/cmaps/78-H.bcmap": "ece6415b853d61e1b2560165151407d35cf16e6556932b85a13ea75276b77402",
@@ -78,12 +118,12 @@
     "assets/reader/vendor/pdfjs/cmaps/CNS1-H.bcmap": "e8487971ab20cd16f3de3e8ac56ec994b72b658ad113f2818239dfd5108f501a",
     "assets/reader/vendor/pdfjs/cmaps/CNS1-V.bcmap": "42df8076aaa7574505e7304af83a3323ec032c4177d64b1309db8c043d594a8a",
     "assets/reader/vendor/pdfjs/cmaps/CNS2-H.bcmap": "bc6024d274d440f0625c69e25f37036ef6cb6689432ceaa160d3432a2a716ca7",
-    "assets/reader/vendor/pdfjs/cmaps/CNS2-V.bcmap": "d89fb339a5b4728786e0832354c0a47cf9245a4692a318be94147a300c0ce849",
+    "assets/reader/vendor/pdfjs/cmaps/CNS2-V.bcmap": "2e4f70a8afd23a121030fc2e5b5f3816e903b11e7ba8b8c09654b31c80399c38",
     "assets/reader/vendor/pdfjs/cmaps/ETHK-B5-H.bcmap": "d2f10fa519336bc4efcc7b6deb9604b75429946b40d82e311cb3a97a1994c89a",
     "assets/reader/vendor/pdfjs/cmaps/ETHK-B5-V.bcmap": "1fea3fd0d9f0f679f80505800851ef2e4131d81127e18c006938ffa2f4c8b247",
     "assets/reader/vendor/pdfjs/cmaps/ETen-B5-H.bcmap": "87ee6b3f5bfda5fe26fa35431264c7d73070d10dbbf398a75185d63ae322c18d",
     "assets/reader/vendor/pdfjs/cmaps/ETen-B5-V.bcmap": "47dc0d2c21e3bde317947aec1675ceabc1d5460a60bf9c24334b8c407a17172c",
-    "assets/reader/vendor/pdfjs/cmaps/ETenms-B5-H.bcmap": "7c83f90bc07d883a0f870f4b9920fbea89e10f7dcecd1f59dad39ce3878bfa83",
+    "assets/reader/vendor/pdfjs/cmaps/ETenms-B5-H.bcmap": "d5f5a73da4173b7da9a3a20e16f26f9cd5d12deb1553409919e0cec6fd37fdee",
     "assets/reader/vendor/pdfjs/cmaps/ETenms-B5-V.bcmap": "18252fca90f472f479af1bddd60d6ab51c8e1b55dcf6845951426504934543e0",
     "assets/reader/vendor/pdfjs/cmaps/EUC-H.bcmap": "f9939cd57fccdc65c5d9f4c205fd497ebdbd283643308da5663801a8c1d9c595",
     "assets/reader/vendor/pdfjs/cmaps/EUC-V.bcmap": "1283a50a706507c4436da83ede9ad7a4440be25378f2e96f6c81a430081426a3",
@@ -93,7 +133,7 @@
     "assets/reader/vendor/pdfjs/cmaps/Ext-V.bcmap": "c2087fb845a9e3acea0c2922cd40e6af67e11957bec74dcd597f1285edd490ce",
     "assets/reader/vendor/pdfjs/cmaps/GB-EUC-H.bcmap": "928bad06fd84a48f5ba7150d7716609119fb660f2aaa73eccad81ddab9b9d203",
     "assets/reader/vendor/pdfjs/cmaps/GB-EUC-V.bcmap": "a9ad88ac2479da529b16dc48abc5952332e27bc355335f91df5729a587533324",
-    "assets/reader/vendor/pdfjs/cmaps/GB-H.bcmap": "558af035a319bf566d3e8d1a0dd7db20a34ab7ed3f271d8e6daae98b6485c039",
+    "assets/reader/vendor/pdfjs/cmaps/GB-H.bcmap": "1018c777a8910b5bb46d7d54a4aee9d51ca5cff8addb2b41c969d9101cb3fd1c",
     "assets/reader/vendor/pdfjs/cmaps/GB-V.bcmap": "0b96789143c0bbf9f1641ae7165b3456dccd14dabffcbb0bd654d5bf6f94f863",
     "assets/reader/vendor/pdfjs/cmaps/GBK-EUC-H.bcmap": "2103fed28650ede096a2281104a1a8a4304dae0db414342c636867522307123b",
     "assets/reader/vendor/pdfjs/cmaps/GBK-EUC-V.bcmap": "a7fd35dd14d9dbdb955f34e6c0630618b6620dfd09d4283b2f65a65ce77fcaea",
@@ -194,8 +234,8 @@
     "assets/reader/vendor/pdfjs/cmaps/WP-Symbol.bcmap": "543923bead225732aba30976690ee89095a19628277b5863efecc2c728d5d7bf",
     "assets/reader/vendor/pdfjs/iccs/CGATS001Compat-v2-micro.icc": "73e1ba37d2bad5bab2a964f40a9eed96209666efc067c3322626214bbef234a0",
     "assets/reader/vendor/pdfjs/iccs/LICENSE": "286e4fd7b447330b2c88e23890e3cd0a9d38cb398d4a59cb247f578ccbda3213",
-    "assets/reader/vendor/pdfjs/pdf.mjs": "373747dea2a21609907fbc77e79e5ca3f3d4c2de102d5f8ecbb670495d72d319",
-    "assets/reader/vendor/pdfjs/pdf.worker.mjs": "945945ff5bc9c872c1bcd9b2b5e8c4717352892536a46c12af13461c8e330f40",
+    "assets/reader/vendor/pdfjs/pdf.mjs": "70f8fd59e1c947d32ebfc7e5b101cc164d305fe98c44523355355ab79875d9e9",
+    "assets/reader/vendor/pdfjs/pdf.worker.mjs": "682770dbc7ac4d94017b79628aa8c231934415f80a76ed99be09ed743912a0ab",
     "assets/reader/vendor/pdfjs/standard_fonts/FoxitDingbats.pfb": "845c752392b6c914fb989c75a08b7792b88f542d2499042ef2889f8c814a16ed",
     "assets/reader/vendor/pdfjs/standard_fonts/FoxitFixed.pfb": "b6c8fe53f134b8b6d4578cd2d544df4cee9624c4efa8d51a560fb40ea296101b",
     "assets/reader/vendor/pdfjs/standard_fonts/FoxitFixedBold.pfb": "f1b7159702973f54fc86254ea38bcf3712b2a736eb3a0995751e9f4bb45ad603",
@@ -212,7 +252,7 @@
     "assets/reader/vendor/pdfjs/standard_fonts/LiberationSans-BoldItalic.ttf": "a224075ac17495ad0a3af3bc0a419ac0704a8b3fd1095456201fb9b095fc281d",
     "assets/reader/vendor/pdfjs/standard_fonts/LiberationSans-Italic.ttf": "832b4406dbef23628800d3aaad21048534ac84d7e3ad955be83b8172ed8ef512",
     "assets/reader/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf": "f8ace1f892b2bd9dc1792ba7f097fa7588f84fed48321480e04de5390828221f",
-    "assets/reader/vendor/pdfjs/text_layer_builder.css": "07515a8f22ce5ac2e5ab9428415bb421b4d077f0d71aa992a90ea74385135808",
+    "assets/reader/vendor/pdfjs/text_layer_builder.css": "2be9205c98964559f0fb63bac692d002171cee13b1c0da38f7e7ef1966c622b5",
     "assets/reader/vendor/pdfjs/wasm/LICENSE_JBIG2": "9e66b7f1b934a28b37f3bc4dac97915de1674271e79a0a88182a18ed9731b4d1",
     "assets/reader/vendor/pdfjs/wasm/LICENSE_OPENJPEG": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6",
     "assets/reader/vendor/pdfjs/wasm/LICENSE_PDFJS_JBIG2": "aad3cce09842e00e9e11ad5e8fef8cc02fbc3a3768fe2f007443b9cee37aaee5",
@@ -225,10 +265,931 @@
     "assets/reader/vendor/pdfjs/wasm/qcms_bg.wasm": "6017eca5939cde1836e88e6d8cd27ae039246f206515ea4487bdfd0e3fb16e26",
     "native/vendor/unrar/license.txt": "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a",
     "native/vendor/unrar/unrarsrc-7.2.6.tar.gz": "d1afa67ef4121ebc5986815699e05db0ce8648499e5dca854f282a4c3f72c003",
-    "native/vendor/unrar/acknow.txt": "6aa07945033641cc693aa4a2ab3404c68c1e39acc0c672293aad4d4c290102fc",
-    "native/vendor/unrar/README.md": "4b97fa1ab27fd9a55ecb69e4d0aeb38c5e5af9d5e8d61bc90c8c23fab944ef72"
+    "native/vendor/unrar/acknow.txt": "082f21aab47b0135318aba98a801ea5bbcfaedfda3ae986ddc5d5ec746bd0796"
   },
-  "unrarVersion": "7.21",
-  "unrarSource": "https://www.rarlab.com/rar/unrarsrc-7.2.6.tar.gz",
-  "unrarLicense": "UnRAR (RAR decoding and redistribution permitted; RAR-compatible compression prohibited)"
+  "provenance": {
+    "assets/reader/vendor/foliate/LICENSE": {
+      "source": "foliate",
+      "path": "LICENSE",
+      "gitBlob": "5930571b73151702a913179ef5f96313ad7d25d3"
+    },
+    "assets/reader/vendor/foliate/README.md": {
+      "source": "foliate",
+      "path": "README.md",
+      "gitBlob": "a3fe2d51104c4de6b4d116138c72ea0376f2176f"
+    },
+    "assets/reader/vendor/foliate/epub.js": {
+      "source": "foliate",
+      "path": "epub.js",
+      "gitBlob": "e8bd70333accb9f9f6fb7389cb434b6805156da0"
+    },
+    "assets/reader/vendor/foliate/epubcfi.js": {
+      "source": "foliate",
+      "path": "epubcfi.js",
+      "gitBlob": "712ead5359b3d30e4a3dbf18de4ca0b9eb37a597"
+    },
+    "assets/reader/vendor/foliate/fixed-layout.js": {
+      "source": "foliate",
+      "path": "fixed-layout.js",
+      "gitBlob": "c582abad1496874a9265cad1ab69e12a475c684d"
+    },
+    "assets/reader/vendor/foliate/overlayer.js": {
+      "source": "foliate",
+      "path": "overlayer.js",
+      "gitBlob": "6fd03ab58505a7a3f196c570ce6a47ae437b747c"
+    },
+    "assets/reader/vendor/foliate/paginator.js": {
+      "source": "foliate",
+      "path": "paginator.js",
+      "gitBlob": "7980c20297049e38b5e5a1d44a9eee11b1fbd68e"
+    },
+    "assets/reader/vendor/foliate/progress.js": {
+      "source": "foliate",
+      "path": "progress.js",
+      "gitBlob": "f01c512c77c6eea45ce9b7745eafd44283b8bb26"
+    },
+    "assets/reader/vendor/foliate/search.js": {
+      "source": "foliate",
+      "path": "search.js",
+      "gitBlob": "a6f176ff7c2f8fbec7401120ae917d119257995f"
+    },
+    "assets/reader/vendor/foliate/text-walker.js": {
+      "source": "foliate",
+      "path": "text-walker.js",
+      "gitBlob": "c1249b79c6beca30e8f4d27e96cd05fa869ef67b"
+    },
+    "assets/reader/vendor/foliate/tts.js": {
+      "source": "foliate",
+      "path": "tts.js",
+      "gitBlob": "bf665c5d0d80d364361ed0ca9ae32d3804a43386"
+    },
+    "assets/reader/vendor/foliate/view.js": {
+      "source": "foliate",
+      "path": "view.js",
+      "gitBlob": "9bdaf022e29f8b491cddfa601a643a2b9df1e990"
+    },
+    "assets/reader/vendor/pdfjs/LICENSE": {
+      "source": "pdfjs-dist",
+      "path": "LICENSE"
+    },
+    "assets/reader/vendor/pdfjs/annotation_layer_builder.css": {
+      "source": "pdfjs-source",
+      "path": "web/annotation_layer_builder.css",
+      "gitBlob": "c1c2a8d54ce72110859df5b9bfb86464dafd06d6"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78-RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78-RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78ms-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78ms-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/78ms-RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/78ms-RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/83pv-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/83pv-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/90ms-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/90ms-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/90ms-RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/90ms-RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/90msp-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/90msp-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/90msp-RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/90msp-RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/90pv-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/90pv-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/90pv-RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/90pv-RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Add-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Add-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Add-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Add-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Add-RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Add-RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Add-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Add-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-0.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-0.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-1.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-1.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-3.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-3.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-4.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-4.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-5.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-5.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-6.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-6.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-CNS1-UCS2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-CNS1-UCS2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-GB1-0.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-GB1-0.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-GB1-1.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-GB1-1.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-GB1-2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-GB1-2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-GB1-3.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-GB1-3.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-GB1-4.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-GB1-4.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-GB1-5.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-GB1-5.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-GB1-UCS2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-GB1-UCS2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-0.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-0.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-1.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-1.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-3.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-3.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-4.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-4.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-5.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-5.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-6.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-6.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Japan1-UCS2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Japan1-UCS2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Korea1-0.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Korea1-0.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Korea1-1.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Korea1-1.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Korea1-2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Korea1-2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Adobe-Korea1-UCS2.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Adobe-Korea1-UCS2.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/B5pc-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/B5pc-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/B5pc-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/B5pc-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/CNS-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/CNS-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/CNS-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/CNS-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/CNS1-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/CNS1-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/CNS1-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/CNS1-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/CNS2-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/CNS2-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/CNS2-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/CNS2-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/ETHK-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/ETHK-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/ETHK-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/ETHK-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/ETen-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/ETen-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/ETen-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/ETen-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/ETenms-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/ETenms-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/ETenms-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/ETenms-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Ext-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Ext-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Ext-RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Ext-RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Ext-RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Ext-RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Ext-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Ext-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GB-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GB-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GB-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GB-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GB-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GB-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GB-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GB-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBK-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBK-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBK-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBK-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBK2K-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBK2K-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBK2K-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBK2K-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBKp-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBKp-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBKp-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBKp-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBT-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBT-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBT-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBT-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBT-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBT-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBT-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBT-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBTpc-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBTpc-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBTpc-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBTpc-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBpc-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBpc-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/GBpc-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/GBpc-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKdla-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKdla-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKdla-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKdla-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKdlb-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKdlb-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKdlb-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKdlb-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKgccs-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKgccs-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKgccs-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKgccs-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKm314-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKm314-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKm314-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKm314-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKm471-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKm471-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKm471-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKm471-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKscs-B5-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKscs-B5-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/HKscs-B5-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/HKscs-B5-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Hankaku.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Hankaku.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Hiragana.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Hiragana.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSC-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSC-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSC-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSC-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSC-Johab-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSC-Johab-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSC-Johab-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSC-Johab-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSCms-UHC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSCms-UHC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSCms-UHC-HW-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSCms-UHC-HW-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSCms-UHC-HW-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSCms-UHC-HW-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSCms-UHC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSCms-UHC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSCpc-EUC-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSCpc-EUC-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/KSCpc-EUC-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/KSCpc-EUC-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Katakana.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Katakana.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/LICENSE": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/LICENSE"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/NWP-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/NWP-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/NWP-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/NWP-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/RKSJ-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/RKSJ-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/RKSJ-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/RKSJ-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/Roman.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/Roman.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UCS2-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UCS2-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UCS2-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UCS2-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UTF16-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UTF16-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UTF16-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UTF16-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UTF32-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UTF32-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UTF32-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UTF32-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UTF8-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UTF8-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniCNS-UTF8-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniCNS-UTF8-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UCS2-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UCS2-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UCS2-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UCS2-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UTF16-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UTF16-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UTF16-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UTF16-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UTF32-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UTF32-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UTF32-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UTF32-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UTF8-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UTF8-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniGB-UTF8-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniGB-UTF8-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UCS2-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UCS2-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UCS2-HW-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UCS2-HW-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UCS2-HW-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UCS2-HW-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UCS2-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UCS2-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UTF16-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UTF16-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UTF16-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UTF16-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UTF32-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UTF32-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UTF32-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UTF32-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UTF8-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UTF8-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS-UTF8-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS-UTF8-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS2004-UTF16-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS2004-UTF16-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS2004-UTF16-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS2004-UTF16-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS2004-UTF32-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS2004-UTF32-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS2004-UTF32-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS2004-UTF32-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS2004-UTF8-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS2004-UTF8-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJIS2004-UTF8-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJIS2004-UTF8-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJISPro-UCS2-HW-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJISPro-UCS2-HW-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJISPro-UCS2-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJISPro-UCS2-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJISPro-UTF8-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJISPro-UTF8-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJISX0213-UTF32-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJISX0213-UTF32-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJISX0213-UTF32-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJISX0213-UTF32-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJISX02132004-UTF32-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJISX02132004-UTF32-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniJISX02132004-UTF32-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniJISX02132004-UTF32-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UCS2-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UCS2-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UCS2-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UCS2-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UTF16-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UTF16-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UTF16-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UTF16-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UTF32-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UTF32-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UTF32-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UTF32-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UTF8-H.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UTF8-H.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/UniKS-UTF8-V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/UniKS-UTF8-V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/V.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/V.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/cmaps/WP-Symbol.bcmap": {
+      "source": "pdfjs-dist",
+      "path": "web/cmaps/WP-Symbol.bcmap"
+    },
+    "assets/reader/vendor/pdfjs/iccs/CGATS001Compat-v2-micro.icc": {
+      "source": "pdfjs-dist",
+      "path": "web/iccs/CGATS001Compat-v2-micro.icc"
+    },
+    "assets/reader/vendor/pdfjs/iccs/LICENSE": {
+      "source": "pdfjs-dist",
+      "path": "web/iccs/LICENSE"
+    },
+    "assets/reader/vendor/pdfjs/pdf.mjs": {
+      "source": "pdfjs-dist",
+      "path": "build/pdf.mjs"
+    },
+    "assets/reader/vendor/pdfjs/pdf.worker.mjs": {
+      "source": "pdfjs-dist",
+      "path": "build/pdf.worker.mjs"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitDingbats.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitDingbats.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitFixed.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitFixed.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitFixedBold.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitFixedBold.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitFixedBoldItalic.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitFixedBoldItalic.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitFixedItalic.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitFixedItalic.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitSerif.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitSerif.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitSerifBold.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitSerifBold.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitSerifBoldItalic.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitSerifBoldItalic.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitSerifItalic.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitSerifItalic.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/FoxitSymbol.pfb": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/FoxitSymbol.pfb"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/LICENSE_FOXIT": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/LICENSE_FOXIT"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/LICENSE_LIBERATION": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/LICENSE_LIBERATION"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/LiberationSans-Bold.ttf": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/LiberationSans-Bold.ttf"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/LiberationSans-BoldItalic.ttf": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/LiberationSans-BoldItalic.ttf"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/LiberationSans-Italic.ttf": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/LiberationSans-Italic.ttf"
+    },
+    "assets/reader/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf": {
+      "source": "pdfjs-dist",
+      "path": "web/standard_fonts/LiberationSans-Regular.ttf"
+    },
+    "assets/reader/vendor/pdfjs/text_layer_builder.css": {
+      "source": "pdfjs-source",
+      "path": "web/text_layer_builder.css",
+      "gitBlob": "a2eb5ad667c1981afe3ab0ec4563f0175e660d98"
+    },
+    "assets/reader/vendor/pdfjs/wasm/LICENSE_JBIG2": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/LICENSE_JBIG2"
+    },
+    "assets/reader/vendor/pdfjs/wasm/LICENSE_OPENJPEG": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/LICENSE_OPENJPEG"
+    },
+    "assets/reader/vendor/pdfjs/wasm/LICENSE_PDFJS_JBIG2": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/LICENSE_PDFJS_JBIG2"
+    },
+    "assets/reader/vendor/pdfjs/wasm/LICENSE_PDFJS_OPENJPEG": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/LICENSE_PDFJS_OPENJPEG"
+    },
+    "assets/reader/vendor/pdfjs/wasm/LICENSE_PDFJS_QCMS": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/LICENSE_PDFJS_QCMS"
+    },
+    "assets/reader/vendor/pdfjs/wasm/LICENSE_QCMS": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/LICENSE_QCMS"
+    },
+    "assets/reader/vendor/pdfjs/wasm/jbig2.wasm": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/jbig2.wasm"
+    },
+    "assets/reader/vendor/pdfjs/wasm/openjpeg.wasm": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/openjpeg.wasm"
+    },
+    "assets/reader/vendor/pdfjs/wasm/openjpeg_nowasm_fallback.js": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/openjpeg_nowasm_fallback.js"
+    },
+    "assets/reader/vendor/pdfjs/wasm/qcms_bg.wasm": {
+      "source": "pdfjs-dist",
+      "path": "web/wasm/qcms_bg.wasm"
+    },
+    "native/vendor/unrar/license.txt": {
+      "source": "unrar",
+      "path": "unrar/license.txt"
+    },
+    "native/vendor/unrar/unrarsrc-7.2.6.tar.gz": {
+      "source": "unrar",
+      "path": "unrarsrc-7.2.6.tar.gz",
+      "archiveItself": true
+    },
+    "native/vendor/unrar/acknow.txt": {
+      "source": "unrar",
+      "path": "unrar/acknow.txt"
+    }
+  },
+  "bundleNotices": [
+    {
+      "source": "unrar",
+      "path": "unrar/license.txt",
+      "bundlePath": "share/licenses/unrar/license.txt",
+      "sha256": "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a",
+      "platforms": [
+        "linux",
+        "windows"
+      ]
+    },
+    {
+      "source": "unrar",
+      "path": "unrar/acknow.txt",
+      "bundlePath": "share/licenses/unrar/acknow.txt",
+      "sha256": "082f21aab47b0135318aba98a801ea5bbcfaedfda3ae986ddc5d5ec746bd0796",
+      "platforms": [
+        "linux",
+        "windows"
+      ]
+    },
+    {
+      "source": "webview2",
+      "path": "LICENSE.txt",
+      "bundlePath": "licenses/webview2-sdk/LICENSE.txt",
+      "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "source": "webview2",
+      "path": "NOTICE.txt",
+      "bundlePath": "licenses/webview2-sdk/NOTICE.txt",
+      "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90",
+      "platforms": [
+        "windows"
+      ]
+    }
+  ]
 }

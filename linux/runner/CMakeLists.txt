@@ -14,6 +14,7 @@ add_executable(${BINARY_NAME}
   "gtk_accent_host.cc"
   "gtk_header_icons.cc"
   "gtk_window_preferences.cc"
+  "gtk_window_menu.cc"
   "reader_host.cc"
   "reading_fonts.cc"
   "reading_font_channel.cc"

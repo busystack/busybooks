@@ -522,7 +522,7 @@ Future<void> _performTitlebarAction(
         await window.maximize();
       }
     case GtkTitlebarAction.menu:
-      await window.showMenu();
+      await const GtkWindowPreferencesService().showWindowMenu();
     case GtkTitlebarAction.lower:
       await const GtkWindowPreferencesService().lowerWindow();
   }

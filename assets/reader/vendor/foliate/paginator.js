@@ -1120,7 +1120,7 @@ export class Paginator extends HTMLElement {
     }
     destroy() {
         this.#observer.unobserve(this)
-        this.#view?.destroy()
+        this.#view.destroy()
         this.#view = null
         this.sections[this.#index]?.unload?.()
         this.#mediaQuery.removeEventListener('change', this.#mediaQueryListener)
@@ -1128,4 +1128,3 @@ export class Paginator extends HTMLElement {
 }
 
 customElements.define('foliate-paginator', Paginator)
-

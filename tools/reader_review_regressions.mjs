@@ -6,7 +6,8 @@ import vm from 'node:vm'
 import * as typography from '../assets/reader/typography.mjs'
 import { validPage } from '../assets/reader/reading_geometry.mjs'
 import { comicAnchor } from '../assets/reader/comic_book.mjs'
-const {search}=await import(process.env.BUSYBOOKS_SEARCH_SOURCE??new URL('../assets/reader/vendor/foliate/search.js',import.meta.url))
+import { FixedLayoutIntegration, readerContents } from '../assets/reader/fixed_layout_integration.mjs'
+import { literalRanges, literalTextMatches, excerptParts } from '../assets/reader/literal_search.mjs'
 
 const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('../assets/reader/reader.js',import.meta.url),'utf8'))
     .replace(/^import .*\r?\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
@@ -22,7 +23,7 @@ async function check(name,run){
 function adapter(){
     const events=[],content={scrollLeft:0,scrollTop:0,clientWidth:800,clientHeight:600,style:{},addEventListener(){},setAttribute(){},removeAttribute(){},replaceChildren(){}}
     const document={querySelectorAll:()=>[],querySelector:()=>content,addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}}
-    const context=vm.createContext({...typography,AbortController,URL,console,Uint8Array,TextDecoder,TextEncoder,ReadableStream,crypto,setTimeout,clearTimeout,structuredClone,validPage,comicAnchor,performance,
+    const context=vm.createContext({...typography,FixedLayoutIntegration,readerContents,literalRanges,literalTextMatches,excerptParts,AbortController,URL,console,Uint8Array,TextDecoder,TextEncoder,ReadableStream,crypto,setTimeout,clearTimeout,structuredClone,validPage,comicAnchor,performance,
         requestAnimationFrame:()=>{},pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},document,
         window:{location:{href:'https://busybooks.local/?session=review'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}}})
     vm.runInContext(source,context)
@@ -49,7 +50,7 @@ await check('F06: two rapid relative PDF commands advance twice',async()=>{
 })
 await check('F04: flush drains comic navigation before its saved snapshot',async()=>{
     const {run,events}=adapter()
-    run(`activeFormat='cbz';pdf=null;view={isFixedLayout:true,book:{format:'cbz',sections:[{pageId:'a'},{pageId:'b'}]},renderer:{getContents:()=>[],getBoundingClientRect:()=>({left:0,top:0})}};location={anchor:comicAnchor(view.book,0)};gotoEpub=()=>new Promise(resolve=>release=()=>{reportLocation({anchor:comicAnchor(view.book,1)});resolve()});navigation=dispatch({action:'goto',anchor:{page:1}})`)
+    run(`activeFormat='cbz';pdf=null;view={isFixedLayout:true,book:{format:'cbz',sections:[{pageId:'a'},{pageId:'b'}]},renderer:{getContents:()=>[],getBoundingClientRect:()=>({left:0,top:0})}};fixedLayout=new FixedLayoutIntegration(view,view.book,fixedContents,()=>{});location={anchor:comicAnchor(view.book,0)};gotoEpub=()=>new Promise(resolve=>release=()=>{reportLocation({anchor:comicAnchor(view.book,1)});resolve()});navigation=dispatch({action:'goto',anchor:{page:1}})`)
     await new Promise(setImmediate)
     run(`flushing=dispatch({action:'flush',request:5})`)
     await new Promise(setImmediate)
@@ -57,6 +58,71 @@ await check('F04: flush drains comic navigation before its saved snapshot',async
     await run('release();navigation;flushing')
     assert.equal(events.at(-2).anchor.page,1)
     assert.equal(events.at(-1).type,'flushed')
+})
+await check('Fixed-layout Back and Forward retain their history target after source failure',async()=>{
+    const {run,events}=adapter()
+    run(`activeFormat='epub';pdf=null;view={isFixedLayout:true,book:{sections:[{},{},{}]}};fixedLayout={activeIndex:2,visibleContents:()=>[]};history=[{index:0},{index:1},{index:2}];historyIndex=2;location={anchor:{index:2}};fail=true;gotoEpub=async anchor=>{if(fail)throw Error('fixture source unavailable');location={anchor};fixedLayout.activeIndex=anchor.index}`)
+    await run(`dispatch({action:'back'})`)
+    assert.equal(run('historyIndex'),2);assert.equal(run('location.anchor.index'),2)
+    assert(events.some(event=>event.type==='navigationError'&&event.message.includes('fixture source unavailable')))
+    await run(`fail=false;dispatch({action:'back'})`)
+    assert.equal(run('historyIndex'),1);assert.equal(run('location.anchor.index'),1)
+    await run(`fail=true;dispatch({action:'forward'})`)
+    assert.equal(run('historyIndex'),1);assert.equal(run('location.anchor.index'),1)
+    await run(`fail=false;dispatch({action:'forward'})`)
+    assert.equal(run('historyIndex'),2);assert.equal(run('location.anchor.index'),2)
+})
+await check('Fixed-layout footnote links queue exact passage reveal and retain owned history',async()=>{
+    const {run,context}=adapter()
+    context.destination={startContainer:{},getClientRects:()=>[{left:20,right:80,top:650,bottom:670}]}
+    context.documents=[0,1].map(index=>({documentElement:{},querySelector:()=>null,defaultView:{
+        focus:()=>{context.focused=index},frameElement:{clientWidth:600,clientHeight:800,getBoundingClientRect:()=>({left:0,top:0,width:600,height:800})},
+    }}))
+    run(`activeFormat='epub';pdf=null;prefs={spread:false};noteGeneration=1;revealed=[];scrolls=[];shown=0;
+        view={isFixedLayout:true,book:{sections:[{},{}],rendition:{spread:'none'}},resolveNavigation:()=>({index:1,anchor:()=>destination}),
+            renderer:{getSpreadOf:section=>({index:view.book.sections.indexOf(section),side:'center'}),style:{},setAttribute(){},
+                goTo:async({index})=>{shown=index},getContents:()=>[{doc:documents[shown]}],clientWidth:600,clientHeight:600,
+                getBoundingClientRect:()=>({left:0,top:0}),scrollBy:delta=>scrolls.push(delta)}};
+        documents.forEach((doc,index)=>fixedContents.set(doc,{index}));
+        fixedLayout=new FixedLayoutIntegration(view,view.book,fixedContents,({index,range})=>{location={anchor:{index}};revealed.push(range)});
+        fixedLayout.prepare(prefs);location={anchor:{index:0}};history=[location.anchor];historyIndex=0;
+        navigationTail=new Promise(resolve=>release=resolve);following=followFootnoteLink('chapter.xhtml#passage',0,null,view,1,session)`)
+    await new Promise(setImmediate)
+    assert.equal(run('revealed.length'),0,'Passage navigation waits for preceding fixed-layout work')
+    await run('release();following')
+    assert.equal(run('revealed[0]===destination'),true,'The resolved source range reaches the application integration')
+    assert.equal(run('fixedLayout.activeIndex'),1)
+    assert.equal(run('scrolls.some(delta=>delta.top>0)'),true)
+    assert.deepEqual(JSON.parse(run('JSON.stringify(history)')),[{index:0},{index:1}])
+    run('fixedLayout.focus()');assert.equal(context.focused,1)
+})
+await check('A superseded or abandoned footnote cannot navigate a replacement publication',async()=>{
+    for(const stage of ['resolution','queue']){
+        const {run,events}=adapter()
+        run(`activeFormat='epub';pdf=null;noteGeneration=1;navigated=0;
+            view={isFixedLayout:true,book:{sections:[{},{}]},resolveNavigation:async()=>({index:1})};
+            fixedLayout={view,activeIndex:0,visibleContents:()=>[]};gotoEpub=async()=>{navigated++};location={anchor:{index:0}};history=[location.anchor];historyIndex=0`)
+        if(stage==='resolution')run('view.resolveNavigation=()=>new Promise(resolve=>release=()=>resolve({index:1}))')
+        else run('navigationTail=new Promise(resolve=>release=resolve)')
+        run(`following=followFootnoteLink('chapter.xhtml#passage',0,null,view,1,session)`)
+        await new Promise(setImmediate)
+        if(stage==='resolution')run('view={book:{sections:[{}]}}')
+        else run('noteGeneration++')
+        await run('release();following')
+        assert.equal(run('navigated'),0,stage)
+        assert.equal(events.some(event=>event.type==='navigationJump'),false,stage)
+        assert.equal(run('historyIndex'),0,stage)
+    }
+})
+await check('Reflowable footnote links keep their public View navigation route',async()=>{
+    const {run,events}=adapter()
+    run(`activeFormat='epub';pdf=null;noteGeneration=1;navigated=[];fixedLayout=null;
+        view={isFixedLayout:false,history:{canGoBack:false,canGoForward:false},renderer:{},
+            resolveNavigation:async()=>({index:1}),goTo:async href=>navigated.push(href)};
+        location={anchor:{index:0}};history=[location.anchor];historyIndex=0`)
+    await run(`followFootnoteLink('chapter.xhtml#passage',0,null,view,1,session)`)
+    assert.deepEqual(JSON.parse(run('JSON.stringify(navigated)')),['chapter.xhtml#passage'])
+    assert.equal(events.filter(event=>event.type==='navigationJump').length,1)
 })
 await check('F05: comic companion-page pan survives a saved-position round trip',async()=>{
     const {run,context,content,events}=adapter()
@@ -127,19 +193,24 @@ await check('F12: opening with zero rendered documents reports failure',async()=
     assert(events.some(x=>x.type==='error'&&x.message.includes('first document')))
 })
 await check('F16: text-search excerpts and ranges span formatting boundaries and exact endpoints',async()=>{
-    for(const sensitivity of ['base','variant','accent'])for(const [strs,query] of [
+    const ranges=(strings,query)=>[...literalTextMatches(strings,query,(startIndex,startOffset,endIndex,endOffset)=>({startIndex,startOffset,endIndex,endOffset}))]
+    for(const [strs,query] of [
         [['quick ','brown ','fox'],'quick brown fox'],[['same',' and ','same'],'same and same'],[['a','b','c'],'abc'],[['same'],'same'],[['ab','ab'],'aba'],[['','ABC',''],'ABC'],
     ]){
-        const matches=[...search(strs,query,{sensitivity})]
-        assert.equal(matches[0]?.excerpt.match,query,JSON.stringify({strs,query,sensitivity,matches}))
+        const matches=ranges(strs,query),match=matches[0]
+        assert.equal(match?.excerptParts.match,query,JSON.stringify({strs,query,matches}))
+        const range=match.range,offset=index=>strs.slice(0,index).join('').length
+        assert.equal(strs.join('').slice(offset(range.startIndex)+range.startOffset,offset(range.endIndex)+range.endOffset),query)
+        assert.equal(match.excerptParts.pre+match.excerptParts.match+match.excerptParts.post,strs.join(''))
     }
-    const matches=[...search(['İABC'],'ABC',{sensitivity:'accent'})]
-    assert.equal(matches[0].range.startOffset,1);assert.equal(matches[0].range.endOffset,4)
-    const turkish=[...search(['I\u0307ABC'],'ABC',{sensitivity:'accent',locales:'tr'})]
-    assert.equal(turkish[0].range.startOffset,2);assert.equal(turkish[0].range.endOffset,5)
-    assert.equal([...search(['qui','ck'],'quick',{granularity:'word'})][0]?.excerpt.match,'quick')
-    assert.equal([...search(['e','\u0301','clair'],'éclair')][0]?.excerpt.match.normalize('NFC'),'éclair')
-    assert.deepEqual([...search(['text'],'')],[])
+    assert.deepEqual(ranges(['İABC'],'abc')[0].range,{startIndex:0,startOffset:1,endIndex:0,endOffset:4})
+    assert.deepEqual(ranges(['I\u0307ABC'],'abc')[0].range,{startIndex:0,startOffset:2,endIndex:0,endOffset:5})
+    assert.equal(ranges(['qui','ck'],'ick')[0]?.excerptParts.match,'ick')
+    assert.deepEqual(ranges(['e','\u0301','clair'],'éclair'),[])
+    assert.equal(ranges(['e','\u0301','clair'],'e\u0301clair')[0]?.excerptParts.match,'e\u0301clair')
+    assert.equal(ranges(['📚','a.*','[x]'],'a.*[x]')[0]?.range.startOffset,0)
+    assert.equal(ranges(['abababa'],'aba').length,2)
+    assert.deepEqual(ranges(['text'],''),[])
 })
 await check('F20: large Unicode events use bounded native frames and locations omit passage text',async()=>{
     const {run,context,events}=adapter()
@@ -178,7 +249,7 @@ await check('F20: a legacy oversized PDF goto reassembles before rendering and k
 await check('F21: unavailable cached resources request recovery even when the loader catches errors',async()=>{
     const {run,context,events}=adapter()
     context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:10}):{ok:false}
-    context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){try{await context.publicationLoader.loadText('chapter.xhtml')}catch{};return {}}}
+    context.makeEpubBook=async(index,loader)=>{context.publicationLoader=loader;try{await loader.loadText('chapter.xhtml')}catch{};return {}}
     run('mountFoliate=async()=>{};theme=()=>{}')
     await run(`openFoliate({format:'epub'})`)
     assert(events.some(e=>e.type==='error'&&e.cacheFailure===true&&e.message.includes('unavailable')))
@@ -189,7 +260,7 @@ await check('F21: same-length cache corruption after preparation is rejected bef
     assert.equal(original.byteLength,damaged.byteLength)
     const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',original))].map(x=>x.toString(16).padStart(2,'0')).join('')
     context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:original.byteLength,sha256:digest}):response(damaged)
-    context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){await context.publicationLoader.loadText('chapter.xhtml');return {}}}
+    context.makeEpubBook=async(index,loader)=>{context.publicationLoader=loader;await loader.loadText('chapter.xhtml');return {}}
     run('mountFoliate=async()=>{};theme=()=>{}')
     await run(`dispatch({action:'open',format:'epub'})`)
     assert(events.some(e=>e.type==='error'&&e.cacheFailure===true&&e.message.includes('digest')),JSON.stringify(events))
@@ -198,7 +269,7 @@ await check('F21: same-length cache corruption after preparation is rejected bef
 await check('F23: oversized text is rejected before fetching or materializing the resource',async()=>{
     const {run,context,events}=adapter();let requests=0
     context.fetch=async path=>{if(path==='book-index')return indexResponse({file:'abc',size:268435456});requests++;throw Error('Oversized resource must not be fetched')}
-    context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){await context.publicationLoader.loadText('chapter.xhtml');return {}}}
+    context.makeEpubBook=async(index,loader)=>{context.publicationLoader=loader;await loader.loadText('chapter.xhtml');return {}}
     run('theme=()=>{};mountFoliate=async()=>{}')
     await run(`dispatch({action:'open',format:'epub'})`)
     assert.equal(requests,0)
@@ -208,7 +279,7 @@ await check('F23: oversized text is rejected before fetching or materializing th
 await check('F23: actual response bytes are bounded even when the descriptor understates size',async()=>{
     const {run,context,events}=adapter();let cancelled=false
     context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:10}):{ok:true,body:new ReadableStream({start(controller){controller.enqueue(new Uint8Array(65536))},cancel(){cancelled=true}})}
-    context.EPUB=class{constructor(loader){context.publicationLoader=loader}async init(){await context.publicationLoader.loadText('chapter.xhtml');return {}}}
+    context.makeEpubBook=async(index,loader)=>{context.publicationLoader=loader;await loader.loadText('chapter.xhtml');return {}}
     run('theme=()=>{};mountFoliate=async()=>{}')
     await run(`dispatch({action:'open',format:'epub'})`)
     assert(cancelled)
