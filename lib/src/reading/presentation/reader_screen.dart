@@ -82,7 +82,7 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
               ModalRoute.of(context)?.isCurrent == true &&
               (event['restorePublicationFocus'] == true
                   ? _reader.ownsFocusRequest(event)
-                  : !ref.read(bookSearchProvider(widget.id)).active)) {
+                  : !ref.read(bookSearchSessionProvider).active)) {
             _surface.currentState?.focusBook();
           }
         });

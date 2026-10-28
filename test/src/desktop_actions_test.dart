@@ -1,3 +1,5 @@
+import 'package:busybooks/src/app/busybooks_search_field.dart';
+import 'package:busybooks/src/search/book_search_session.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -99,6 +101,10 @@ class _GatedRestore implements ReadingDataStore {
   String get root => store.root;
   @override
   Stream<Map<String, dynamic>> get progress => store.progress;
+  @override
+  Stream<int> get changes => store.changes;
+  @override
+  int get searchRevision => store.searchRevision;
   @override
   Future<dynamic> call(String action, [Object? argument]) async {
     if (action == this.action) {
@@ -449,7 +455,7 @@ void main() {
     );
   }
   testWidgets(
-    'collection header query, selection and scroll survive entering and leaving a book in a narrow window',
+    'shared collection search memory and browsing selection survive entering and leaving a book in a narrow window',
     (tester) async {
       tester.view.physicalSize = const Size(640, 800);
       tester.view.devicePixelRatio = 1;
@@ -493,11 +499,18 @@ void main() {
           container.read(appRouterProvider).go('/workspace');
         });
         await tester.pumpAndSettle();
+        await tester.tap(
+          find.byWidgetPredicate(
+            (w) => w is BusyBooksHeaderIconButton && w.tooltip == 'Search',
+          ),
+        );
+        await tester.pumpAndSettle();
         final query = find.descendant(
-          of: find.byKey(const ValueKey('collection-header-search')),
+          of: find.byKey(const ValueKey('book-header-search')),
           matching: find.byType(TextField),
         );
         await tester.enterText(query, 'book');
+        container.read(bookSearchSessionProvider.notifier).close();
         await tester.pumpAndSettle();
         await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
         await tester.pumpAndSettle();
@@ -542,7 +555,8 @@ void main() {
           tester,
           () => find.byType(CollectionScreen).evaluate().isNotEmpty,
         );
-        expect(tester.widget<TextField>(query).controller!.text, 'book');
+        expect(find.byType(BusyBooksSearchField), findsNothing);
+        expect(container.read(bookSearchSessionProvider).query, 'book');
         expect(
           container
               .read(

@@ -184,6 +184,7 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
                         ref,
                         a.bookId,
                         anchor: a.anchor,
+                        annotationId: a.id,
                       );
                       return;
                     }

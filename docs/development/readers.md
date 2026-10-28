@@ -2,8 +2,9 @@
 
 EPUB uses [Foliate.js](https://github.com/johnfactotum/foliate-js) pinned to
 `78914aef4466eb960965702401634c2cb348e9b1` (MIT). Its EPUB loader,
-reflow paginator, fixed-layout renderer, CFI resolver, text walker, search and
-overlayer are used directly. The upstream project documents both renderer
+reflow paginator, fixed-layout renderer, CFI resolver, text walker and
+overlayer are used directly. BusyBooks owns literal text matching and uses the
+publication document/range APIs to obtain navigation CFIs. The upstream project documents both renderer
 interfaces and has no stable release/API promise; a pinned vendored revision
 avoids an unreviewed runtime update. EPUB 2 and 3 use this loader. FB2 and comics
 construct book objects through its documented book interface and share Foliate
@@ -83,7 +84,9 @@ hashes and the upstream revision are recorded in
 | `paginator.js` | Cleanup tolerates an uninitialized view after first-document failure, preserving the original opening error |
 | `search.js` | Node-indexed excerpts and intermediate/equal endpoint text; exact-end and overlapping matches; empty-query handling; word/grapheme boundaries across markup and normalized Unicode offsets |
 
-All other Foliate files remain at the pinned revision. PDF.js resources and the
+The inherited `search.js` modifications remain recorded and unchanged; the
+application search no longer calls that matcher. This does not make the vendored
+dependency tree upstream-clean. All other Foliate files remain at the pinned revision. PDF.js resources and the
 UnRAR archive are unmodified. Source comments and accompanying upstream licenses
 remain intact. Fixture/probe code is separate from distributed reader assets.
 
@@ -170,11 +173,47 @@ is excluded before page ordering and ComicInfo index application. Archive path,
 integrity and output-limit checks still cover those entries.
 
 PDF stores page identity/reference and PDF-coordinate position/selection
-geometry. Search maps normalized excerpts back to text-layer offsets. Resizing,
+geometry. Search maps original-text offsets across PDF text items back to
+text-layer offsets. Resizing,
 zoom and rotation regenerate viewports without changing saved geometry. The
 annotation sidebar and Markdown export share a comparator using spine/CFI order
 or PDF/comic page identity and text/region offsets. Actual rendered attachment, boundary selection and
 native accessibility require execution, not round-trip storage tests.
+
+## Publication search matching
+
+`literal_search.mjs` owns the same literal, case-insensitive, non-overlapping
+substring contract as BusyMark's Unicode source matcher. Regex-looking text is
+escaped. Typed whitespace is preserved. Matching uses Unicode simple case
+folding without locale-dependent conversion, accent removal or normalization;
+precomposed and combining spellings remain distinct literal text. Supplementary
+characters retain their original UTF-16 range boundaries. Case mappings such as
+Greek final sigma and Kelvin sign follow the Unicode regular-expression engine;
+full expansions such as sharp S to `ss` are not introduced.
+
+EPUB/FB2 scan sanitized publication text nodes through Foliate's text walker,
+`sections.createDocument`, `getCFI` and `getProgressOf` interfaces. Inline markup
+does not split phrases, and original DOM ranges produce existing EPUB and FB2
+locators. PDF uses the same matcher on logical text assembled from PDF.js text
+items; an offset map removes synthetic end-of-line separators when selecting
+text-layer ranges. Structured excerpts retain the exact original matched text.
+Search never searches raw XML or moves the reading position.
+
+A scan counts every occurrence while transferring only a bounded window of at
+most 500 rows (200 by default). Requests carry reader/session and query revision
+ownership; obsolete events are ignored. Occurrence navigation can request another
+window without retaining all publication ranges. Progress, completion, cancellation
+and failure remain distinct; a partial failed scan is incomplete. Search is
+serialized to retain native cancellation ordering. Each dense page/chapter yields
+periodically so a replacement or cancellation can interrupt it.
+
+Text availability is a publication capability, separate from renderer readiness
+and current-page text. PDFs always search all pages; blank or image-only pages
+never disable searching a text body elsewhere. A wholly scanned PDF can finish
+with zero occurrences. Comics have no Book Text capability. Native rendering,
+actual selection alignment and Windows behavior require their own runtime checks;
+`tools/literal_search_probe.mjs` tests the matching/protocol contracts under
+controlled APIs.
 
 ## Shared typography capabilities
 
@@ -251,7 +290,8 @@ in [development tools](../../tools/README.md).
 
 ## Selection search and online lookup
 
-Search in This Book captures the complete trimmed selection and its book/session
+Search in This Book captures the complete selection, preserving literal
+whitespace, and its book/session
 before the protected popover handoff. It explicitly reveals the existing header
 search and temporary Book Text sidebar session, synchronizes the editable field,
 and starts an immediate search revision. It does not submit or navigate an existing result.

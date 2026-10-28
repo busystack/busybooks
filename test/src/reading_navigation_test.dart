@@ -354,7 +354,7 @@ void main() {
     },
   );
   test(
-    'collection view sessions retain query filter position and selected book by collection identity',
+    'collection view sessions retain browsing filter position and selected book by collection identity',
     () async {
       final container = ProviderContainer(
         overrides: [
@@ -368,24 +368,22 @@ void main() {
       container
           .read(collectionViewProvider('collection:${'a' * 32}').notifier)
           .update(
-            query: 'library',
             filter: 'reading',
             selectedBook: 'sha256-one',
             scrollOffset: 512,
           );
       container
           .read(collectionViewProvider('collection:${'b' * 32}').notifier)
-          .update(query: 'other');
+          .update(filter: 'finished');
       final first = container.read(
         collectionViewProvider('collection:${'a' * 32}'),
       );
-      expect(first.query, 'library');
       expect(first.filter, 'reading');
       expect(first.selectedBook, 'sha256-one');
       expect(first.scrollOffset, 512);
       expect(
-        container.read(collectionViewProvider('collection:${'b' * 32}')).query,
-        'other',
+        container.read(collectionViewProvider('collection:${'b' * 32}')).filter,
+        'finished',
       );
     },
   );

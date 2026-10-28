@@ -57,6 +57,7 @@ class _NotebookRegionPreviewState extends ConsumerState<NotebookRegionPreview> {
             ref,
             widget.annotation.bookId,
             anchor: widget.annotation.anchor,
+            annotationId: widget.annotation.id,
           ),
           child: Text(context.l10n.showInReading),
         ),

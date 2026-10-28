@@ -10,6 +10,17 @@ class BusyBooksSearchFocusNode extends FocusNode {
     : super(debugLabel: 'BusyBooksSearchField text entry');
 }
 
+/// Ancestor dismissal and command handlers must leave composition keys local.
+bool busyBooksTextInputComposing() {
+  final target = FocusManager.instance.primaryFocus?.context;
+  final field = target?.findAncestorWidgetOfExactType<TextField>();
+  final editable = target?.widget is EditableText
+      ? target!.widget as EditableText
+      : target?.findAncestorWidgetOfExactType<EditableText>();
+  final range = (field?.controller ?? editable?.controller)?.value.composing;
+  return range != null && range.isValid && !range.isCollapsed;
+}
+
 /// Keep input editing local without shadowing application navigation (for
 /// example Alt+Left) with a second complete platform shortcut map.
 class BusyBooksLocalTextEditingShortcuts extends StatelessWidget {
@@ -166,6 +177,13 @@ class _BusyBooksSearchFieldState extends State<BusyBooksSearchField> {
       if ((event is! KeyDownEvent && event is! KeyRepeatEvent) ||
           (_controller.value.composing.isValid &&
               !_controller.value.composing.isCollapsed)) {
+        return KeyEventResult.ignored;
+      }
+      final keyboard = HardwareKeyboard.instance;
+      if (keyboard.isControlPressed ||
+          keyboard.isAltPressed ||
+          keyboard.isMetaPressed ||
+          keyboard.isShiftPressed) {
         return KeyEventResult.ignored;
       }
       if (event is KeyDownEvent &&

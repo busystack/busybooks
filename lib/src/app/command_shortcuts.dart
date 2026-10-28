@@ -101,7 +101,15 @@ class _CommandShortcutManager extends ShortcutManager {
           LogicalKeyboardKey.keyZ,
           LogicalKeyboardKey.keyY,
         ].contains(event.logicalKey);
-    if (editable && (!modified || editingCombination)) {
+    final textField = target?.findAncestorWidgetOfExactType<TextField>();
+    final composing = textField?.controller?.value.composing;
+    if (busyBooksTextInputComposing() ||
+        (composing != null && composing.isValid && !composing.isCollapsed)) {
+      return KeyEventResult.ignored;
+    }
+    if (editable &&
+        ((!modified && event.logicalKey != LogicalKeyboardKey.f3) ||
+            editingCombination)) {
       return KeyEventResult.ignored;
     }
     if (!modified &&

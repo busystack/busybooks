@@ -357,7 +357,7 @@
   "searchCategory": "Suchkategorie",
   "closeSearch": "Suche schließen",
   "searchNeedsReading": "Öffnen Sie die Leseansicht, um das Buch zu durchsuchen oder Seitenvorschauen zu laden.",
-  "enterSearch": "Suchbegriff eingeben",
+  "enterSearch": "Text für die Suche eingeben.",
   "noResults": "Keine Ergebnisse",
   "allTypes": "Alle Typen",
   "bookOrder": "Buchreihenfolge",
@@ -393,5 +393,29 @@
   "anyNotes": "Notiz optional",
   "dateUnavailable": "Datum nicht verfügbar",
   "regionPreviewUnavailable": "Bereichsvorschau nicht verfügbar. Die private Notiz bleibt zugänglich.",
-  "regionPreviewLoading": "Bereichsvorschau wird geladen"
+  "regionPreviewLoading": "Bereichsvorschau wird geladen",
+  "searchBooks": "Bücher durchsuchen",
+  "searchRecent": "Zuletzt geöffnet durchsuchen",
+  "searchBookmarks": "Lesezeichen durchsuchen",
+  "searchChapters": "Kapitel durchsuchen",
+  "searchBookText": "Buchtext durchsuchen",
+  "thisBook": "Dieses Buch",
+  "currentCollection": "Aktuelle Sammlung",
+  "allSavedBooks": "Alle gespeicherten Bücher",
+  "searchScope": "Suchbereich",
+  "showMoreResults": "Weitere Ergebnisse anzeigen",
+  "searchUnavailable": "Suchquelle ist nicht verfügbar",
+  "searchIncomplete": "Ergebnisse sind unvollständig",
+  "searchDisabled": "In diesem Kontext nicht verfügbar",
+  "searchContext": "Suche:",
+  "searchLoadedResults": "{count} Ergebnisse angezeigt",
+  "@searchLoadedResults": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchMoreAvailable": "Weitere Ergebnisse sind verfügbar.",
+  "searchEarlierResults": "Frühere Ergebnisse liegen außerhalb dieses Bereichs. Erneut suchen, um zum Anfang zurückzukehren."
 }

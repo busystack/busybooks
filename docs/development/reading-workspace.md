@@ -18,18 +18,17 @@ these same routes; there is no second route adapter.
 | --- | --- |
 | `WorkspaceController` | Book identity, stored annotations, collection and availability |
 | `bookSidebarProvider(bookId)` | Typed panel, open state, outline expansion/focus, panel offsets, Marks filter/selection, retained publication metadata |
-| `bookSearchProvider(bookId)` | Active/category/query, generation, stable results/selection, loading/error, focus request/return and previous sidebar presentation |
+| `bookSearchSessionProvider` | Active/category/query, generation, stable results/selection, loading/error, focus request/return and previous sidebar presentation |
 | `NotebookController` | Sort/type/notes filters, identity-relative scroll/reveal, selected editor and protected revisioned drafts |
 | `ReaderController` | Native engine/session, positions/history, capabilities, visibility acknowledgements and transient input handoff |
 
-The search and sidebar families auto-dispose. `retainActiveBookSession` holds a
-Riverpod lease only for `WorkspaceState.openedBook`: Reading/Notebook switching
-and a Settings round trip retain the same controllers. Replacing or closing the
-book releases that lease; ordinary widget subscriptions finish disposal. Timers,
-renderer-intent subscriptions and provider listeners then end with the session.
-Publication metadata and search results do not accumulate for previously opened
-books. Reopening reconstructs stored metadata and saved application preferences;
-transient Marks filters, outline expansion and search start a new session.
+The sidebar family auto-disposes. `retainActiveBookSession` holds its lease only
+for the open book, including Reading/Notebook and Settings round trips. The one
+window search controller retains lightweight category/query/scope/selection memory;
+closing it releases results, renderer ownership and outline subscriptions. It does
+not retain a controller or reader per visited book. Reopening a book reconstructs
+stored metadata and saved preferences; transient Marks and outline browsing starts
+a new book session.
 Protected Notebook drafts remain owned by `NotebookController`, independently
 of these presentation lifetimes.
 
@@ -308,7 +307,7 @@ cover processing follow the first passage and fall back independently.
 
 Fatal publication errors stay visible until explicit recovery succeeds.
 Persistence failures retain the readable surface and pending position with an
-explicit save warning/retry. PDF search maps transformed Unicode ranges back to
+explicit save warning/retry. PDF search retains original UTF-16 ranges and maps them back to
 original text before calculating text-layer anchors and excerpts.
 
 Native rendering, keyboard traversal, accessible publication text, popover
@@ -415,27 +414,86 @@ ownership. The header/sidebar and Reading/Notebook composition are unchanged.
 
 ## Shared search and adaptive presentation
 
-The book-scoped search session adapts BusyMark's category and close semantics:
-Book Text, Notebook, Bookmarks, Chapters and Actions, with no All category.
-The header has the only query input. Search temporarily replaces the sidebar
-content while retaining its navigation widgets and state offstage, excluded from
-focus/semantics/ticking. Closing restores the previous panel/open presentation.
-The global command-search shortcut and identity open Actions in this same search
-presentation, including on Home/Collection/Settings; the separate palette is gone.
+Search follows BusyMark's one-header-query, temporary-results-sidebar pattern.
+The stable category order is Book Text, Notebook, Bookmarks, Chapters, Books,
+Recent, Actions; genuinely inapplicable categories are omitted. Home offers
+Notebook, Bookmarks, Books, Recent and Actions; Settings offers Actions, without
+using a retained hidden publication as a search target. There is no combined
+category, separate results window, private Notebook query or collection-grid search.
+The collection grid keeps its independent reading-state filter, sort, selection,
+view mode and scrolling. Ordinary sidebar widgets remain mounted offstage, excluded
+from focus/semantics/ticking, and return when search closes.
 
-Requests debounce for 220ms. Query/category/book generations invalidate work;
-local scans yield in bounded batches, and native matches additionally require the
-same renderer session and query revision. Notebook/Bookmarks use stored records
-and protected drafts offline; Chapters uses retained publication outline data.
-Comics and image-only PDF pages do not advertise Book Text. A suspended reader
-shows an explicit Reading recovery action for a retained Book Text session.
+Notebook and Bookmarks search persisted annotations through the SQLite worker,
+including unopened books and missing originals. Their explicit scopes are This
+Book, Current Collection and All Saved Books. Books searches title, author, series
+and original filename/path in Current Collection or All Saved Books. Context shows
+the actual book/collection name. Defaults follow the visible surface; category
+commands choose that default explicitly. The Search icon restores its last
+applicable category and scope. Opening a result retains its originating scope and
+never adds membership or broadens a collection search. Recent filters existing
+book/collection resources in their original chronological order.
 
-Arrows select results, Enter activates, Escape closes and the clear affordance
-retains the session. Close restores the captured usable focus target. Actions
-execute through the current command registry; result navigation rechecks route/
-book ownership. A native publication can search while hidden behind a temporary
-narrow sidebar, but navigation/focus require visible ownership. Activating a
-result dismisses that narrow overlay before navigating or focusing Notebook.
+Content categories wait for a nonempty query and show “Enter text to search.”
+Whitespace remains searchable. Clearing invalidates requests and removes results
+and selection. Actions deliberately displays the grouped catalog initially,
+including unavailable and unassigned commands. Typed Actions queries rank name,
+prefix/token and metadata matches. Identity-preserving updates include shortcuts,
+availability and disabled reasons, using the current command registry at activation.
+
+Search debounces for 120ms. Enter flushes that work, awaits results and validates
+the original generation before activation; repeated Enter cannot overlap navigation.
+Up/Down selects without opening. F3/Shift+F3 navigates Book Text occurrences only,
+requests bounded windows beyond the displayed page and wraps at the actual book
+boundaries. Previous without an active occurrence selects the last occurrence.
+Tab traverses controls normally, IME composition remains local, and Escape dismisses
+an active popup before closing search. The clear affordance retains search.
+Category selectors show current effective bindings; Books and Recent default to
+Ctrl+Shift+D and Ctrl+Shift+R, while Marks retains Ctrl+Shift+H. Other category
+commands can be assigned in Settings.
+
+Book Text searches only the active publication via application-owned reader code.
+PDF support is publication-level: an image cover, illustration or blank current
+page cannot disable, cancel or switch search. A scanned PDF may finish without
+matches. Comics do not support Book Text. Reader readiness and suspension are
+separate states; a supported loading reader retains its query, while a suspended
+reader offers an explicit Reading action. Search does not start a hidden reader.
+For a renderer failure, Retry uses the existing reader recovery workflow and
+resumes Book Text with the retained query, including edits made during recovery,
+when the correct book's reader becomes ready. An ordinary search failure retries
+only the search operation.
+Literal matching is Unicode case-insensitive and non-overlapping, without regex
+syntax, accent folding, normalization or whitespace trimming. Exact offsets refer
+to original publication text; EPUB/FB2 matches can span inline markup and PDF
+matches can span text items. See [reader matching](readers.md).
+
+Results identify their book, source reference and matching excerpt; chapters retain
+publication order and ancestor context. Wrapping rows follow text scaling, and
+selection scrolls using measured geometry. Bounded retrieval exposes Show more
+results without claiming the loaded subset is an exact total. Loading, unavailable
+sources, errors/retry and completed empty results have distinct presentation.
+Notebook results open the exact annotation editor; passage navigation is a separate
+row action. Bookmarks navigate directly when their original is available, while
+missing records remain accessible through Notebook and Locate. Books/Recent reuse
+opening and missing-file recovery. Captured identities, source digests, membership,
+query generation, renderer ownership and route transitions are revalidated after
+asynchronous waits. A result's owned handoff is accepted; unrelated navigation
+invalidates pending work. Wide layouts retain cross-book search during handoff;
+narrow layouts dismiss the same overlay while keeping lightweight query memory.
+Deferred passage jumps bind the target book, claimed opening revision and
+activation ownership until dispatched or abandoned. Source records and anchors,
+query/scope and renderer ownership are checked again before the eventual `goto`,
+including after queued dispatch waits. A replacement, failed opening, close,
+suspension or unrelated navigation abandons the request, so another book cannot
+consume its anchor. Narrow dismissal preserves the owned activation until that
+request completes or is abandoned.
+
+Native visibility uses separate route/modal and workspace gates. Opening shared
+chrome captures transient input, dismisses without restoring publication focus,
+and explicitly transfers GTK/Win32 ownership to Flutter. Session-scoped handoff
+cannot focus an inactive window or owned native popover. Flutter focus alone does
+not transfer GTK/WebView2 ownership. Closing search restores a valid origin focus
+or the active publication. No query is saved into settings, recovery or backups.
 
 Settings uses typed General/Reading/Accessibility/Keyboard Shortcuts/Data pages,
 a wide sidebar or narrow selector and the semantic main view surface. Reduced

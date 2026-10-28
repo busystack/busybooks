@@ -10,7 +10,6 @@ import 'package:busybooks/src/app/app_router.dart';
 import 'package:busybooks/src/app/app_settings.dart';
 import 'package:busybooks/src/book_workspace/application/book_sidebar_controller.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
-import 'package:busybooks/src/reading/application/reader_controller.dart';
 import 'package:busybooks/src/reading/domain/publication_outline.dart';
 import 'package:busybooks/src/search/book_search_session.dart';
 import 'package:busybooks/src/workspace/workspace_controller.dart';
@@ -77,16 +76,19 @@ Future<void> main() async {
             labels: List.generate(300, (i) => '$i'),
           );
       await container
-          .read(bookSearchProvider(id).notifier)
+          .read(bookSearchSessionProvider.notifier)
           .open(category: BookSearchCategory.chapters, query: 'chapter');
       final deadline = Stopwatch()..start();
-      while (container.read(bookSearchProvider(id)).loading) {
+      while (container.read(bookSearchSessionProvider).loading) {
         if (deadline.elapsed > const Duration(seconds: 5)) {
           throw StateError('Search did not finish');
         }
         await Future<void>.delayed(Duration.zero);
       }
-      if (container.read(bookSearchProvider(id)).results.length != 300) {
+      while (container.read(bookSearchSessionProvider).hasMore) {
+        await container.read(bookSearchSessionProvider.notifier).showMore();
+      }
+      if (container.read(bookSearchSessionProvider).results.length != 300) {
         throw StateError('Incomplete search');
       }
       await container.pump();
@@ -94,9 +96,9 @@ Future<void> main() async {
         final sample = <String, int>{
           'visits': visit + 1,
           'distinctBooks': visit < 60 ? visit + 1 : 60,
-          'searchProviders': container
-              .allProviders(family: bookSearchProvider)
-              .length,
+          'searchProviders': container.exists(bookSearchSessionProvider)
+              ? 1
+              : 0,
           'sidebarProviders': container
               .allProviders(family: bookSidebarProvider)
               .length,
@@ -156,11 +158,16 @@ Future<void> main() async {
     router.go('/');
     await container.pump();
     await Future<void>.delayed(Duration.zero);
-    final remaining =
-        container.allProviders(family: bookSearchProvider).length +
-        container.allProviders(family: bookSidebarProvider).length;
+    container
+        .read(bookSearchSessionProvider.notifier)
+        .close(restoreFocus: false);
+    // The single lightweight window session remains; old book metadata and
+    // result pages must be released with their sidebar providers.
+    final remaining = container
+        .allProviders(family: bookSidebarProvider)
+        .length;
     if (remaining != 0 ||
-        container.read(readerControllerProvider.notifier).events.hasListener) {
+        container.read(bookSearchSessionProvider).results.isNotEmpty) {
       throw StateError('Session subscriptions survived close');
     }
     await File(p.join(directory.path, 'result.json')).writeAsString(

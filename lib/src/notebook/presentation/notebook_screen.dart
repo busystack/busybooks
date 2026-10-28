@@ -188,7 +188,7 @@ class _NotebookContentState extends ConsumerState<NotebookContent> {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape &&
             view.editFocused &&
-            !ref.read(bookSearchProvider(widget.id)).active) {
+            !ref.read(bookSearchSessionProvider).active) {
           controller.view(widget.id, focusEditor: false);
           _listFocus.requestFocus();
           return KeyEventResult.handled;

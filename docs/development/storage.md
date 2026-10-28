@@ -18,6 +18,47 @@ IDs independent of names and paths. Books retain SHA-256 identities and existing
 reading/annotation records. An annotation cannot replace a book or change its
 owning book. Membership/collection removal leaves books and annotations intact.
 
+Saved-library search reads these records through the same worker. Books searches
+stored title, author, series and known filename/location references. Notebook and
+Bookmarks search quotations, effective personal notes and source references,
+including records for unopened books and missing originals. All Saved Books does
+not depend on Recent, collection membership or the active workspace's loaded
+annotations. A collection scope uses its actual membership IDs with unique book
+and annotation identities, so overlapping collections do not duplicate results.
+
+Search is read-only: it does not prepare publications, verify external files,
+record Recent, update reading progress or save drafts. Publication-content search
+remains an operation of the current reader; there is no persistent full-text index
+or cross-publication text extraction. Empty content queries return before record
+enumeration. Nonempty queries use escaped, Unicode-aware case-insensitive literal
+matching in Dart, preserving whitespace and original UTF-16 match coordinates.
+SQLite supplies bounded identity/membership batches; SQL LIKE and its `%`/`_`
+wildcards and ASCII-only case folding do not define the matching contract.
+
+Each search request scans at most 256 records and returns at most 200 matches.
+Keyset continuation carries a source revision; mutations to searchable data invalidate
+it and require a refresh. Potentially large note records are decoded one at a
+time. Result transport contains bounded display excerpts with structured match
+parts and lightweight book metadata, while the full source remains in SQLite.
+The window session extends results through Show more results and retains a bounded
+display window, reporting when earlier results have been omitted from that window.
+
+Protected Notebook drafts overlay persisted note text before matching. This
+replaces saved-only matches as well as adding unsaved matches, without inserting
+or saving anything. Failed, unwritten creations appear once using their protected
+source identity; an ordinary edit draft cannot revive a deleted annotation.
+Discarding or editing drafts refreshes their search results.
+
+Token-specific search cancellation is independent of preparation, saving, moves
+and restore cancellation. Worker mutation revisions notify the search session
+even for unloaded sources. Routine progress, appearance, structural metadata saves
+and repeated unchanged book metadata do not restart saved-library searches.
+Activation rechecks the exact book/annotation identity,
+current membership and a digest of its effective source, including draft text;
+it cannot substitute a nearby result or similarly named book. Restore advances
+the source generation even when it restores identical text. Normal opening and
+Locate continue to validate original-file identity through their existing paths.
+
 The additive migration within `reading-data.sqlite` preserves existing
 book/annotation data and turns known book paths into unverified locations.
 Historical filesystem-definition records

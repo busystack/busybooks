@@ -2202,7 +2202,7 @@ abstract class AppLocalizations {
   /// No description provided for @enterSearch.
   ///
   /// In en, this message translates to:
-  /// **'Enter a search query'**
+  /// **'Enter text to search.'**
   String get enterSearch;
 
   /// No description provided for @noResults.
@@ -2378,6 +2378,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Loading region preview'**
   String get regionPreviewLoading;
+
+  /// No description provided for @searchBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Books'**
+  String get searchBooks;
+
+  /// No description provided for @searchRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Recent'**
+  String get searchRecent;
+
+  /// No description provided for @searchBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Bookmarks'**
+  String get searchBookmarks;
+
+  /// No description provided for @searchChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Chapters'**
+  String get searchChapters;
+
+  /// No description provided for @searchBookText.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Book Text'**
+  String get searchBookText;
+
+  /// No description provided for @thisBook.
+  ///
+  /// In en, this message translates to:
+  /// **'This Book'**
+  String get thisBook;
+
+  /// No description provided for @currentCollection.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Collection'**
+  String get currentCollection;
+
+  /// No description provided for @allSavedBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'All Saved Books'**
+  String get allSavedBooks;
+
+  /// No description provided for @searchScope.
+  ///
+  /// In en, this message translates to:
+  /// **'Search scope'**
+  String get searchScope;
+
+  /// No description provided for @showMoreResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more results'**
+  String get showMoreResults;
+
+  /// No description provided for @searchUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Search source is unavailable'**
+  String get searchUnavailable;
+
+  /// No description provided for @searchIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Results are incomplete'**
+  String get searchIncomplete;
+
+  /// No description provided for @searchDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable in this context'**
+  String get searchDisabled;
+
+  /// No description provided for @searchContext.
+  ///
+  /// In en, this message translates to:
+  /// **'Search:'**
+  String get searchContext;
+
+  /// No description provided for @searchLoadedResults.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} results shown'**
+  String searchLoadedResults(int count);
+
+  /// No description provided for @searchMoreAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'More results are available.'**
+  String get searchMoreAvailable;
+
+  /// No description provided for @searchEarlierResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier results are outside this window. Search again to return to the beginning.'**
+  String get searchEarlierResults;
 }
 
 class _AppLocalizationsDelegate

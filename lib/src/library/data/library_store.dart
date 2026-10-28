@@ -16,6 +16,7 @@ import '../../import_export/data/archive_guard.dart';
 import 'book_inspection.dart';
 import 'book_paths.dart';
 import 'record_validation.dart';
+import 'reading_search.dart';
 import 'book_move.dart';
 import 'file_identity.dart';
 import 'fb2_book.dart';
@@ -34,6 +35,10 @@ class ReadingDataStore {
       if (result[1] == 'progress') {
         _progress.add((result[2] as Map).cast<String, dynamic>());
         return;
+      }
+      if (result.length > 3 && result[3] != _searchRevision) {
+        _searchRevision = result[3] as int;
+        _changes.add(_searchRevision);
       }
       final pending = _pending.remove(id);
       if (result[1] == true) {
@@ -54,6 +59,12 @@ class ReadingDataStore {
   late final StreamSubscription<dynamic> _subscription;
   final _pending = <int, Completer<dynamic>>{};
   final _progress = StreamController<Map<String, dynamic>>.broadcast();
+  final _changes = StreamController<int>.broadcast();
+  int _searchRevision = 0;
+
+  /// Reading-data mutations, including restore and writes for unloaded books.
+  Stream<int> get changes => _changes.stream;
+  int get searchRevision => _searchRevision;
   Stream<Map<String, dynamic>> get progress => _progress.stream;
   int _serial = 0;
   bool _closed = false;
@@ -85,6 +96,10 @@ class ReadingDataStore {
       _commands.send([0, 'cancel', 'prepare']);
       return Future.value(null);
     }
+    if (action == 'cancelSearch') {
+      _commands.send([0, 'cancelSearch', argument]);
+      return Future.value(null);
+    }
     final id = ++_serial, completer = Completer<dynamic>();
     _pending[id] = completer;
     _commands.send([id, action, argument]);
@@ -107,6 +122,7 @@ class ReadingDataStore {
           await _subscription.cancel();
           _replies.close();
           await _progress.close();
+          await _changes.close();
           _isolate.kill();
         })
         .catchError((Object error) {
@@ -134,6 +150,17 @@ Future<void> _worker(List<dynamic> ports) async {
   Future<void> tail = Future.value();
   commands.listen((dynamic message) {
     final request = message as List;
+    if (request[1] == 'cancelSearch') {
+      final token = request[2] as String;
+      if (worker.activeSearches.contains(token)) {
+        worker.cancelledSearches.add(token);
+      }
+      return;
+    }
+    if (request[1] == 'searchRecords') {
+      final token = (request[2] as Map)['requestToken'];
+      if (token is String) worker.activeSearches.add(token);
+    }
     if (request[1] == 'cancel') {
       if (request[2] != 'prepare' ||
           [
@@ -147,22 +174,40 @@ Future<void> _worker(List<dynamic> ports) async {
       return;
     }
     tail = tail.then((_) async {
+      var beforeChanges = 0, relevant = false;
       try {
+        beforeChanges = worker.databaseChanges;
+        relevant = worker.searchRelevantOperation(
+          request[1] as String,
+          request[2],
+        );
         worker.cancelled = false;
-        worker.replies.send([
-          request[0],
-          true,
-          await worker.handle(
-            request[0] as int,
-            request[1] as String,
-            request[2],
-          ),
-        ]);
+        final value = await worker.handle(
+          request[0] as int,
+          request[1] as String,
+          request[2],
+        );
+        if (request[1] != 'close') {
+          worker.finishSearchMutation(
+            beforeChanges,
+            relevant,
+            restore: request[1] == 'restore',
+          );
+        }
+        worker.replies.send([request[0], true, value, worker.searchRevision]);
       } catch (error) {
+        if (request[1] != 'close') {
+          worker.finishSearchMutation(
+            beforeChanges,
+            relevant,
+            restore: request[1] == 'restore',
+          );
+        }
         worker.replies.send([
           request[0],
           false,
           error is WorkspaceException ? error.toJson() : error.toString(),
+          worker.searchRevision,
         ]);
       }
     });
@@ -178,6 +223,50 @@ class _ReadingWorker {
   bool cancelled = false;
   int currentRequest = 0;
   String currentAction = '';
+  final cancelledSearches = <String>{};
+  final activeSearches = <String>{};
+  int searchRestoreEpoch = 0;
+  int searchRevision = 0;
+  int get databaseChanges =>
+      database.select('SELECT total_changes() AS n').single['n'] as int;
+  void finishSearchMutation(
+    int before,
+    bool relevant, {
+    required bool restore,
+  }) {
+    if (relevant && (restore || databaseChanges != before)) searchRevision++;
+  }
+
+  bool searchRelevantOperation(String action, dynamic args) {
+    if (action == 'updateBook') {
+      final owner = book(args['id'] as String);
+      final changes = args['changes'] as Map;
+      // Position, appearance and renderer-owned structural metadata are saved
+      // frequently. They do not change searchable saved-library sources.
+      return owner != null &&
+          ['title', 'author', 'series'].any(
+            (key) =>
+                changes.containsKey(key) &&
+                (changes[key] ?? '') != (owner[key] ?? ''),
+          );
+    }
+    return {
+      'putAnnotation',
+      'updateAnnotation',
+      'deleteAnnotation',
+      'openPath',
+      'openMember',
+      'createCollection',
+      'renameCollection',
+      'deleteCollection',
+      'addBooks',
+      'removeBook',
+      'moveBook',
+      'relocate',
+      'restore',
+    }.contains(action);
+  }
+
   Future<void> initialize() async {
     for (final name in ['reading-data.sqlite', '.reading-data-lock']) {
       if (await FileSystemEntity.isLink(p.join(root, name))) {
@@ -517,6 +606,334 @@ class _ReadingWorker {
     return {...value, 'status': status};
   }
 
+  void checkSearchScope(Map<String, dynamic> args) {
+    final category = args['category'];
+    if (!['books', 'notebook', 'bookmarks'].contains(category)) {
+      throw const FormatException('Unknown reading-data search category');
+    }
+    if (args['bookId'] != null && args['collectionId'] != null) {
+      throw const FormatException('Search has two scopes');
+    }
+    final collection = args['collectionId'];
+    if (collection != null &&
+        database.select('SELECT id FROM collections WHERE id=?', [
+          collection,
+        ]).isEmpty) {
+      throw const WorkspaceException(
+        'searchUnavailable',
+        '',
+        'The search collection no longer exists.',
+      );
+    }
+    if (args['bookId'] != null && book(args['bookId'] as String) == null) {
+      throw const WorkspaceException(
+        'searchUnavailable',
+        '',
+        'The search book no longer exists.',
+      );
+    }
+  }
+
+  bool searchIncludesBook(String id, Map<String, dynamic> args) {
+    if (args['bookId'] != null && args['bookId'] != id) return false;
+    final collection = args['collectionId'];
+    return collection == null ||
+        database.select(
+          'SELECT 1 FROM memberships WHERE collection_id=? AND book_id=?',
+          [collection, id],
+        ).isNotEmpty;
+  }
+
+  Map<String, dynamic> searchDrafts(Map<String, dynamic> args) => {
+    for (final raw in args['drafts'] as List? ?? const [])
+      if (raw is Map && raw['annotation'] is Map && raw['note'] is String)
+        ((raw['annotation'] as Map)['id'] as String): raw,
+  };
+
+  Map<String, dynamic>? makeSearchResult(
+    Map<String, dynamic> owner,
+    Map<String, dynamic>? annotation,
+    ReadingSearchMatcher matcher,
+  ) {
+    final paths = database
+        .select(
+          'SELECT path FROM locations WHERE book_id=? ORDER BY preferred DESC,verified DESC,path',
+          [owner['id']],
+        )
+        .map((r) => r['path'] as String)
+        .toList();
+    final bookFields = <String, String>{
+      for (final key in ['title', 'author', 'series'])
+        key: owner[key] as String? ?? '',
+    };
+    final fields = annotation == null
+        ? bookFields
+        : <String, String>{
+            for (final key in ['text', 'note', 'reference'])
+              key: annotation[key] as String? ?? '',
+          };
+    Map<String, dynamic>? match = matcher.first(fields);
+    String? matchedText = match == null ? null : fields[match['field']];
+    if (annotation == null && match == null) {
+      // Match each actual location separately: a synthetic join must not
+      // create phrases spanning two unrelated filesystem references.
+      for (final path in {
+        ...paths,
+        ...((owner['paths'] as List?)?.cast<String>() ?? const <String>[]),
+        owner['referencePath'] as String? ?? '',
+      }) {
+        match = matcher.first({'path': path});
+        if (match != null) {
+          matchedText = path;
+          break;
+        }
+      }
+    }
+    if (match == null) return null;
+    final excerpt = readingSearchExcerpt(
+      matchedText!,
+      match['start'] as int,
+      match['end'] as int,
+    );
+    final annotationSummary = annotation == null
+        ? null
+        : <String, dynamic>{
+            ...annotation,
+            for (final key in ['text', 'note', 'reference'])
+              key: match['field'] == key
+                  ? excerpt['text']
+                  : readingSearchSummary(annotation[key] as String? ?? ''),
+          };
+    return {
+      'book': {
+        // Search retains lightweight owner metadata, never cached outlines or
+        // full publication state for every result in the saved library.
+        for (final key in ['id', 'format', 'originalSuffix', 'state'])
+          if (owner[key] != null) key: owner[key],
+        for (final key in ['title', 'author', 'series'])
+          key: readingSearchSummary(owner[key] as String? ?? '', limit: 500),
+        'path': paths.firstOrNull ?? '',
+        'referencePath': owner['referencePath'] ?? paths.firstOrNull ?? '',
+        'status': 'unverified',
+      },
+      if (annotationSummary != null) 'annotation': annotationSummary,
+      'match': {...match, ...excerpt},
+      'sourceDigest': sha256
+          .convert(
+            utf8.encode(
+              jsonEncode({
+                // Restoring equal bytes is still a new source generation;
+                // an activation captured before restore must be retried.
+                'restoreEpoch': searchRestoreEpoch,
+                'book': {
+                  'id': owner['id'],
+                  ...bookFields,
+                  'paths': paths,
+                  'references': owner['paths'],
+                  'referencePath': owner['referencePath'],
+                },
+                if (annotation != null) 'annotation': annotation,
+              }),
+            ),
+          )
+          .toString(),
+    };
+  }
+
+  /// Keyset pages bound both SQLite decoding and transport to Flutter. No
+  /// publication is opened, prepared, inspected or entered into Recent here.
+  /// The cursor is invalidated by any intervening database write; the caller
+  /// refreshes from the start instead of reviving a removed membership/record.
+  Future<Map<String, dynamic>> searchRecords(Map<String, dynamic> args) async {
+    final token = args['requestToken'] as String?;
+    try {
+      final query = args['query'] as String;
+      if (query.isEmpty) {
+        return {
+          'results': <Object>[],
+          'hasMore': false,
+          'scanned': 0,
+          'sourceRevision': searchRevision,
+        };
+      }
+      checkSearchScope(args);
+      final contextDigest = sha256
+          .convert(
+            utf8.encode(
+              jsonEncode({
+                for (final key in [
+                  'query',
+                  'category',
+                  'bookId',
+                  'collectionId',
+                  'drafts',
+                ])
+                  key: args[key],
+              }),
+            ),
+          )
+          .toString();
+      final cursor = args['cursor'] as Map?;
+      if (cursor != null &&
+          (cursor['revision'] != searchRevision ||
+              cursor['restoreEpoch'] != searchRestoreEpoch ||
+              cursor['context'] != contextDigest)) {
+        throw const WorkspaceException(
+          'searchStale',
+          '',
+          'Reading data changed. Search again.',
+        );
+      }
+      if (token != null && cancelledSearches.contains(token)) {
+        throw const WorkspaceException(
+          'searchCancelled',
+          '',
+          'Search cancelled.',
+        );
+      }
+      final limit = (args['limit'] as int? ?? 100).clamp(1, 200);
+      final matcher = ReadingSearchMatcher(query), drafts = searchDrafts(args);
+      final results = <Map<String, dynamic>>[];
+      var row = cursor?['row'] as int? ?? 0;
+      var draftIndex = cursor?['draft'] as int? ?? 0;
+      var rowsDone = cursor?['rowsDone'] == true;
+      var scanned = 0;
+      final kind = args['category'] == 'books' ? 'book' : 'annotation';
+      final scopeClause = args['bookId'] != null
+          ? ' AND ${kind == 'book' ? 'r.id' : 'r.book_id'}=?'
+          : args['collectionId'] != null
+          ? ' AND EXISTS(SELECT 1 FROM memberships m WHERE m.collection_id=? AND m.book_id=${kind == 'book' ? 'r.id' : 'r.book_id'})'
+          : '';
+      final creating = kind == 'book'
+          ? const <dynamic>[]
+          : drafts.values.where((d) => d['creating'] == true).toList();
+      if (!rowsDone) {
+        final rows = database.select(
+          'SELECT r.rowid,r.id FROM records r WHERE r.kind=? AND r.rowid>?$scopeClause ORDER BY r.rowid LIMIT 257',
+          [
+            kind,
+            row,
+            if (args['bookId'] != null)
+              args['bookId']
+            else if (args['collectionId'] != null)
+              args['collectionId'],
+          ],
+        );
+        for (final stored in rows.take(256)) {
+          // Fetch only one potentially large note at a time instead of
+          // copying a whole batch of million-character records into memory.
+          final value = record(stored['id'] as String, kind)!;
+          row = stored['rowid'] as int;
+          scanned++;
+          Map<String, dynamic>? result;
+          if (kind == 'book') {
+            result = makeSearchResult(value, null, matcher);
+          } else if (args['category'] != 'bookmarks' ||
+              value['annotationKind'] == 'bookmark') {
+            final overlay = drafts[value['id']];
+            // Only replace the note: protected UI state is never authority to
+            // change a persisted record's owner, locator or quotation.
+            if (overlay != null &&
+                overlay['annotation']['bookId'] == value['bookId']) {
+              value['note'] = overlay['note'];
+            }
+            final owner = book(value['bookId'] as String);
+            if (owner != null) result = makeSearchResult(owner, value, matcher);
+          }
+          if (result != null) results.add(result);
+          if (scanned % 32 == 0) {
+            await Future<void>.delayed(Duration.zero);
+            if (token != null && cancelledSearches.contains(token)) {
+              throw const WorkspaceException(
+                'searchCancelled',
+                '',
+                'Search cancelled.',
+              );
+            }
+          }
+          if (results.length >= limit) break;
+        }
+        rowsDone = rows.isEmpty || row == rows.last['rowid'];
+      }
+      while (rowsDone &&
+          draftIndex < creating.length &&
+          scanned < 256 &&
+          results.length < limit) {
+        final draft = creating[draftIndex++] as Map;
+        final value = (draft['annotation'] as Map).cast<String, dynamic>();
+        scanned++;
+        // A failed creation is visible, while a deleted saved annotation is
+        // never reintroduced by an ordinary edit draft.
+        if (record(value['id'] as String, 'annotation') != null ||
+            !searchIncludesBook(value['bookId'] as String, args) ||
+            args['category'] == 'bookmarks' &&
+                value['annotationKind'] != 'bookmark') {
+          continue;
+        }
+        final owner = book(value['bookId'] as String);
+        if (owner == null) continue;
+        final result = makeSearchResult(owner, {
+          ...value,
+          'note': draft['note'],
+        }, matcher);
+        if (result != null) results.add(result);
+      }
+      return {
+        'results': results,
+        'hasMore': !rowsDone || draftIndex < creating.length,
+        'cursor': {
+          'row': row,
+          'draft': draftIndex,
+          'rowsDone': rowsDone,
+          'revision': searchRevision,
+          'restoreEpoch': searchRestoreEpoch,
+          'context': contextDigest,
+        },
+        'scanned': scanned,
+        'sourceRevision': searchRevision,
+      };
+    } finally {
+      if (token != null) {
+        activeSearches.remove(token);
+        cancelledSearches.remove(token);
+      }
+    }
+  }
+
+  Map<String, dynamic>? validateSearchResult(Map<String, dynamic> args) {
+    checkSearchScope(args);
+    final owner = book(args['targetBookId'] as String);
+    if (owner == null || !searchIncludesBook(owner['id'] as String, args)) {
+      return null;
+    }
+    Map<String, dynamic>? annotation;
+    if (args['category'] != 'books') {
+      final id = args['annotationId'] as String;
+      annotation = record(id, 'annotation');
+      final overlay = searchDrafts(args)[id];
+      if (annotation == null && overlay?['creating'] == true) {
+        annotation = (overlay['annotation'] as Map).cast<String, dynamic>();
+      }
+      if (annotation == null ||
+          annotation['bookId'] != owner['id'] ||
+          args['category'] == 'bookmarks' &&
+              annotation['annotationKind'] != 'bookmark') {
+        return null;
+      }
+      if (overlay != null && overlay['annotation']['bookId'] == owner['id']) {
+        annotation = {...annotation, 'note': overlay['note']};
+      }
+    }
+    final result = makeSearchResult(
+      owner,
+      annotation,
+      ReadingSearchMatcher(args['query'] as String),
+    );
+    return result != null && result['sourceDigest'] == args['sourceDigest']
+        ? result
+        : null;
+  }
+
   Future<Map<String, dynamic>> openCollection(
     String id, {
     bool recordRecent = true,
@@ -748,6 +1165,10 @@ class _ReadingWorker {
     currentRequest = request;
     currentAction = action;
     switch (action) {
+      case 'searchRecords':
+        return searchRecords((args as Map).cast<String, dynamic>());
+      case 'validateSearchResult':
+        return validateSearchResult((args as Map).cast<String, dynamic>());
       case 'snapshot':
         return {
           'recent': recentList(),
@@ -1289,6 +1710,7 @@ class _ReadingWorker {
         );
         return null;
       case 'restore':
+        searchRestoreEpoch++;
         return restore(args as String);
       case 'pendingPreferences':
         final rows = database.select('SELECT json FROM metadata WHERE key=?', [

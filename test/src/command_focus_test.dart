@@ -1,5 +1,7 @@
 import 'package:busybooks/src/app/command_focus.dart';
 import 'package:busybooks/src/app/command_registry.dart';
+import 'package:busybooks/src/app/keymap_controller.dart';
+import 'package:busybooks/src/app/shortcut_binding.dart';
 import 'package:busybooks/src/app/command_shortcuts.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
 import 'package:busybooks/src/app/busybooks_search_field.dart';
@@ -8,6 +10,30 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'new category defaults yield to saved assignments and Marks keeps its binding',
+    () {
+      final catalog = BusyBooksCommandCatalog.metadata;
+      final marks = catalog[BusyBooksCommandIds.annotations]!.shortcut!.label;
+      expect(marks, 'Ctrl+Shift+H');
+      final registry = effectiveCommandRegistry(catalog, {
+        BusyBooksCommandIds.open: const BusyBooksKeyBinding(
+          LogicalKeyboardKey.keyD,
+          control: true,
+          shift: true,
+        ),
+        BusyBooksCommandIds.settings: const BusyBooksKeyBinding(
+          LogicalKeyboardKey.keyR,
+          control: true,
+          shift: true,
+        ),
+      });
+      expect(registry[BusyBooksCommandIds.searchBooks]!.shortcut, isNull);
+      expect(registry[BusyBooksCommandIds.searchRecent]!.shortcut, isNull);
+      expect(registry[BusyBooksCommandIds.searchBookmarks]!.shortcut, isNull);
+    },
+  );
+
   testWidgets(
     'visible book Search owns Ctrl+F while Collection Search is hidden',
     (tester) async {

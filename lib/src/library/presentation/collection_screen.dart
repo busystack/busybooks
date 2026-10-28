@@ -8,7 +8,6 @@ import '../../app/app_settings.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
 import '../../app/busybooks_main_menu.dart';
-import '../../app/busybooks_search_field.dart';
 import '../../app/command_registry.dart';
 import '../../app/linux/linux_header_style.dart';
 import '../../app/linux/linux_page_frame.dart';
@@ -42,7 +41,6 @@ class _CollectionWorkspace extends ConsumerStatefulWidget {
 }
 
 class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
-  late final TextEditingController _query;
   late final ScrollController _scroll;
   CollectionViewController get view =>
       ref.read(collectionViewProvider(widget.path).notifier);
@@ -50,7 +48,6 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
   void initState() {
     super.initState();
     final saved = ref.read(collectionViewProvider(widget.path));
-    _query = TextEditingController(text: saved.query);
     _scroll = ScrollController(initialScrollOffset: saved.scrollOffset);
     _scroll.addListener(_saveScroll);
   }
@@ -63,7 +60,6 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
   void dispose() {
     _scroll.removeListener(_saveScroll);
     _scroll.dispose();
-    _query.dispose();
     super.dispose();
   }
 
@@ -72,16 +68,16 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
     final data = ref.watch(workspaceControllerProvider),
         settings = ref.watch(appSettingsControllerProvider),
         l = context.l10n;
-    final search = ref.watch(bookSearchProvider(applicationSearchId));
+    final search = ref.watch(bookSearchSessionProvider);
     final sidebarOpen = ref.watch(
       collectionViewProvider(widget.path).select((s) => s.sidebarOpen),
     );
     final presentation = ref.watch(
-      collectionViewProvider(widget.path).select(
-        (s) => (s.query, s.filter, s.selectedBook, s.focusRequest, s.sort),
-      ),
+      collectionViewProvider(
+        widget.path,
+      ).select((s) => (s.filter, s.selectedBook, s.sort)),
     );
-    final query = presentation.$1, filter = presentation.$2;
+    final filter = presentation.$1;
     void open(Book book) {
       view.update(selectedBook: book.id);
       openBook(context, ref, book);
@@ -89,15 +85,9 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
 
     final workspace = data.workspace;
     final books = data.books
-        .where(
-          (b) =>
-              (filter == 'all' || filter == b.state) &&
-              '${b.title} ${b.author} ${b.series}'.toLowerCase().contains(
-                query.toLowerCase(),
-              ),
-        )
+        .where((b) => (filter == 'all' || filter == b.state))
         .toList();
-    final sort = presentation.$5;
+    final sort = presentation.$3;
     books.sort((a, b) => compareCollectionBooks(a, b, sort));
     final grid = settings.data['grid'] == true;
     final narrow =
@@ -110,14 +100,13 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
         sidebarExpanded: !narrow || sidebarOpen || search.active,
         onSidebarDismiss: () {
           if (search.active) {
-            ref.read(bookSearchProvider(applicationSearchId).notifier).close();
+            ref.read(bookSearchSessionProvider.notifier).close();
           } else {
             view.update(sidebarOpen: false);
           }
         },
         sidebarHeader: const BusyBooksLinuxBrandHeader(),
         sidebarBody: BookSearchSidebarHost(
-          bookId: applicationSearchId,
           child: Column(
             children: [
               if (workspace != null)
@@ -179,11 +168,7 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
                   selected: sidebarOpen || search.active,
                   onPressed: () {
                     if (search.active) {
-                      ref
-                          .read(
-                            bookSearchProvider(applicationSearchId).notifier,
-                          )
-                          .close();
+                      ref.read(bookSearchSessionProvider.notifier).close();
                     } else {
                       view.update(sidebarOpen: !sidebarOpen);
                     }
@@ -215,16 +200,23 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
           centerAllocation:
               BusyBooksLinuxHeaderCenterAllocation.fillBetweenControls,
           title: search.active
-              ? const BookSearchHeaderField(bookId: applicationSearchId)
-              : BusyBooksSearchField(
-                  key: const ValueKey('collection-header-search'),
-                  controller: _query,
-                  focusRequest: presentation.$4,
-                  hintText: l.collectionSearchScope,
-                  onChanged: (v) => view.update(query: v),
-                ),
+              ? const BookSearchHeaderField()
+              : BusyBooksLinuxHeaderTitle(workspace?.name ?? l.collection),
           trailing: BusyBooksLinuxHeaderControlGroup(
             children: [
+              BusyBooksHeaderIconButton(
+                tooltip: l.search,
+                icon: BusyBooksGlyphs.search,
+                selected: search.active,
+                onPressed: () => ref
+                    .read(bookSearchSessionProvider.notifier)
+                    .toggle(
+                      actions: bookSearchActions(
+                        context,
+                        BusyBooksCommandRegistryScope.maybeOf(context)!,
+                      ),
+                    ),
+              ),
               BusyBooksHeaderPopupMenuButton<String>(
                 tooltip: l.collection,
                 icon: BusyBooksGlyphs.menuHorizontal,
@@ -353,7 +345,7 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
                                   itemCount: books.length,
                                   itemBuilder: (c, i) => _BookCard(
                                     book: books[i],
-                                    selected: presentation.$3 == books[i].id,
+                                    selected: presentation.$2 == books[i].id,
                                     onOpen: () => open(books[i]),
                                   ),
                                 ),
@@ -370,7 +362,7 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
                                   itemCount: books.length,
                                   itemBuilder: (c, i) => BookRow(
                                     book: books[i],
-                                    selected: presentation.$3 == books[i].id,
+                                    selected: presentation.$2 == books[i].id,
                                     onOpen: () => open(books[i]),
                                   ),
                                 ),

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,7 +23,7 @@ Future<void> _dismissBookOverlay(
   bool narrow,
 ) async {
   if (!narrow) return;
-  container.read(bookSearchProvider(id).notifier).close(restoreFocus: false);
+  container.read(bookSearchSessionProvider.notifier).dismissForActivation();
   await container.read(bookSidebarProvider(id).notifier).setOpen(false);
 }
 
@@ -31,6 +33,7 @@ Future<void> openNotebook(
   String id, {
   String? annotationId,
   bool Function()? canActivate,
+  Future<bool> Function()? validateActivation,
 }) async {
   final narrow =
       MediaQuery.sizeOf(context).width <
@@ -41,6 +44,10 @@ Future<void> openNotebook(
   if (origin.path == '/notebook/$id' && annotationId == null) return;
   bool sameRoute() => router.routeInformationProvider.value.uri == origin;
   bool current() => sameRoute() && (canActivate?.call() ?? true);
+  Future<bool> valid() async =>
+      current() &&
+      (validateActivation == null || await validateActivation()) &&
+      current();
   bool annotationAvailable() =>
       annotationId == null ||
       container
@@ -58,7 +65,7 @@ Future<void> openNotebook(
           .read(workspaceControllerProvider.notifier)
           .loadBook(id, activate: true, isCurrent: current);
     }
-    if (!current() || !annotationAvailable()) return;
+    if (!await valid() || !annotationAvailable()) return;
     if (origin.path != '/read/$id' && origin.path != '/notebook/$id') {
       await container
           .read(workspaceControllerProvider.notifier)
@@ -66,13 +73,14 @@ Future<void> openNotebook(
       if (!current()) return;
     }
     await container.read(readerControllerProvider.notifier).suspend();
-    if (!current() || !annotationAvailable()) return;
+    if (!await valid() || !annotationAvailable()) return;
     if (annotationId != null) {
       await _dismissBookOverlay(container, id, narrow);
       // A narrow handoff deliberately closes its search session. Validate the
       // route and actual record again without rejecting that owned dismissal.
-      if (!sameRoute() ||
-          (!narrow && !(canActivate?.call() ?? true)) ||
+      if (!await valid() ||
+          !sameRoute() ||
+          !(canActivate?.call() ?? true) ||
           !annotationAvailable()) {
         return;
       }
@@ -91,6 +99,8 @@ Future<void> openReading(
   Map<String, dynamic>? anchor,
   String? annotationId,
   bool Function()? canActivate,
+  Future<bool> Function()? validateActivation,
+  void Function(ReaderJumpRequest)? onDeferred,
 }) async {
   final narrow =
       MediaQuery.sizeOf(context).width <
@@ -101,6 +111,10 @@ Future<void> openReading(
   if (origin.path == '/read/$id' && anchor == null) return;
   bool sameRoute() => router.routeInformationProvider.value.uri == origin;
   bool current() => sameRoute() && (canActivate?.call() ?? true);
+  Future<bool> valid() async =>
+      current() &&
+      (validateActivation == null || await validateActivation()) &&
+      current();
   bool annotationAvailable() =>
       annotationId == null ||
       container
@@ -118,12 +132,14 @@ Future<void> openReading(
           .read(workspaceControllerProvider.notifier)
           .loadBook(id, activate: true, isCurrent: current);
     }
-    if (!current() || !annotationAvailable()) return;
+    if (!await valid() || !annotationAvailable()) return;
     final reader = container.read(readerControllerProvider.notifier);
     if (anchor != null) {
+      if (!await valid()) return;
       await _dismissBookOverlay(container, id, narrow);
-      if (!sameRoute() ||
-          (!narrow && !(canActivate?.call() ?? true)) ||
+      if (!await valid() ||
+          !sameRoute() ||
+          !(canActivate?.call() ?? true) ||
           !annotationAvailable()) {
         return;
       }
@@ -131,18 +147,88 @@ Future<void> openReading(
           reader.stateBookId == id &&
           !reader.suspended) {
         await reader.setWorkspaceVisible(true);
-        if (!sameRoute() ||
-            (!narrow && !(canActivate?.call() ?? true)) ||
-            !annotationAvailable()) {
+        if (!sameRoute() || !await valid() || !annotationAvailable()) {
           return;
         }
         if (reader.interactive) {
-          await reader.navigateFromSidebar(anchor, bookId: id);
+          await reader.navigateFromSidebar(
+            anchor,
+            bookId: id,
+            validateNavigation: validateActivation,
+          );
           return;
         }
       }
     }
-    reader.pendingJump = anchor;
+    if (anchor != null) {
+      final targetAnchor = jsonEncode(anchor);
+      final target = Uri(path: '/read/$id');
+      final routes = router.routeInformationProvider;
+      var arrived = origin == target;
+      ReaderJumpRequest? request;
+      bool ownsRoute() =>
+          routes.value.uri == (arrived ? target : origin) ||
+          (!arrived && routes.value.uri == target);
+      void routeChanged() {
+        if (!arrived && routes.value.uri == target) arrived = true;
+        if (!ownsRoute()) request?.cancel();
+      }
+
+      // The query/result validator survives an owned route through its deferred
+      // activation lease; source existence is checked again after readiness.
+      Future<bool> validateJump() async {
+        if (!ownsRoute() ||
+            !(canActivate?.call() ?? true) ||
+            !annotationAvailable()) {
+          return false;
+        }
+        if (annotationId != null) {
+          final notes = container.read(notebookControllerProvider);
+          final draft = notes.drafts[annotationId];
+          if (draft?.creating == true && draft?.creationWritten == false) {
+            final source = notes.sources[annotationId];
+            if (source?.bookId != id ||
+                jsonEncode(source?.anchor) != targetAnchor) {
+              return false;
+            }
+          } else {
+            try {
+              final stored =
+                  await container.read(readingDataStoreProvider).call(
+                        'annotation',
+                        {'id': annotationId, 'bookId': id},
+                      )
+                      as Map;
+              if (jsonEncode(stored['anchor']) != targetAnchor) {
+                return false;
+              }
+            } on Object {
+              return false;
+            }
+          }
+        }
+        return ownsRoute() &&
+            (canActivate?.call() ?? true) &&
+            annotationAvailable() &&
+            (validateActivation == null || await validateActivation()) &&
+            ownsRoute() &&
+            (canActivate?.call() ?? true) &&
+            annotationAvailable();
+      }
+
+      routes.addListener(routeChanged);
+      request = reader.deferJump(
+        bookId: id,
+        anchor: anchor,
+        isCurrent: () =>
+            ownsRoute() &&
+            container.read(workspaceControllerProvider).openedBook?.id == id &&
+            (canActivate?.call() ?? true),
+        validate: validateJump,
+        onReleased: () => routes.removeListener(routeChanged),
+      );
+      onDeferred?.call(request);
+    }
     router.go('/read/$id');
   });
 }

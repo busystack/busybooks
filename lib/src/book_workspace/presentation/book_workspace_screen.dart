@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/busybooks_design.dart';
 import '../../app/command_focus.dart';
+import '../../app/busybooks_search_field.dart';
 import '../../app/linux/linux_page_frame.dart';
 import '../../app/localization.dart';
 import '../../notebook/presentation/book_view_selector.dart';
@@ -106,7 +107,7 @@ class _BookWorkspaceScreenState extends ConsumerState<BookWorkspaceScreen> {
   @override
   Widget build(BuildContext context) {
     final sidebar = ref.watch(bookSidebarProvider(widget.id)),
-        search = ref.watch(bookSearchProvider(widget.id)),
+        search = ref.watch(bookSearchSessionProvider),
         l = context.l10n;
     final narrow =
         MediaQuery.sizeOf(context).width <
@@ -186,8 +187,9 @@ class _BookWorkspaceScreenState extends ConsumerState<BookWorkspaceScreen> {
         onKeyEvent: (_, event) {
           if (event is KeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.escape &&
-              ref.read(bookSearchProvider(widget.id)).active) {
-            ref.read(bookSearchProvider(widget.id).notifier).close();
+              !busyBooksTextInputComposing() &&
+              ref.read(bookSearchSessionProvider).active) {
+            ref.read(bookSearchSessionProvider.notifier).close();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -198,7 +200,7 @@ class _BookWorkspaceScreenState extends ConsumerState<BookWorkspaceScreen> {
           sidebarExpanded: open,
           sidebarTransitionGeneration: open ? 1 : 0,
           onSidebarDismiss: () => search.active
-              ? ref.read(bookSearchProvider(widget.id).notifier).close()
+              ? ref.read(bookSearchSessionProvider.notifier).close()
               : unawaited(
                   ref
                       .read(bookSidebarProvider(widget.id).notifier)
@@ -206,7 +208,6 @@ class _BookWorkspaceScreenState extends ConsumerState<BookWorkspaceScreen> {
                 ),
           sidebarHeader: const BusyBooksLinuxBrandHeader(),
           sidebarBody: BookSearchSidebarHost(
-            bookId: widget.id,
             child: Column(
               children: [
                 ReadingSidebarHeader(bookId: widget.id),

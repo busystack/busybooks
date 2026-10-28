@@ -9,7 +9,6 @@ import 'package:ubuntu_localizations/ubuntu_localizations.dart';
 
 import '../../l10n/generated/app_localizations.dart';
 import '../book_workspace/application/book_sidebar_controller.dart';
-import '../library/application/collection_view_controller.dart';
 import '../notebook/application/notebook_controller.dart';
 import '../notebook/presentation/book_view_selector.dart';
 import '../platform/gtk_animation_settings_service.dart';
@@ -25,6 +24,7 @@ import 'app_router.dart';
 import 'app_settings.dart';
 import 'app_theme.dart';
 import 'busybooks_toast.dart';
+import 'busybooks_search_field.dart';
 import 'command_registry.dart';
 import 'command_shortcuts.dart';
 import 'desktop_frame.dart';
@@ -141,6 +141,15 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         ref.read(readerControllerProvider).surfaceVisible &&
         ref.read(readerControllerProvider).ready &&
         ref.read(readerControllerProvider).error == null &&
+        reader.stateBookId ==
+            ref
+                .read(appRouterProvider)
+                .routeInformationProvider
+                .value
+                .uri
+                .path
+                .split('/')
+                .last &&
         ref
             .read(appRouterProvider)
             .routeInformationProvider
@@ -169,6 +178,30 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         .uri
         .path
         .startsWith('/notebook/');
+    BookSearchScope defaultScope(BookSearchCategory category) {
+      final data = ref.read(workspaceControllerProvider);
+      if (bookView() && category != BookSearchCategory.books) {
+        final book = data.bookById(activeBook());
+        return BookSearchScope(
+          BookSearchScopeKind.thisBook,
+          id: book?.id,
+          name: book?.title ?? '',
+        );
+      }
+      final collection = data.workspace;
+      if (collection != null &&
+          !collection.isBook &&
+          origin.path != '/' &&
+          origin.path != '/settings') {
+        return BookSearchScope(
+          BookSearchScopeKind.currentCollection,
+          id: collection.id,
+          name: collection.name,
+        );
+      }
+      return const BookSearchScope.all();
+    }
+
     const sharedBookCommands = {
       BusyBooksCommandIds.viewReading,
       BusyBooksCommandIds.viewNotebook,
@@ -217,50 +250,56 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
       BusyBooksCommandIds.fullScreen: () =>
           ref.read(windowControlServiceProvider).toggleFullScreen(),
       BusyBooksCommandIds.outline: () async {
-        ref
-            .read(bookSearchProvider(activeBook()!).notifier)
-            .close(restoreFocus: false);
+        ref.read(bookSearchSessionProvider.notifier).close(restoreFocus: false);
         await ref
             .read(bookSidebarProvider(activeBook()!).notifier)
             .selectPanel(BookSidebarPanel.outline);
       },
       BusyBooksCommandIds.thumbnails: () async {
-        ref
-            .read(bookSearchProvider(activeBook()!).notifier)
-            .close(restoreFocus: false);
+        ref.read(bookSearchSessionProvider.notifier).close(restoreFocus: false);
         await ref
             .read(bookSidebarProvider(activeBook()!).notifier)
             .selectPanel(BookSidebarPanel.thumbnails);
       },
       BusyBooksCommandIds.readerBooks: () async {
-        ref
-            .read(bookSearchProvider(activeBook()!).notifier)
-            .close(restoreFocus: false);
+        ref.read(bookSearchSessionProvider.notifier).close(restoreFocus: false);
         await ref
             .read(bookSidebarProvider(activeBook()!).notifier)
             .selectPanel(BookSidebarPanel.books);
       },
       BusyBooksCommandIds.search: () async {
-        final id = activeBook()!;
-        final search = ref.read(bookSearchProvider(id).notifier);
-        await search.toggle(
+        final search = ref.read(bookSearchSessionProvider.notifier);
+        await search.open(
           category: notebook()
               ? BookSearchCategory.notebook
-              : search.categories.contains(BookSearchCategory.bookText)
-              ? BookSearchCategory.bookText
-              : BookSearchCategory.notebook,
+              : BookSearchCategory.bookText,
+          scope: defaultScope(
+            notebook()
+                ? BookSearchCategory.notebook
+                : BookSearchCategory.bookText,
+          ),
           actions: bookSearchActions(context, _registry(context)),
         );
       },
-      BusyBooksCommandIds.searchCollection: () {
-        final path = ref.read(workspaceControllerProvider).workspace?.id;
-        if (path != null) {
-          ref.read(collectionViewProvider(path).notifier).update(focus: true);
-        }
-      },
+      BusyBooksCommandIds.searchCollection: () => ref
+          .read(bookSearchSessionProvider.notifier)
+          .open(
+            category: BookSearchCategory.books,
+            scope: defaultScope(BookSearchCategory.books),
+            actions: bookSearchActions(context, _registry(context)),
+          ),
+      for (final MapEntry(key: command, value: category)
+          in searchCategoryCommands.entries)
+        command: () => ref
+            .read(bookSearchSessionProvider.notifier)
+            .open(
+              category: category,
+              scope: defaultScope(category),
+              actions: bookSearchActions(context, _registry(context)),
+            ),
       BusyBooksCommandIds.sidebar: () async {
-        final search = ref.read(bookSearchProvider(activeBook()!).notifier);
-        if (ref.read(bookSearchProvider(activeBook()!)).active) {
+        final search = ref.read(bookSearchSessionProvider.notifier);
+        if (ref.read(bookSearchSessionProvider).active) {
           search.close();
         } else {
           await ref
@@ -278,9 +317,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           _activateSearchStep(context, activeBook()!, -1),
       BusyBooksCommandIds.addNote: reader.addNote,
       BusyBooksCommandIds.annotations: () async {
-        ref
-            .read(bookSearchProvider(activeBook()!).notifier)
-            .close(restoreFocus: false);
+        ref.read(bookSearchSessionProvider.notifier).close(restoreFocus: false);
         await ref
             .read(bookSidebarProvider(activeBook()!).notifier)
             .selectPanel(BookSidebarPanel.marks);
@@ -323,9 +360,8 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             await runAppAction(context, entry.value);
           },
         BusyBooksCommandIds.commandPalette: () async {
-          final id = bookView() ? activeBook()! : applicationSearchId;
           await ref
-              .read(bookSearchProvider(id).notifier)
+              .read(bookSearchSessionProvider.notifier)
               .open(
                 category: BookSearchCategory.actions,
                 actions: bookSearchActions(context, _registry(context)),
@@ -333,6 +369,12 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         },
       },
       visible: {
+        for (final MapEntry(key: id, value: category)
+            in searchCategoryCommands.entries)
+          id: () => ref
+              .read(bookSearchSessionProvider.notifier)
+              .categories
+              .contains(category),
         BusyBooksCommandIds.searchCollection: () =>
             ref
                 .read(appRouterProvider)
@@ -371,6 +413,12 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
                 .available(BookSidebarPanel.books),
       },
       enabled: {
+        for (final MapEntry(key: id, value: category)
+            in searchCategoryCommands.entries)
+          id: () => ref
+              .read(bookSearchSessionProvider.notifier)
+              .categories
+              .contains(category),
         BusyBooksCommandIds.settings: () =>
             ref
                 .read(appRouterProvider)
@@ -447,12 +495,16 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
                 ref.read(readerControllerProvider).selection != null),
         BusyBooksCommandIds.nextResult: () =>
             hasBook() &&
-            ref.read(bookSearchProvider(activeBook()!)).active &&
-            ref.read(bookSearchProvider(activeBook()!)).results.isNotEmpty,
+            ref.read(bookSearchSessionProvider).active &&
+            ref.read(bookSearchSessionProvider).category ==
+                BookSearchCategory.bookText &&
+            ref.read(bookSearchSessionProvider).query.isNotEmpty,
         BusyBooksCommandIds.previousResult: () =>
             hasBook() &&
-            ref.read(bookSearchProvider(activeBook()!)).active &&
-            ref.read(bookSearchProvider(activeBook()!)).results.isNotEmpty,
+            ref.read(bookSearchSessionProvider).active &&
+            ref.read(bookSearchSessionProvider).category ==
+                BookSearchCategory.bookText &&
+            ref.read(bookSearchSessionProvider).query.isNotEmpty,
         BusyBooksCommandIds.highlight: () =>
             reading() &&
             reader.textInteraction &&
@@ -474,20 +526,15 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
     String bookId,
     int delta,
   ) async {
-    final controller = ref.read(bookSearchProvider(bookId).notifier);
-    controller.moveSelection(delta);
+    final controller = ref.read(bookSearchSessionProvider.notifier);
+    if (!await controller.selectOccurrence(delta) || !context.mounted) return;
     final result = controller.selectedResult;
-    if (ref.read(bookSearchProvider(bookId)).category ==
-        BookSearchCategory.actions) {
-      return;
-    }
     if (result != null) {
       await activateBookSearchResult(
         context,
         ref,
-        bookId,
         result,
-        ref.read(bookSearchProvider(bookId)).generation,
+        ref.read(bookSearchSessionProvider).generation,
       );
     }
   }
@@ -523,16 +570,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         ),
         registry = _registry(context);
     if (key == 'Escape') {
-      final path = ref
-          .read(appRouterProvider)
-          .routeInformationProvider
-          .value
-          .uri
-          .path;
-      final id = RegExp(r'^/(read|notebook)/').hasMatch(path)
-          ? path.split('/').last
-          : applicationSearchId;
-      ref.read(bookSearchProvider(id).notifier).close();
+      ref.read(bookSearchSessionProvider.notifier).close();
       return;
     }
     final command = registry.commandForNativeBinding(binding);
@@ -605,48 +643,60 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           ),
           child: BusyBooksCommandRegistryScope(
             registry: registry,
-            child: BusyBooksCommandShortcuts(
-              shortcuts: registry.shortcutIntents(
-                scopes: {
-                  BusyBooksCommandScope.application,
-                  if (router.routeInformationProvider.value.uri.path.startsWith(
-                        '/read/',
-                      ) ||
-                      router.routeInformationProvider.value.uri.path.startsWith(
-                        '/notebook/',
-                      ))
-                    BusyBooksCommandScope.documentView,
-                },
-                intentFor: BusyBooksCommandIntent.new,
-              ),
-              child: Actions(
-                actions: {
-                  BusyBooksCommandIntent:
-                      CallbackAction<BusyBooksCommandIntent>(
-                        onInvoke: (intent) {
-                          unawaited(
-                            registry.execute(intent.commandId).catchError((
-                              Object e,
-                            ) {
-                              if (context.mounted) {
-                                unawaited(
-                                  showError(
-                                    rootNavigatorKey.currentContext!,
-                                    e,
-                                  ),
-                                );
-                              }
-                              return false;
-                            }),
-                          );
-                          return null;
-                        },
+            child: Focus(
+              onKeyEvent: (_, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.escape &&
+                    !busyBooksTextInputComposing() &&
+                    ref.read(bookSearchSessionProvider).active) {
+                  ref.read(bookSearchSessionProvider.notifier).close();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: BusyBooksCommandShortcuts(
+                shortcuts: registry.shortcutIntents(
+                  scopes: {
+                    BusyBooksCommandScope.application,
+                    if (router.routeInformationProvider.value.uri.path
+                            .startsWith('/read/') ||
+                        router.routeInformationProvider.value.uri.path
+                            .startsWith('/notebook/'))
+                      BusyBooksCommandScope.documentView,
+                  },
+                  intentFor: BusyBooksCommandIntent.new,
+                ),
+                child: Actions(
+                  actions: {
+                    BusyBooksCommandIntent:
+                        CallbackAction<BusyBooksCommandIntent>(
+                          onInvoke: (intent) {
+                            unawaited(
+                              registry.execute(intent.commandId).catchError((
+                                Object e,
+                              ) {
+                                if (context.mounted) {
+                                  unawaited(
+                                    showError(
+                                      rootNavigatorKey.currentContext!,
+                                      e,
+                                    ),
+                                  );
+                                }
+                                return false;
+                              }),
+                            );
+                            return null;
+                          },
+                        ),
+                  },
+                  child: GtkHeaderIconScope(
+                    service: ref.watch(gtkHeaderIconServiceProvider),
+                    child: BusyBooksToastOverlay(
+                      child: desktopWindowHost(
+                        child ?? const SizedBox.shrink(),
                       ),
-                },
-                child: GtkHeaderIconScope(
-                  service: ref.watch(gtkHeaderIconServiceProvider),
-                  child: BusyBooksToastOverlay(
-                    child: desktopWindowHost(child ?? const SizedBox.shrink()),
+                    ),
                   ),
                 ),
               ),

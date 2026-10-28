@@ -240,17 +240,28 @@ Future<void> openCollection(BuildContext context, WidgetRef ref) async {
 Future<void> openCollectionId(
   BuildContext context,
   WidgetRef ref,
-  String id,
-) async {
+  String id, {
+  bool Function()? canActivate,
+  Future<bool> Function()? validateActivation,
+}) async {
   final container = ProviderScope.containerOf(context, listen: false);
+  bool current() => context.mounted && (canActivate?.call() ?? true);
+  Future<bool> valid() async =>
+      current() &&
+      (validateActivation == null || await validateActivation()) &&
+      current();
   try {
     await container.read(workspaceControllerProvider.notifier).navigate(
       () async {
+        if (!await valid()) return;
         await container.read(notebookControllerProvider.notifier).flush();
+        if (!await valid()) return;
         await container.read(readerControllerProvider.notifier).close();
+        if (!await valid()) return;
         await container
             .read(workspaceControllerProvider.notifier)
             .openCollection(id);
+        if (!await valid()) return;
         container.read(appRouterProvider).go('/workspace');
       },
     );
@@ -262,16 +273,38 @@ Future<void> openCollectionId(
 Future<void> openRecent(
   BuildContext context,
   WidgetRef ref,
-  RecentResource resource,
-) async {
-  if (!resource.isBook) {
-    await openCollectionId(context, ref, resource.resourceId);
+  RecentResource resource, {
+  bool Function()? canActivate,
+  Future<bool> Function()? validateActivation,
+}) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  if (!(canActivate?.call() ?? true) ||
+      (validateActivation != null && !await validateActivation())) {
     return;
   }
-  final book = await ref
+  if (!context.mounted) return;
+  if (!resource.isBook) {
+    await openCollectionId(
+      context,
+      ref,
+      resource.resourceId,
+      canActivate: canActivate,
+      validateActivation: validateActivation,
+    );
+    return;
+  }
+  final book = await container
       .read(workspaceControllerProvider.notifier)
       .loadBook(resource.resourceId);
-  if (context.mounted) await openBook(context, ref, book);
+  if (context.mounted && (canActivate?.call() ?? true)) {
+    await openBook(
+      context,
+      ref,
+      book,
+      canActivate: canActivate,
+      validateActivation: validateActivation,
+    );
+  }
 }
 
 Future<void> createCollection(BuildContext context, WidgetRef ref) async {
@@ -355,9 +388,21 @@ Future<void> addExistingBooks(BuildContext context, WidgetRef ref) async {
   }
 }
 
-Future<void> openBook(BuildContext context, WidgetRef ref, Book book) async {
+Future<void> openBook(
+  BuildContext context,
+  WidgetRef ref,
+  Book book, {
+  bool Function()? canActivate,
+  Future<bool> Function()? validateActivation,
+}) async {
   final container = ProviderScope.containerOf(context, listen: false);
-  final navigation = ref.read(workspaceControllerProvider.notifier);
+  final navigation = container.read(workspaceControllerProvider.notifier);
+  bool current() => context.mounted && (canActivate?.call() ?? true);
+  Future<bool> valid() async =>
+      current() &&
+      (validateActivation == null || await validateActivation()) &&
+      current();
+  if (!current()) return;
   if (!book.available && book.status != 'unverified') {
     await unavailableFile(
       context,
@@ -374,11 +419,16 @@ Future<void> openBook(BuildContext context, WidgetRef ref, Book book) async {
   }
   try {
     await navigation.navigate(() async {
+      if (!await valid()) return;
       final controller = container.read(workspaceControllerProvider.notifier);
       final prepared = await controller.prepareBook(book);
+      if (!await valid()) return;
       await container.read(notebookControllerProvider.notifier).flush();
+      if (!await valid()) return;
       await container.read(readerControllerProvider.notifier).close();
+      if (!await valid()) return;
       await controller.activateBook(prepared);
+      if (!await valid()) return;
       await _readerLocation(container, prepared.id);
     });
   } on WorkspaceException catch (error) {

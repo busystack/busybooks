@@ -1149,7 +1149,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Öffnen Sie die Leseansicht, um das Buch zu durchsuchen oder Seitenvorschauen zu laden.';
 
   @override
-  String get enterSearch => 'Suchbegriff eingeben';
+  String get enterSearch => 'Text für die Suche eingeben.';
 
   @override
   String get noResults => 'Keine Ergebnisse';
@@ -1247,4 +1247,58 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get regionPreviewLoading => 'Bereichsvorschau wird geladen';
+
+  @override
+  String get searchBooks => 'Bücher durchsuchen';
+
+  @override
+  String get searchRecent => 'Zuletzt geöffnet durchsuchen';
+
+  @override
+  String get searchBookmarks => 'Lesezeichen durchsuchen';
+
+  @override
+  String get searchChapters => 'Kapitel durchsuchen';
+
+  @override
+  String get searchBookText => 'Buchtext durchsuchen';
+
+  @override
+  String get thisBook => 'Dieses Buch';
+
+  @override
+  String get currentCollection => 'Aktuelle Sammlung';
+
+  @override
+  String get allSavedBooks => 'Alle gespeicherten Bücher';
+
+  @override
+  String get searchScope => 'Suchbereich';
+
+  @override
+  String get showMoreResults => 'Weitere Ergebnisse anzeigen';
+
+  @override
+  String get searchUnavailable => 'Suchquelle ist nicht verfügbar';
+
+  @override
+  String get searchIncomplete => 'Ergebnisse sind unvollständig';
+
+  @override
+  String get searchDisabled => 'In diesem Kontext nicht verfügbar';
+
+  @override
+  String get searchContext => 'Suche:';
+
+  @override
+  String searchLoadedResults(int count) {
+    return '$count Ergebnisse angezeigt';
+  }
+
+  @override
+  String get searchMoreAvailable => 'Weitere Ergebnisse sind verfügbar.';
+
+  @override
+  String get searchEarlierResults =>
+      'Frühere Ergebnisse liegen außerhalb dieses Bereichs. Erneut suchen, um zum Anfang zurückzukehren.';
 }

@@ -71,7 +71,7 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
   Widget build(BuildContext context) {
     final state = ref.watch(readerControllerProvider),
         sidebar = ref.watch(bookSidebarProvider(widget.bookId)),
-        search = ref.watch(bookSearchProvider(widget.bookId)),
+        search = ref.watch(bookSearchSessionProvider),
         book = ref.watch(workspaceControllerProvider).bookById(widget.bookId),
         l = context.l10n;
     final registry =
@@ -119,9 +119,7 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
                 selected: sidebar.open || search.active,
                 onPressed: () => runAppAction(context, () async {
                   if (search.active) {
-                    ref
-                        .read(bookSearchProvider(widget.bookId).notifier)
-                        .close();
+                    ref.read(bookSearchSessionProvider.notifier).close();
                   } else {
                     await ref
                         .read(bookSidebarProvider(widget.bookId).notifier)
@@ -178,10 +176,7 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
             ],
           ),
           title: search.active
-              ? BookSearchHeaderField(
-                  bookId: widget.bookId,
-                  tooltipPositionDelegate: tooltipPosition,
-                )
+              ? BookSearchHeaderField(tooltipPositionDelegate: tooltipPosition)
               : BusyBooksLinuxHeaderTitle(
                   reading
                       ? book?.title ?? l.reader
@@ -239,20 +234,8 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
                 icon: BusyBooksGlyphs.search,
                 selected: search.active,
                 onPressed: () => ref
-                    .read(bookSearchProvider(widget.bookId).notifier)
-                    .toggle(
-                      category:
-                          reading &&
-                              ref
-                                  .read(
-                                    bookSearchProvider(widget.bookId).notifier,
-                                  )
-                                  .categories
-                                  .contains(BookSearchCategory.bookText)
-                          ? BookSearchCategory.bookText
-                          : BookSearchCategory.notebook,
-                      actions: bookSearchActions(context, registry),
-                    ),
+                    .read(bookSearchSessionProvider.notifier)
+                    .toggle(actions: bookSearchActions(context, registry)),
               ),
               BusyBooksMainMenuButton(bookViewSelectorVisible: selector),
             ],

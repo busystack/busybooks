@@ -4,19 +4,16 @@ import '../domain/book.dart';
 
 class CollectionViewState {
   const CollectionViewState({
-    this.query = '',
     this.filter = 'all',
     this.selectedBook,
     this.scrollOffset = 0,
-    this.focusRequest = 0,
     this.sort = 'added',
     this.sidebarOpen = false,
   });
-  final String query, filter, sort;
+  final String filter, sort;
   final bool sidebarOpen;
   final String? selectedBook;
   final double scrollOffset;
-  final int focusRequest;
 }
 
 /// Presentation session state belongs to a collection ID, never to the
@@ -27,22 +24,18 @@ class CollectionViewController extends Notifier<CollectionViewState> {
   @override
   CollectionViewState build() => const CollectionViewState();
   void update({
-    String? query,
     String? filter,
     String? sort,
     String? selectedBook,
     double? scrollOffset,
-    bool focus = false,
     bool? sidebarOpen,
   }) {
     state = CollectionViewState(
-      query: query ?? state.query,
       sidebarOpen: sidebarOpen ?? state.sidebarOpen,
       filter: filter ?? state.filter,
       sort: sort ?? state.sort,
       selectedBook: selectedBook ?? state.selectedBook,
       scrollOffset: scrollOffset ?? state.scrollOffset,
-      focusRequest: state.focusRequest + (focus ? 1 : 0),
     );
   }
 }
