@@ -752,14 +752,19 @@ async function styleFootnote(dialog){
     if(typography.fontFamily)applyFontFamily(dialog.querySelector('article'),appearance.publisher?null:font.family)
     return true
 }
+function resolvedPageColor(p){return p.color==='system'?(p.systemDark?'dark':'light'):p.color}
+function pageTint(p,invert=true){
+    const color=resolvedPageColor(p)
+    return invert&&color==='dark'?'invert(1) hue-rotate(180deg)':color==='sepia'?'sepia(.3)':'none'
+}
 function css(p) {
-    const dark=p.color==='dark'||p.color==='system'&&p.systemDark
-    const bg=dark?'#202124':p.color==='sepia'?'#f4ecd8':'#ffffff', fg=dark?'#eeeeec':'#242424'
-    // Canvas follows the resolved application surface; publication artwork is
-    // never inverted in response to application theme changes.
+    const color=resolvedPageColor(p),dark=color==='dark'
+    const bg=dark?'#202124':color==='sepia'?'#f4ecd8':'#ffffff', fg=dark?'#eeeeec':'#242424'
+    // PDF canvases and fixed pages share the effective page color. Reflowable
+    // documents receive background/text CSS instead; comics keep their colors.
     document.body.style.setProperty('--book-bg',bg);document.body.style.setProperty('--book-foreground',fg)
     document.body.style.setProperty('--page-bg','#ffffff')
-    document.body.style.setProperty('--page-tint',p.color==='dark'?'invert(1) hue-rotate(180deg)':p.color==='sepia'?'sepia(.3)':'none')
+    document.body.style.setProperty('--page-tint',pageTint(p))
     // Foliate installs these styles before emitting section load. Family is
     // applied only through controlled properties AFTER specialist capture, so
     // the load handler always measures the publication's original families.
@@ -791,7 +796,7 @@ async function applyAppearance(p,restoring=null){
                 if(!current())return false
             }
             const r=view.renderer
-            view.style.setProperty('--page-tint',isComic()?'none':p.color==='dark'?'invert(1) hue-rotate(180deg)':p.color==='sepia'?'sepia(.3)':'none')
+            view.style.setProperty('--page-tint',isComic()?'none':pageTint(prefs,view.isFixedLayout))
             r.setAttribute('gap',`${Math.min(30,((p.margin??32)*2/Math.max(1,content.clientWidth))*100)}%`);r.setAttribute('flow',p.flow??'paginated');r.setAttribute('margin',`${p.margin??32}px`)
             r.setAttribute('max-inline-size',`${p.width??720}px`);r.setAttribute('max-column-count',p.spread?'2':'1')
             r.setAttribute('zoom',p.zoom??'fit-page')
@@ -831,7 +836,7 @@ async function applyAppearance(p,restoring=null){
                 pinnedTypographyLocation={view,anchor:work.anchor,progress:original.progress}
                 typographyWork.finish(work);reportLocation(settled)
             }
-        }else if(pdf){css(prefs);await relayoutPdf(work.anchor);if(!current())return false}
+        }else if(pdf){css(prefs);await relayoutPdf(work.anchor,true);if(!current())return false}
         return true
     }finally{typographyWork.finish(work)}
 }

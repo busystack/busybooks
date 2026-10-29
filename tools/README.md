@@ -18,6 +18,7 @@ procedures, rather than individual executions.
 | `format_probe.dart` | Format preparation, original-byte export, locators, cache deletion/restart and data-only backup |
 | `format_resources_probe.dart` | Resource ownership and active-decoder cancellation |
 | `reader_logic_probe.mjs` | CFI, network policy, geometry and controlled adapter regressions |
+| `reader_appearance_probe.mjs` | Production appearance dispatch/CSS, effective page tint, app/System overrides, retained state and selection-preserving PDF layout; included in `reader_logic_probe.mjs` |
 | `reader_focus_probe.mjs` | Application focus protocol and resize/selection ownership with fresh controlled interfaces; also imported by `reader_logic_probe.mjs` |
 | `pdf_selection_probe.mjs` | Logical PDF endpoint/direction, ownership and cancellation regressions using application-owned DOM fixtures; included in `reader_logic_probe.mjs` |
 | `qualify_rar.py DECODER` | Exact decoded RAR4/5 fixture bytes and corrupt/encrypted/multipart/path rejection |
@@ -26,7 +27,7 @@ procedures, rather than individual executions.
 Run Dart tools with `dart run tools/NAME.dart`, Python tools with `python3 tools/NAME.py`, and the JavaScript entry with `node tools/reader_logic_probe.mjs`.
 The JavaScript entry imports `fixed_layout_probe.mjs`, `reader_startup_probe.mjs`,
 `reader_defects_probe.mjs`, `reader_review_regressions.mjs`,
-`reader_sidebar_probe.mjs`, `typography_probe.mjs`,
+`reader_sidebar_probe.mjs`, `typography_probe.mjs`, `reader_appearance_probe.mjs`,
 `comic_interaction_probe.mjs`, `literal_search_probe.mjs`,
 `epub_integration_probe.mjs`, `reader_focus_probe.mjs` and `pdf_selection_probe.mjs`. These execute actual
 adapter/renderer logic with controlled APIs; they do not establish native layout,
@@ -88,6 +89,15 @@ provide its WebSocket API (use `--experimental-websocket` when required).
 `BUSYBOOKS_CHROMIUM_BIN` selects Chrome; `BUSYBOOKS_DART_BIN` selects Dart.
 `BUSYBOOKS_REVIEW_PROOF` selects an alternate proof such as
 `review_native_proof.js` or `hardening_native_proof.js`.
+`theme_native_proof.js` checks the actual computed PDF canvas filter, fixed-page
+tint and reflowable document colors across explicit colors, resolved application
+overrides and live System changes; comics retain their artwork colors. It uses
+the same native/Chromium harness. With the native harness's saved-input JSON
+`{"themeSelection":true}`, run only the owned `text.pdf` fixture to additionally
+check PDF selection endpoints, source boxes, annotations, deliberate clearing
+and absence of a new selection popup across theme updates. Desktop-to-Flutter
+brightness propagation, saved preferences and installed-app restart behavior
+still require full application acceptance.
 `BUSYBOOKS_REVIEW_ANNOTATIONS` supplies saved annotations where applicable.
 `BUSYBOOKS_REVIEW_REMOVE_RESOURCE` removes one exact resource-map key only from
 the probe's disposable prepared index. Pair it with
@@ -179,8 +189,16 @@ failure/restore work. Optional nested-Wayland inputs are exposed in `--help`.
 --xdotool PATH` runs guarded closes under GDB on an explicitly isolated display.
 It needs GDB, xdotool and a window manager, and refuses an existing matching app.
 Optional `--book`, `--seed-profile`, `--switch-book-views` and `--cycles` select
-inputs. Each close produces a GDB log; `outcomes.json` records normal/aborted
-exits. It stops on failure without suppressing a crash. See the unresolved
+inputs. `--reader-popover` requires `--book`, opens Go To, waits for its existing
+native presentation acknowledgment and dismisses it before close. BusyBooks
+Welcome is left idle by default: Tab/Return opens a file chooser there and can
+make a subsequent Alt+F4 close only that chooser. Use
+`--exercise-template-button` only for the untouched Flutter counter comparison.
+Each close produces a GDB log; `outcomes.json` records normal/aborted/segmentation
+fault exits and driver errors. It stops on failure without suppressing a crash.
+A bounded failed-diagnostic cleanup cannot count as successful application close.
+Keep the private D-Bus session, runtime/config directories and settings backend
+isolated from the real desktop. See the unresolved
 [Linux shutdown issue](../docs/development/known-issues.md#intermittent-linux-shutdown-abort).
 
 ## Memory and performance diagnostics

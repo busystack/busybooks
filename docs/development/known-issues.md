@@ -8,6 +8,21 @@ the BusyBooks baseline before workspace remediation and after it. The applicatio
 releases native reader/popover ownership before GTK destroys the main view; the
 compositor abort remains unresolved.
 
+The October 2026 followup reproduced the abort on ordinary release-window close
+from Welcome without an open book or secondary engine. Deeper GDB stacks showed
+GTK child destruction reaching `FlViewRenderer` finalization and
+`FlCompositorOpenGL` disposal while the compositor mutex was still in use. A
+separate baseline run also stopped at a Flutter idle callback with `SIGSEGV`
+after GLib reported a reference to an already-finalized object. Debug-only clean
+closes do not qualify the intermittent release failure.
+
+Application-owned retention/close sequencing candidates were tested and rejected:
+retaining children through view retirement could avoid a sampled abort, but an
+independent engine-shutdown hold exposed an engine reference that did not drain.
+Allowing a zero exit while retained objects remain is not cleanup verification;
+no such candidate or forced engine disposal is shipped. The remaining reference
+owner and safe teardown ordering still need diagnosis.
+
 The stack points into Flutter's teardown, but definitive attribution to Flutter
 alone, rather than its interaction with BusyBooks, has not been established.
 Untouched Flutter counter and independent two-view controls did not reproduce
@@ -19,6 +34,17 @@ demonstrate data corruption; they do not establish durability for every crash or
 successful clean shutdown. Release decisions must account for the abnormal exit.
 The pinned SDK and normal shutdown behavior remain unchanged. Reproduction uses
 [the guarded-close driver](../../tools/README.md#linux-workspace-and-shutdown-diagnostics).
+
+## Intermittent focus-test transition timeout
+
+The serial widget suite can time out in `reader_workspace_test.dart`'s
+"native focus mirroring repairs confirmed loss once and rejects a later Notebook
+handoff" case while waiting for its second native-focus query. The unchanged
+case passed alone, with its neighboring focus cases, and after the preceding
+workspace cases; the failed transition's state and cause remain unidentified.
+No focus behavior, assertion or deadline was changed to hide that failure.
+A targeted pass or an earlier complete suite does not replace the failed final
+suite in release qualification.
 
 ## Distribution and desktop coverage
 

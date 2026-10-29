@@ -3076,6 +3076,12 @@ class ReaderController extends Notifier<ReaderState> {
     Map<String, dynamic> value, {
     TypographyCapabilities? capabilities,
   }) async {
+    final diagnose =
+        const bool.fromEnvironment('BUSYBOOKS_READER_DIAGNOSTICS') ||
+        Platform.environment['BUSYBOOKS_READER_DIAGNOSTICS'] == '1';
+    final mode = diagnose
+        ? ref.read(appSettingsControllerProvider).themeMode.name
+        : null;
     final choice = FontChoice.parse(value['font']) ?? FontChoice.serif;
     final resolved = value['publisher'] == true
         ? null
@@ -3098,6 +3104,14 @@ class ReaderController extends Notifier<ReaderState> {
           effective.remove(key);
         }
       }
+    }
+    if (diagnose) {
+      debugPrint(
+        'reader-theme applicationTheme=$mode '
+        'resolvedBrightness=${_chrome['dark'] == true ? 'dark' : 'light'} '
+        'chromeDark=${_chrome['dark']} color=${effective['color']} '
+        'systemDark=${effective['systemDark']}',
+      );
     }
     return effective;
   }

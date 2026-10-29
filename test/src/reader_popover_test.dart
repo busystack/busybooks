@@ -33,6 +33,25 @@ Future<void> _update(
   if (settle) await tester.pumpAndSettle();
 }
 
+Future<Object?> _nativeCall(
+  WidgetTester tester,
+  String method,
+  Map<String, dynamic> arguments,
+) async {
+  final reply = Completer<Object?>();
+  ServicesBinding.instance.channelBuffers.push(
+    readerPopoverChannel.name,
+    readerPopoverChannel.codec.encodeMethodCall(MethodCall(method, arguments)),
+    (data) => reply.complete(
+      data == null ? null : readerPopoverChannel.codec.decodeEnvelope(data),
+    ),
+  );
+  await tester.pump();
+  final result = await reply.future;
+  await tester.pumpAndSettle();
+  return result;
+}
+
 Future<void> _lookupResult(
   WidgetTester tester,
   Map<String, dynamic> result,
@@ -88,6 +107,156 @@ void main() {
   tearDown(
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(readerPopoverChannel, null),
+  );
+  testWidgets(
+    'hidden reader controls leave semantics and focus while rejecting queued actions',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await tester.pumpWidget(const ReaderPopoverApp());
+        final payload = <String, dynamic>{
+          'kind': 'goto',
+          'pdf': true,
+          'pages': 5,
+          'labels': ['i', 'ii', '1', '2', '3'],
+          'toc': [],
+          'location': {
+            'anchor': {'page': 0},
+          },
+        };
+        await _update(tester, payload);
+        await tester.enterText(find.byType(TextField), '2');
+        await tester.pumpAndSettle();
+        final field = tester.widget<EditableText>(find.byType(EditableText));
+        final staleGo = tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Go'))
+            .onPressed!;
+        expect(find.semantics.byLabel('Go').evaluate(), hasLength(1));
+        expect(field.focusNode.hasPrimaryFocus, isTrue);
+        await _nativeCall(tester, 'hidden', {
+          'session': '1',
+          'presentation': 99,
+        });
+        expect(find.semantics.byLabel('Go').evaluate(), hasLength(1));
+        expect(field.focusNode.hasPrimaryFocus, isTrue);
+        await _nativeCall(tester, 'hidden', {
+          'session': '1',
+          'presentation': 1,
+        });
+        expect(find.semantics.byLabel('Go').evaluate(), isEmpty);
+        expect(
+          find.semantics
+              .byPredicate((node) => node.flagsCollection.isTextField)
+              .evaluate(),
+          isEmpty,
+        );
+        expect(field.focusNode.hasPrimaryFocus, isFalse);
+        expect(field.focusNode.canRequestFocus, isFalse);
+        staleGo();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(actions, isEmpty);
+        await _update(tester, {...payload, 'presentation': 2});
+        expect(find.semantics.byLabel('Go').evaluate(), hasLength(1));
+        final current = tester.widget<EditableText>(find.byType(EditableText));
+        expect(current.focusNode.hasPrimaryFocus, isTrue);
+        await tester.enterText(find.byType(TextField), '3');
+        await tester.tap(find.text('Go'));
+        await tester.pumpAndSettle();
+        expect(actions.single['presentation'], 2);
+        expect(actions.single['anchor'], {'page': 2});
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+  testWidgets(
+    'hidden note editor retains its controller and uncaptured draft for sealed handoff',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await tester.pumpWidget(const ReaderPopoverApp());
+        await _update(tester, {
+          'kind': 'selection',
+          'editing': true,
+          'color': 'blue',
+          'note': 'original note',
+        });
+        await tester.enterText(find.byType(TextField), 'uncaptured draft');
+        await tester.pumpAndSettle();
+        final field = tester.widget<EditableText>(find.byType(EditableText));
+        final controller = field.controller;
+        final formatter = tester
+            .widget<TextField>(find.byType(TextField))
+            .inputFormatters!
+            .first;
+        expect(actions.single['action'], 'noteDraft');
+        await _nativeCall(tester, 'hidden', {
+          'session': '1',
+          'presentation': 1,
+        });
+        expect(
+          find.semantics
+              .byPredicate((node) => node.flagsCollection.isTextField)
+              .evaluate(),
+          isEmpty,
+        );
+        expect(field.focusNode.hasPrimaryFocus, isFalse);
+        expect(
+          tester.widget<EditableText>(find.byType(EditableText)).controller,
+          same(controller),
+        );
+        expect(controller.text, 'uncaptured draft');
+        const accepted = TextEditingValue(text: 'uncaptured draft');
+        expect(
+          formatter.formatEditUpdate(
+            accepted,
+            const TextEditingValue(text: 'late hidden input'),
+          ),
+          accepted,
+        );
+        final captured =
+            await _nativeCall(tester, 'capture', {
+                  'session': '1',
+                  'presentation': 1,
+                  'seal': true,
+                })
+                as Map;
+        expect(captured['session'], '1');
+        expect(captured['presentation'], 1);
+        expect(captured['note'], 'uncaptured draft');
+        expect(captured['color'], 'blue');
+        expect(captured['revision'], greaterThan(0));
+        expect(controller.text, 'uncaptured draft');
+        expect(find.semantics.byLabel('Save').evaluate(), isEmpty);
+        await _update(tester, {
+          'kind': 'selection',
+          'editing': true,
+          'color': captured['color'],
+          'note': captured['note'],
+          'presentation': 2,
+        });
+        expect(find.semantics.byLabel('Save').evaluate(), hasLength(1));
+        expect(
+          tester
+              .widget<EditableText>(find.byType(EditableText))
+              .controller
+              .text,
+          'uncaptured draft',
+        );
+        expect(
+          tester
+              .widget<EditableText>(find.byType(EditableText))
+              .focusNode
+              .hasPrimaryFocus,
+          isTrue,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
+      }
+    },
   );
   testWidgets('selection accepts Escape before any control gains focus', (
     tester,

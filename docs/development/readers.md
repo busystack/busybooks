@@ -31,6 +31,19 @@ adapter tests, native engine probes and full application acceptance have
 different scopes; see [development tools](../../tools/README.md) and
 [known issues](known-issues.md).
 
+Reader Page Color **System** retains its saved value and follows the resolved
+application brightness supplied as `systemDark`. Application System follows the
+desktop; an explicit application Light or Dark override remains authoritative.
+PDF canvases and non-comic fixed pages resolve that same effective color for
+their page filter as for their surrounding background. Reflowable content uses
+dark background/text CSS without a second inversion; its existing sepia
+treatment remains available. Comic artwork always keeps `--page-tint: none`.
+Live application-theme changes use the existing appearance transaction and
+retain the current publication anchor, selection intent and annotations. PDF
+appearance relayout uses the same owned logical-selection capture/restore as
+viewport resizing; it neither reopens the selection popup nor revives a range
+the user deliberately cleared.
+
 ## Supported inputs
 
 | Input | Reader and durable identity |

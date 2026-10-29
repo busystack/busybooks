@@ -8097,13 +8097,21 @@ void main() {
         );
         expect(find.textContaining('Saving is still pending'), findsNothing);
         await tester.enterText(find.byType(TextField), 'Replacement latest');
-        // Simulate an already queued callback from the old field. Its bound
-        // presentation must remain stale even though the app has new data.
+        await tester.pump();
+        final deliveriesBeforeStaleInput = delivered.length;
+        final currentDraft = Map.of(delivered.last);
+        expect(currentDraft['action'], 'noteDraft');
+        expect(currentDraft['presentation'], replacement['presentation']);
+        expect(currentDraft['note'], 'Replacement latest');
+        // The retired field must reject an already queued callback before it
+        // reaches the channel, retaining the replacement owner's latest draft.
         staleChanged('Obsolete old input');
         await tester.pump();
+        expect(delivered, hasLength(deliveriesBeforeStaleInput));
+        expect(delivered.last, currentDraft);
         expect(
-          delivered.last['presentation'],
-          isNot(replacement['presentation']),
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'Replacement latest',
         );
         final dismissals = f.calls
             .where((c) => c.method == 'dismissPopover')

@@ -84,6 +84,7 @@ class ReaderPopoverApp extends StatefulWidget {
 
 class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
   Map<String, dynamic>? data;
+  bool _visible = false;
   final _menuService = _ReaderPopoverMenuService();
   int _serial = 0;
   final _pending = <int, Completer<void>>{};
@@ -126,6 +127,9 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
         if (owner['session'] == data?['session'] &&
             owner['presentation'] == data?['presentation']) {
           _menuService.invalidate();
+          // Keep note controllers and delivery state available for capture,
+          // while retiring the hidden surface's accessibility/input ownership.
+          if (mounted) setState(() => _visible = false);
         }
         return null;
       }
@@ -261,7 +265,10 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
             next['presentation'] != data?['presentation']) {
           _menuService.invalidate();
         }
-        setState(() => data = next);
+        setState(() {
+          data = next;
+          _visible = true;
+        });
         _menuService.activate();
         _pruneFinishedPresentations();
       }
@@ -275,6 +282,7 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
 
   void _painted(_PopoverOwner owner, Size size) {
     if (!mounted ||
+        !_visible ||
         owner !=
             (session: data?['session'], presentation: data?['presentation']) ||
         _failedPresentations.contains(owner) ||
@@ -317,6 +325,7 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
 
   @override
   void dispose() {
+    _visible = false;
     _menuService.invalidate();
     readerPopoverChannel.setMethodCallHandler(null);
     if (identical(ErrorWidget.builder, _errorBuilder)) {
@@ -374,6 +383,11 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
       session: args['session'] ?? data?['session'],
       presentation: args['presentation'] ?? data?['presentation'],
     );
+    if (!_visible ||
+        owner !=
+            (session: data?['session'], presentation: data?['presentation'])) {
+      return;
+    }
     final savesNote = _savesNote(name);
     if (savesNote &&
         (_saving.containsValue(owner) || _transferring.contains(owner))) {
@@ -493,35 +507,54 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
               // The Navigator's route scope is above these Shortcuts. A
               // noneditable popup needs its own default keyboard target below
               // them; editor/button autofocus still chooses a child normally.
-              child: FocusScope(
-                key: ValueKey(owner),
-                autofocus: d != null && !_failedPresentations.contains(owner),
-                skipTraversal: true,
-                child: Material(
-                  color: BusyBooksSurfaceColors.of(context).popover,
-                  child: d == null || _failedPresentations.contains(owner)
-                      ? const SizedBox.shrink()
-                      : Align(
-                          alignment: Alignment.topLeft,
-                          child: _PopoverContents(
-                            onPainted: (size) => _painted(owner, size),
-                            key: ValueKey(owner),
-                            data: d,
-                            action: send,
-                            isSaving: () =>
-                                _saving.containsValue(owner) ||
-                                _transferring.contains(owner),
-                            unconfirmed: _saving.entries.any(
-                              (e) =>
-                                  e.value == owner &&
-                                  _unconfirmed.contains(e.key),
-                            ),
-                            saveError: _saveFailure?.owner == owner
-                                ? _saveFailure?.error
-                                : null,
-                            deliveryRejected: _rejected.contains(owner),
-                          ),
-                        ),
+              child: ExcludeSemantics(
+                excluding: !_visible,
+                child: ExcludeFocus(
+                  excluding: !_visible,
+                  child: IgnorePointer(
+                    ignoring: !_visible,
+                    child: FocusScope(
+                      key: ValueKey(owner),
+                      canRequestFocus: _visible,
+                      autofocus:
+                          _visible &&
+                          d != null &&
+                          !_failedPresentations.contains(owner),
+                      skipTraversal: true,
+                      child: Material(
+                        color: BusyBooksSurfaceColors.of(context).popover,
+                        child: d == null || _failedPresentations.contains(owner)
+                            ? const SizedBox.shrink()
+                            : Align(
+                                alignment: Alignment.topLeft,
+                                child: _PopoverContents(
+                                  onPainted: (size) => _painted(owner, size),
+                                  key: ValueKey(owner),
+                                  data: d,
+                                  action: send,
+                                  isSaving: () =>
+                                      !_visible ||
+                                      owner !=
+                                          (
+                                            session: data?['session'],
+                                            presentation: data?['presentation'],
+                                          ) ||
+                                      _saving.containsValue(owner) ||
+                                      _transferring.contains(owner),
+                                  unconfirmed: _saving.entries.any(
+                                    (e) =>
+                                        e.value == owner &&
+                                        _unconfirmed.contains(e.key),
+                                  ),
+                                  saveError: _saveFailure?.owner == owner
+                                      ? _saveFailure?.error
+                                      : null,
+                                  deliveryRejected: _rejected.contains(owner),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
