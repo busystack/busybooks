@@ -17,9 +17,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reader => 'Reader';
 
   @override
-  String get continueReading => 'Continue Reading';
-
-  @override
   String get allBooks => 'All Books';
 
   @override
@@ -141,9 +138,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sort => 'Sort';
-
-  @override
-  String get noMatches => 'No matching books';
 
   @override
   String get general => 'General';
@@ -285,13 +279,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'This PDF page has no text layer. Reading and page bookmarks are available; text selection, dictionary and search require text.';
 
   @override
-  String get searchPlaceholder => 'Search the whole book';
-
-  @override
   String get searching => 'Searching';
-
-  @override
-  String get noSearchResults => 'No results';
 
   @override
   String get note => 'Note';
@@ -312,17 +300,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pink => 'Pink';
 
   @override
-  String get copyText => 'Copy Selected Text';
-
-  @override
   String get selectText =>
       'Select text in the book to highlight, copy or look up a word.';
 
   @override
   String get noAnnotations => 'No annotations yet';
-
-  @override
-  String get openPassage => 'Open Passage';
 
   @override
   String get play => 'Play';
@@ -341,9 +323,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get speed => 'Speed';
-
-  @override
-  String get spokenPassage => 'Spoken passage';
 
   @override
   String get dictionarySource =>
@@ -412,13 +391,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reducedMotion => 'Follow system reduced motion';
 
   @override
-  String get readingState => 'Reading state';
-
-  @override
-  String get notAvailable =>
-      'No resource is available. Install a language resource and try again.';
-
-  @override
   String get speechUnavailable =>
       'Read-aloud could not start. Check the installed speech service and language voices.';
 
@@ -448,14 +420,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Settings could not be loaded. The original settings file has been preserved.';
 
   @override
-  String get restoreRestart =>
-      'Restored appearance preferences are applied immediately.';
-
-  @override
-  String get annotationsExportHelp =>
-      'Export notes and highlighted passages as readable Markdown.';
-
-  @override
   String get countBooks => 'Books';
 
   @override
@@ -469,20 +433,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Only DRM-free EPUB 2/3, PDF, FB2 (.fb2, .fb2.zip, .fbz), CBZ and CBR are supported.';
 
   @override
-  String get goToHelp =>
-      'Enter an EPUB CFI, chapter number, PDF page label or page number.';
-
-  @override
   String get source => 'Source';
-
-  @override
-  String get defaultVoice => 'System default';
-
-  @override
-  String get useSelection => 'From selection or current passage';
-
-  @override
-  String get version => 'Version';
 
   @override
   String get noSpeechText =>
@@ -593,23 +544,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openChangedBook => 'Open Changed Book';
 
   @override
-  String get invalidCollectionName =>
-      'Choose a collection name without path separators.';
-
-  @override
   String get sidebar => 'Sidebar';
 
   @override
   String get books => 'Books';
-
-  @override
-  String get searchResults => 'Search Results';
-
-  @override
-  String get searchHint => 'Enter words to find a passage.';
-
-  @override
-  String get searchCancelled => 'Search cancelled.';
 
   @override
   String get searchFailed => 'Search failed. Try again.';
@@ -678,10 +616,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pageNumberHelp => 'Use the physical page number, starting at 1.';
 
   @override
-  String get pageLabelHelp =>
-      'Use a supplied label, such as iv. Labels may differ from page numbers.';
-
-  @override
   String get invalidPage =>
       'Enter a physical page in range or an exact printed label. Use = for a numeric label.';
 
@@ -704,10 +638,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get speechOptions => 'Voice and Speed';
 
   @override
-  String get dictionaryExternal =>
-      'Definitions from English Wiktionary appear inside the reader and require a connection. Open Full Entry opens the source in your browser.';
-
-  @override
   String get annotation => 'Annotation';
 
   @override
@@ -724,9 +654,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pdfDefaults => 'PDF Defaults';
-
-  @override
-  String get epubDefaults => 'EPUB Defaults';
 
   @override
   String get footnote => 'Footnote';
@@ -758,9 +685,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get viewMode => 'View';
 
   @override
-  String get allItems => 'All';
-
-  @override
   String get highlights => 'Highlights';
 
   @override
@@ -771,14 +695,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get searchNotebook => 'Search in Notebook';
-
-  @override
-  String get notebookSearchScope =>
-      'Saved passages and private notes in this book';
-
-  @override
-  String get notebookEmpty =>
-      'No saved items match. Highlights and bookmarks saved while reading appear here.';
 
   @override
   String get missingBookNotebook =>
@@ -890,10 +806,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Reading data was restored. Preferences could not be applied; they will be retried at the next start.';
 
   @override
-  String get noteActionFailed =>
-      'This action could not be completed. Your note draft is retained. Try again or save the note.';
-
-  @override
   String get backToCollection => 'Back to Collection';
 
   @override
@@ -935,9 +847,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get thumbnailFailed => 'Page preview could not be loaded.';
 
   @override
-  String get openInNotebook => 'Open in Notebook';
-
-  @override
   String get loadingOutline => 'Loading outline…';
 
   @override
@@ -952,9 +861,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get navigation => 'Navigation';
-
-  @override
-  String get readingAssistance => 'Reading Assistance';
 
   @override
   String get annotationActions => 'Annotation Actions';

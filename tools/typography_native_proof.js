@@ -19,6 +19,7 @@
         const observer=new MutationObserver(()=>{const el=document.querySelector(selector);if(el){observer.disconnect();clearTimeout(timer);resolve(el)}})
         observer.observe(document.body,{childList:true,subtree:true});const timer=setTimeout(()=>{observer.disconnect();reject(Error('Missing '+selector))},10000)
     })
+    await doc().fonts.load('24px '+family())
     const publicationFamily=family(),publicationPixels=pixels(publicationFamily)
     const initialHistory=[view.history.canGoBack,view.history.canGoForward]
     const firstDoc=doc(),range=firstDoc.createRange();range.selectNodeContents(firstDoc.querySelector('#p8'));range.collapse(true)

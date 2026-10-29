@@ -186,15 +186,21 @@ flutter build linux --release --no-pub
 ```
 
 The typography probe creates an isolated temporary Fontconfig collection from
-existing licensed Noto and Liberation resources. It creates a renamed OFL
-punctuation/Unicode family and a publication whose embedded serif face claims an
-installed sans-family name. Required notices accompany those disposable files;
-they never enter the release bundle. It executes actual Pango preview generation,
+existing licensed Noto and Liberation resources and the official `fonts-lato`
+package's real weight/style faces. `BUSYBOOKS_LATO_ROOT` may point to an extracted
+package's `usr/share`; no installation is needed. All copied and embedded font
+bytes remain identical to their inputs. Publication CSS aliases exercise
+punctuation/Unicode and an embedded serif face under an installed sans-family
+name without changing font metadata. Required notices accompany those disposable
+files; they never enter the release bundle. It executes actual Pango preview generation,
 Foliate/WebKit glyph rendering, emphasis, hierarchy, code exclusion, durable
 passages/history, highlights, selection, search, narration anchors, footnotes,
 chapter direction, rapid updates and publisher restoration. Fixed-layout and PDF
 passes reject replacement and check their page/text content. Deterministic Dart
-fixtures do not depend on a developer's installed collection.
+fixtures do not depend on a developer's installed collection. The punctuation
+alias tests browser CSS serialization and rendering; it does not establish native
+discovery or matching of an available family with punctuation/Unicode in its font
+metadata. That scenario requires a suitable unmodified upstream input.
 
 Windows has a native implementation and a separate stock-desktop backend probe:
 

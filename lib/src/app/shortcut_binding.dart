@@ -123,15 +123,6 @@ class BusyBooksKeyBinding {
         '${shift ? '<Shift>' : ''}${meta ? '<Super>' : ''}$name';
   }
 
-  bool get hasKnownSystemConflict =>
-      meta ||
-      (alt && {LogicalKeyboardKey.tab, LogicalKeyboardKey.f4}.contains(key)) ||
-      (control &&
-          alt &&
-          (key == LogicalKeyboardKey.delete ||
-              key.keyId >= LogicalKeyboardKey.f1.keyId &&
-                  key.keyId <= LogicalKeyboardKey.f12.keyId));
-
   @override
   bool operator ==(Object other) =>
       other is BusyBooksKeyBinding &&
@@ -183,19 +174,3 @@ final _gtkNames = <LogicalKeyboardKey, String>{
   LogicalKeyboardKey.numpadDivide: 'KP_Divide',
   LogicalKeyboardKey.numpadDecimal: 'KP_Decimal',
 };
-
-/// Missing entries use defaults; null entries explicitly unassign a command.
-Map<String, BusyBooksKeyBinding?> readShortcutOverrides(Object? value) {
-  if (value is! Map) return const {};
-  return Map.unmodifiable({
-    for (final entry in value.entries)
-      if (entry.key is String &&
-          RegExp(
-            r'^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)+$',
-          ).hasMatch(entry.key as String))
-        if (entry.value == null)
-          entry.key as String: null
-        else if (BusyBooksKeyBinding.fromJson(entry.value) case final binding?)
-          entry.key as String: binding,
-  });
-}

@@ -31,7 +31,7 @@ function adapter(){
     run(`pdf={numPages:5};pages=Array.from({length:5},()=>({element:{offsetTop:0,offsetLeft:0,offsetHeight:1000,hidden:false},viewport:{convertToPdfPoint:(x,y)=>[x,y],convertToViewportPoint:(x,y)=>[x,y]}}));queuePage=async()=>true`)
     return {events,content,context,document,run}
 }
-await check('F06: an older PDF render cannot commit after a newer destination',async()=>{
+await check('an older PDF render cannot commit after a newer destination',async()=>{
     const {run,events}=adapter()
     run('pending={};queuePage=index=>new Promise(resolve=>pending[index]=resolve);older=gotoPdf({page:1});newer=gotoPdf({page:3})')
     await run('pending[3](true);newer')
@@ -39,7 +39,7 @@ await check('F06: an older PDF render cannot commit after a newer destination',a
     assert.deepEqual(events.filter(x=>x.type==='location').map(x=>x.anchor.page),[3])
     assert.equal(run('location.anchor.page'),3)
 })
-await check('F06: two rapid relative PDF commands advance twice',async()=>{
+await check('two rapid relative PDF commands advance twice',async()=>{
     const {run,events}=adapter()
     run(`activeFormat='pdf';location={anchor:{page:0}};pending={};queuePage=index=>new Promise(resolve=>pending[index]=resolve);first=dispatch({action:'next'});second=dispatch({action:'next'})`)
     await new Promise(setImmediate)
@@ -48,7 +48,7 @@ await check('F06: two rapid relative PDF commands advance twice',async()=>{
     await run('pending[2]?.(true);second')
     assert.deepEqual(events.filter(x=>x.type==='location').map(x=>x.anchor.page),[1,2])
 })
-await check('F04: flush drains comic navigation before its saved snapshot',async()=>{
+await check('flush drains comic navigation before its saved snapshot',async()=>{
     const {run,events}=adapter()
     run(`activeFormat='cbz';pdf=null;view={isFixedLayout:true,book:{format:'cbz',sections:[{pageId:'a'},{pageId:'b'}]},renderer:{getContents:()=>[],getBoundingClientRect:()=>({left:0,top:0})}};fixedLayout=new FixedLayoutIntegration(view,view.book,fixedContents,()=>{});location={anchor:comicAnchor(view.book,0)};gotoEpub=()=>new Promise(resolve=>release=()=>{reportLocation({anchor:comicAnchor(view.book,1)});resolve()});navigation=dispatch({action:'goto',anchor:{page:1}})`)
     await new Promise(setImmediate)
@@ -124,7 +124,7 @@ await check('Reflowable footnote links keep their public View navigation route',
     assert.deepEqual(JSON.parse(run('JSON.stringify(navigated)')),['chapter.xhtml#passage'])
     assert.equal(events.filter(event=>event.type==='navigationJump').length,1)
 })
-await check('F05: comic companion-page pan survives a saved-position round trip',async()=>{
+await check('comic companion-page pan survives a saved-position round trip',async()=>{
     const {run,context,content,events}=adapter()
     let left=2200
     context.parts=[0,1].map(index=>({index,doc:{querySelector:()=>({}),defaultView:{frameElement:{getBoundingClientRect:()=>({left:index*1800-left,top:0,width:1800,height:2400})}}}}))
@@ -149,7 +149,7 @@ await check('Comic fit spreads retain their selected page during capture',async(
         assert(Math.abs(anchor.position[1]-100/height)<.00001)
     }
 })
-await check('F07: PDF anchors retain both viewport axes',async()=>{
+await check('PDF anchors retain both viewport axes',async()=>{
     const {run,content}=adapter()
     content.scrollLeft=450;content.scrollTop=250
     run('saved=pdfAnchor(0,.25)')
@@ -157,14 +157,14 @@ await check('F07: PDF anchors retain both viewport axes',async()=>{
     await run('gotoPdf(saved)')
     assert.equal(content.scrollLeft,450);assert.equal(content.scrollTop,250)
 })
-await check('F08: Previous from physical PDF page 2 reaches the first spread',async()=>{
+await check('Previous from physical PDF page 2 reaches the first spread',async()=>{
     const {run,events}=adapter()
     run(`activeFormat='pdf';prefs={spread:true};location={anchor:{page:1}}`)
     await run(`dispatch({action:'previous'})`)
     assert.equal(events.findLast(x=>x.type==='location')?.anchor.page,0)
     assert.equal(events.some(x=>x.type==='navigationError'),false)
 })
-await check('F02: annotation chunks commit atomically and obsolete transfers cannot repaint',async()=>{
+await check('annotation chunks commit atomically and obsolete transfers cannot repaint',async()=>{
     const {run,context}=adapter()
     run('pdf=null')
     const records=Array.from({length:400},(_,i)=>({id:String(i),text:'漢📘\u0001'.repeat(500),anchor:{page:i}})),encoded=JSON.stringify(records)
@@ -182,7 +182,7 @@ await check('F02: annotation chunks commit atomically and obsolete transfers can
     await run(`dispatch({action:'annotations',revision:4,value:[]})`)
     assert.equal(run('annotations.length'),0)
 })
-await check('F12: opening with zero rendered documents reports failure',async()=>{
+await check('opening with zero rendered documents reports failure',async()=>{
     const {run,context,document,events}=adapter()
     const book={sections:[{}],metadata:{}}
     const publication={isFixedLayout:false,renderer:{getContents:()=>[]},history:{addEventListener(){},canGoBack:false,canGoForward:false},addEventListener(){},open:async()=>{},init:async()=>{}}
@@ -192,7 +192,7 @@ await check('F12: opening with zero rendered documents reports failure',async()=
     assert.equal(events.some(x=>x.type==='opened'),false)
     assert(events.some(x=>x.type==='error'&&x.message.includes('first document')))
 })
-await check('F16: text-search excerpts and ranges span formatting boundaries and exact endpoints',async()=>{
+await check('text-search excerpts and ranges span formatting boundaries and exact endpoints',async()=>{
     const ranges=(strings,query)=>[...literalTextMatches(strings,query,(startIndex,startOffset,endIndex,endOffset)=>({startIndex,startOffset,endIndex,endOffset}))]
     for(const [strs,query] of [
         [['quick ','brown ','fox'],'quick brown fox'],[['same',' and ','same'],'same and same'],[['a','b','c'],'abc'],[['same'],'same'],[['ab','ab'],'aba'],[['','ABC',''],'ABC'],
@@ -212,7 +212,7 @@ await check('F16: text-search excerpts and ranges span formatting boundaries and
     assert.equal(ranges(['abababa'],'aba').length,2)
     assert.deepEqual(ranges(['text'],''),[])
 })
-await check('F20: large Unicode events use bounded native frames and locations omit passage text',async()=>{
+await check('large Unicode events use bounded native frames and locations omit passage text',async()=>{
     const {run,context,events}=adapter()
     const text='📚'.repeat(400000)
     context.largeText=text
@@ -228,7 +228,7 @@ await check('F20: large Unicode events use bounded native frames and locations o
     for(const event of events.filter(e=>e.type==='location'))assert.equal(Object.hasOwn(event,'text'),false)
     assert.equal(events.some(e=>e.type==='bridgeChunk'),false)
 })
-await check('F20: a legacy oversized PDF goto reassembles before rendering and keeps its text length',async()=>{
+await check('a legacy oversized PDF goto reassembles before rendering and keeps its text length',async()=>{
     const {run,context,events}=adapter()
     context.request={action:'goto',session:'review',anchor:{page:1,segments:[{page:1,start:7,text:'📚'.repeat(400000),boxes:[[0,0,10,10]]}]}}
     const encoded=JSON.stringify(context.request)
@@ -246,7 +246,7 @@ await check('F20: a legacy oversized PDF goto reassembles before rendering and k
     await run(`dispatch({action:'bridgeChunk',session:'review',bridgeRevision:2,offset:0,total:5,chunk:'{',complete:false});dispatch({action:'flush'})`)
     assert.equal(events.at(-1).type,'bridgeError')
 })
-await check('F21: unavailable cached resources request recovery even when the loader catches errors',async()=>{
+await check('unavailable cached resources request recovery even when the loader catches errors',async()=>{
     const {run,context,events}=adapter()
     context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:10}):{ok:false}
     context.makeEpubBook=async(index,loader)=>{context.publicationLoader=loader;try{await loader.loadText('chapter.xhtml')}catch{};return {}}
@@ -254,7 +254,7 @@ await check('F21: unavailable cached resources request recovery even when the lo
     await run(`openFoliate({format:'epub'})`)
     assert(events.some(e=>e.type==='error'&&e.cacheFailure===true&&e.message.includes('unavailable')))
 })
-await check('F21: same-length cache corruption after preparation is rejected before document parsing',async()=>{
+await check('same-length cache corruption after preparation is rejected before document parsing',async()=>{
     const {run,context,events}=adapter()
     const original=new TextEncoder().encode('Readable original'),damaged=new TextEncoder().encode('Readable modified')
     assert.equal(original.byteLength,damaged.byteLength)
@@ -266,7 +266,7 @@ await check('F21: same-length cache corruption after preparation is rejected bef
     assert(events.some(e=>e.type==='error'&&e.cacheFailure===true&&e.message.includes('digest')),JSON.stringify(events))
     assert.equal(events.some(e=>e.type==='opened'),false)
 })
-await check('F23: oversized text is rejected before fetching or materializing the resource',async()=>{
+await check('oversized text is rejected before fetching or materializing the resource',async()=>{
     const {run,context,events}=adapter();let requests=0
     context.fetch=async path=>{if(path==='book-index')return indexResponse({file:'abc',size:268435456});requests++;throw Error('Oversized resource must not be fetched')}
     context.makeEpubBook=async(index,loader)=>{context.publicationLoader=loader;await loader.loadText('chapter.xhtml');return {}}
@@ -276,7 +276,7 @@ await check('F23: oversized text is rejected before fetching or materializing th
     assert(events.some(e=>e.type==='error'&&e.message.includes('media limit')))
     assert.equal(events.some(e=>e.type==='opened'),false)
 })
-await check('F23: actual response bytes are bounded even when the descriptor understates size',async()=>{
+await check('actual response bytes are bounded even when the descriptor understates size',async()=>{
     const {run,context,events}=adapter();let cancelled=false
     context.fetch=async path=>path==='book-index'?indexResponse({file:'abc',size:10}):{ok:true,body:new ReadableStream({start(controller){controller.enqueue(new Uint8Array(65536))},cancel(){cancelled=true}})}
     context.makeEpubBook=async(index,loader)=>{context.publicationLoader=loader;await loader.loadText('chapter.xhtml');return {}}

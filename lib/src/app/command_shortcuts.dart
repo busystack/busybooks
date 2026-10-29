@@ -63,8 +63,7 @@ class _CommandShortcutManager extends ShortcutManager {
     shortcuts = bindings;
     _commandKeys.clear();
     for (final entry in bindings.entries) {
-      if (entry.value is! BusyBooksContextCommandIntent &&
-          entry.value is! BusyBooksCommandIntent) {
+      if (entry.value is! BusyBooksCommandIntent) {
         continue;
       }
       for (final key in entry.key.triggers ?? <LogicalKeyboardKey>[]) {

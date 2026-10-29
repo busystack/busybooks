@@ -419,8 +419,8 @@ artwork. This adds no persistence domain or backup field.
 ## Selected-text actions
 
 The selection popover includes Search in This Book and Look Up. Search captures
-the entire trimmed passage (including Unicode and footnote selections), opens
-the shared header field and temporary Book Text search session, and starts an
+the entire passage, preserving literal whitespace, Unicode and footnote
+selections. It opens the shared header field and temporary Book Text search session, and starts an
 owned immediate engine search. Repeating it starts a new query revision without
 advancing a result. The publication stays at its passage until a result or result
 navigation command is chosen; Back/Forward and Return keep their existing engine
@@ -455,8 +455,7 @@ GTK transient-view construction clears the owning view's current GDK GL context
 before creating the pinned Flutter engine and before explicit realization; this
 avoids the reproduced blank compositor surface without changing the SDK or host.
 A hide notification preceding failed presentation still preserves primary Retry
-feedback. [The selection/lookup contract](readers.md#selection-search-and-online-lookup)
-and [known issues](known-issues.md) describe service limits and remaining
+feedback. [Known issues](known-issues.md) describes remaining
 qualification boundaries. Controlled checks do not establish native acceptance.
 
 ## Local font selection

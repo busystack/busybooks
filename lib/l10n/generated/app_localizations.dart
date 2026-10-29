@@ -111,12 +111,6 @@ abstract class AppLocalizations {
   /// **'Reader'**
   String get reader;
 
-  /// No description provided for @continueReading.
-  ///
-  /// In en, this message translates to:
-  /// **'Continue Reading'**
-  String get continueReading;
-
   /// No description provided for @allBooks.
   ///
   /// In en, this message translates to:
@@ -362,12 +356,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sort'**
   String get sort;
-
-  /// No description provided for @noMatches.
-  ///
-  /// In en, this message translates to:
-  /// **'No matching books'**
-  String get noMatches;
 
   /// No description provided for @general.
   ///
@@ -639,23 +627,11 @@ abstract class AppLocalizations {
   /// **'This PDF page has no text layer. Reading and page bookmarks are available; text selection, dictionary and search require text.'**
   String get noText;
 
-  /// No description provided for @searchPlaceholder.
-  ///
-  /// In en, this message translates to:
-  /// **'Search the whole book'**
-  String get searchPlaceholder;
-
   /// No description provided for @searching.
   ///
   /// In en, this message translates to:
   /// **'Searching'**
   String get searching;
-
-  /// No description provided for @noSearchResults.
-  ///
-  /// In en, this message translates to:
-  /// **'No results'**
-  String get noSearchResults;
 
   /// No description provided for @note.
   ///
@@ -693,12 +669,6 @@ abstract class AppLocalizations {
   /// **'Pink'**
   String get pink;
 
-  /// No description provided for @copyText.
-  ///
-  /// In en, this message translates to:
-  /// **'Copy Selected Text'**
-  String get copyText;
-
   /// No description provided for @selectText.
   ///
   /// In en, this message translates to:
@@ -710,12 +680,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No annotations yet'**
   String get noAnnotations;
-
-  /// No description provided for @openPassage.
-  ///
-  /// In en, this message translates to:
-  /// **'Open Passage'**
-  String get openPassage;
 
   /// No description provided for @play.
   ///
@@ -752,12 +716,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Speed'**
   String get speed;
-
-  /// No description provided for @spokenPassage.
-  ///
-  /// In en, this message translates to:
-  /// **'Spoken passage'**
-  String get spokenPassage;
 
   /// No description provided for @dictionarySource.
   ///
@@ -879,18 +837,6 @@ abstract class AppLocalizations {
   /// **'Follow system reduced motion'**
   String get reducedMotion;
 
-  /// No description provided for @readingState.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading state'**
-  String get readingState;
-
-  /// No description provided for @notAvailable.
-  ///
-  /// In en, this message translates to:
-  /// **'No resource is available. Install a language resource and try again.'**
-  String get notAvailable;
-
   /// No description provided for @speechUnavailable.
   ///
   /// In en, this message translates to:
@@ -945,18 +891,6 @@ abstract class AppLocalizations {
   /// **'Settings could not be loaded. The original settings file has been preserved.'**
   String get appDataError;
 
-  /// No description provided for @restoreRestart.
-  ///
-  /// In en, this message translates to:
-  /// **'Restored appearance preferences are applied immediately.'**
-  String get restoreRestart;
-
-  /// No description provided for @annotationsExportHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Export notes and highlighted passages as readable Markdown.'**
-  String get annotationsExportHelp;
-
   /// No description provided for @countBooks.
   ///
   /// In en, this message translates to:
@@ -981,35 +915,11 @@ abstract class AppLocalizations {
   /// **'Only DRM-free EPUB 2/3, PDF, FB2 (.fb2, .fb2.zip, .fbz), CBZ and CBR are supported.'**
   String get unsupported;
 
-  /// No description provided for @goToHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter an EPUB CFI, chapter number, PDF page label or page number.'**
-  String get goToHelp;
-
   /// No description provided for @source.
   ///
   /// In en, this message translates to:
   /// **'Source'**
   String get source;
-
-  /// No description provided for @defaultVoice.
-  ///
-  /// In en, this message translates to:
-  /// **'System default'**
-  String get defaultVoice;
-
-  /// No description provided for @useSelection.
-  ///
-  /// In en, this message translates to:
-  /// **'From selection or current passage'**
-  String get useSelection;
-
-  /// No description provided for @version.
-  ///
-  /// In en, this message translates to:
-  /// **'Version'**
-  String get version;
 
   /// No description provided for @noSpeechText.
   ///
@@ -1203,12 +1113,6 @@ abstract class AppLocalizations {
   /// **'Open Changed Book'**
   String get openChangedBook;
 
-  /// No description provided for @invalidCollectionName.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose a collection name without path separators.'**
-  String get invalidCollectionName;
-
   /// No description provided for @sidebar.
   ///
   /// In en, this message translates to:
@@ -1220,24 +1124,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Books'**
   String get books;
-
-  /// No description provided for @searchResults.
-  ///
-  /// In en, this message translates to:
-  /// **'Search Results'**
-  String get searchResults;
-
-  /// No description provided for @searchHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter words to find a passage.'**
-  String get searchHint;
-
-  /// No description provided for @searchCancelled.
-  ///
-  /// In en, this message translates to:
-  /// **'Search cancelled.'**
-  String get searchCancelled;
 
   /// No description provided for @searchFailed.
   ///
@@ -1371,12 +1257,6 @@ abstract class AppLocalizations {
   /// **'Use the physical page number, starting at 1.'**
   String get pageNumberHelp;
 
-  /// No description provided for @pageLabelHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Use a supplied label, such as iv. Labels may differ from page numbers.'**
-  String get pageLabelHelp;
-
   /// No description provided for @invalidPage.
   ///
   /// In en, this message translates to:
@@ -1419,12 +1299,6 @@ abstract class AppLocalizations {
   /// **'Voice and Speed'**
   String get speechOptions;
 
-  /// No description provided for @dictionaryExternal.
-  ///
-  /// In en, this message translates to:
-  /// **'Definitions from English Wiktionary appear inside the reader and require a connection. Open Full Entry opens the source in your browser.'**
-  String get dictionaryExternal;
-
   /// No description provided for @annotation.
   ///
   /// In en, this message translates to:
@@ -1460,12 +1334,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'PDF Defaults'**
   String get pdfDefaults;
-
-  /// No description provided for @epubDefaults.
-  ///
-  /// In en, this message translates to:
-  /// **'EPUB Defaults'**
-  String get epubDefaults;
 
   /// No description provided for @footnote.
   ///
@@ -1521,12 +1389,6 @@ abstract class AppLocalizations {
   /// **'View'**
   String get viewMode;
 
-  /// No description provided for @allItems.
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get allItems;
-
   /// No description provided for @highlights.
   ///
   /// In en, this message translates to:
@@ -1550,18 +1412,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search in Notebook'**
   String get searchNotebook;
-
-  /// No description provided for @notebookSearchScope.
-  ///
-  /// In en, this message translates to:
-  /// **'Saved passages and private notes in this book'**
-  String get notebookSearchScope;
-
-  /// No description provided for @notebookEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No saved items match. Highlights and bookmarks saved while reading appear here.'**
-  String get notebookEmpty;
 
   /// No description provided for @missingBookNotebook.
   ///
@@ -1755,12 +1605,6 @@ abstract class AppLocalizations {
   /// **'Reading data was restored. Preferences could not be applied; they will be retried at the next start.'**
   String get restorePreferencesPending;
 
-  /// No description provided for @noteActionFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'This action could not be completed. Your note draft is retained. Try again or save the note.'**
-  String get noteActionFailed;
-
   /// No description provided for @backToCollection.
   ///
   /// In en, this message translates to:
@@ -1833,12 +1677,6 @@ abstract class AppLocalizations {
   /// **'Page preview could not be loaded.'**
   String get thumbnailFailed;
 
-  /// No description provided for @openInNotebook.
-  ///
-  /// In en, this message translates to:
-  /// **'Open in Notebook'**
-  String get openInNotebook;
-
   /// No description provided for @loadingOutline.
   ///
   /// In en, this message translates to:
@@ -1868,12 +1706,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Navigation'**
   String get navigation;
-
-  /// No description provided for @readingAssistance.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading Assistance'**
-  String get readingAssistance;
 
   /// No description provided for @annotationActions.
   ///

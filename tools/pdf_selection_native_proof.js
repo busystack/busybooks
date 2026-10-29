@@ -74,13 +74,27 @@
     for(const backward of [false,true]){
         const {saved,payload}=await select(0,first,1,second+7,backward)
         const originalAnchor=JSON.stringify(payload.anchor),beforeSettled=settled(),position=await flush()
+        const annotation={id:'pdf-selection-proof',annotationKind:'highlight',anchor:payload.anchor,text:payload.text,color:'yellow'}
+        await dispatch('annotations',{value:[annotation]})
+        const assertMarks=()=>{
+            const marks=[...content.querySelectorAll('.annotation-mark[data-id="pdf-selection-proof"]')]
+            assert(marks.length===payload.anchor.segments.reduce((count,segment)=>count+segment.boxes.length,0),'Application overlays paint every saved PDF box')
+            assert(marks.every(mark=>{
+                const rect=mark.getBoundingClientRect(),style=getComputedStyle(mark)
+                return rect.width>0&&rect.height>0&&style.position==='absolute'&&style.backgroundColor!=='rgba(0, 0, 0, 0)'
+            }),'Application annotation styling remains visible without optional upstream CSS')
+        }
+        assertMarks()
         await resize(backward?620:680)
+        assertMarks()
+        assert(JSON.stringify(annotation.anchor)===originalAnchor,'Relayout leaves saved annotation source boxes unchanged')
         assertSelection(saved,'Multi-page endpoints and direction survive geometry')
         assert(JSON.stringify(events.findLast(event=>event.type==='selection'&&event.anchor).anchor)===originalAnchor,'Original PDF-unit anchor is unchanged')
         assert(settled()===beforeSettled,'Resize does not settle/reopen a selection popup')
         assert((await flush()).anchor.page===position.anchor.page,'Geometry retains the source page')
         checks.push(backward?'multi-page-backward':'multi-page-forward')
     }
+    checks.push('application-annotation-overlays-retain-source-boxes')
     const {saved}=await select(0,first,0,first+5)
     const hiddenSettled=settled()
     const editor=document.createElement('input');editor.value='Notebook keeps focus';document.body.append(editor)

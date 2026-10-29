@@ -367,29 +367,6 @@ Future<Color?> _readAccentSafely(Future<Color?> Function() read) async {
   }
 }
 
-/// Retains both portal states so a missing named accent releases precedence.
-@visibleForTesting
-class LinuxAccentChangeResolver {
-  LinuxAccentChangeResolver({bool gnomeAuthoritative = false})
-    : _gnomeAuthoritative = gnomeAuthoritative;
-
-  bool _gnomeAuthoritative;
-  Color? _generic;
-
-  Color? resolve(String namespace, DBusValue value) {
-    if (namespace == LinuxPortalAppearance.gnomeInterface) {
-      final color = colorFromUbuntuAccentNameValue(value);
-      _gnomeAuthoritative = color != null;
-      return color ?? _generic;
-    }
-    if (namespace == LinuxPortalAppearance.freedesktopAppearance) {
-      _generic = colorFromPortalAccentValue(value);
-      return _gnomeAuthoritative ? null : _generic;
-    }
-    return null;
-  }
-}
-
 Color? colorFromPortalAccentValue(DBusValue value) {
   final resolved = value.signature == DBusSignature('v')
       ? value.asVariant()

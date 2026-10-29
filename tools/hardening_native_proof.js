@@ -13,7 +13,7 @@
         await img?.decode()
         assert(section.width===900&&section.height===600&&section.pageSpread==='center','Oriented comic descriptor is landscape and centered')
         assert(img?.naturalWidth===900&&img.naturalHeight===600,'Native JPEG decoder displays EXIF-oriented geometry despite marker fill')
-        checks.push('F22-oriented-marker-fill-comic')
+        checks.push('oriented-marker-fill-comic')
     }else{
         const text=view?'📚'.repeat(300000):'x'.repeat(525000)
         const doc=view?busybooks.contents()[0]?.doc:document
@@ -32,7 +32,7 @@
         if(!view){
             assert(selection.anchor.segments[0].length===text.length,'PDF anchor stores UTF-16 length')
             assert(!Object.hasOwn(selection.anchor.segments[0],'text'),'PDF anchor does not duplicate the quotation')
-            checks.push('F19-verified-pdf-snapshot-renders','F20-compact-pdf-selection')
+            checks.push('verified-pdf-snapshot-renders','compact-pdf-selection')
         }
         const chunks=frames.map(json=>JSON.parse(json)).filter(frame=>frame.type==='bridgeChunk')
         assert(chunks.length>1,'Oversized native events are chunked')
@@ -45,7 +45,7 @@
         const location=events.findLast(e=>e.type==='location')
         assert(location&&!Object.hasOwn(location,'text'),'Flushed location omits passage text')
         assert(events.at(-1).type==='flushed','Location precedes the flush acknowledgement')
-        checks.push('F20-native-large-selection-frames','F20-on-demand-narration','F20-compact-flushed-location')
+        checks.push('native-large-selection-frames','on-demand-narration','compact-flushed-location')
     }
     assert(frames.every(json=>new TextEncoder().encode(json).byteLength<=1048576),'Every native frame respects the byte limit')
     window.reviewResult={passed:true,checks}

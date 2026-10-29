@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Recreate the CC0 F22 regression and optional high-expansion F18 EPUB.
+"""Recreate the CC0 EXIF-orientation/fill comic and optional expansion EPUB.
 
-The review's sandbox attachments are not mounted in the developer checkout.
-This fixture independently reproduces the specified geometry/orientation/fill.
+The comic exercises intrinsic dimensions and fill after JPEG orientation.
+The EPUB exercises bounded preparation of highly compressed unused resources.
 """
 import argparse
 import hashlib

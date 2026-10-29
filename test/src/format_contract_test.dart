@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:busybooks/src/library/data/book_xml.dart';
+import 'package:busybooks/src/library/data/book_inspection.dart';
 import 'package:busybooks/src/library/data/comic_book.dart';
 import 'package:busybooks/src/library/data/fb2_book.dart';
 import 'package:busybooks/src/library/data/record_validation.dart';
@@ -15,6 +16,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
 
 void main() {
+  for (final entry in {
+    'protected.epub': 'DRM-protected EPUB is unsupported',
+    'damaged.pdf': 'Damaged PDF trailer',
+  }.entries) {
+    test('opening rejects ${entry.key} with its format error', () async {
+      await expectLater(
+        inspectBook('test/fixtures/${entry.key}', () => false),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            entry.value,
+          ),
+        ),
+      );
+    });
+  }
+
   test(
     'eligible names keep logical format separate from original container',
     () {

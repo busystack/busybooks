@@ -14,19 +14,25 @@
     }
     const family=()=>style(doc().querySelector('#typography')).fontFamily
     if(typographyProbeMode==='weights'||typographyProbeMode==='system'){
-        await apply(3)
+        await apply(2)
         const rendered=[]
         for(const weight of [300,400,500,600,700]){
-            await apply(3,{weight})
+            await apply(2,{weight})
             const pixels=raster(family(),weight)
-            assert(pixels===raster(JSON.stringify(nativeFontData[3].choice.family),weight),'Private family must render the actual installed '+weight+' face')
+            assert(pixels===raster(JSON.stringify(nativeFontData[2].choice.family),weight),'Private family must render the actual installed '+weight+' face')
             rendered.push(pixels)
         }
         assert(new Set(rendered).size===5,'All five installed body weights must produce distinct glyphs')
-        for(const weight of [300,400,500,600,700])assert(raster(family(),weight,true)===raster(JSON.stringify(nativeFontData[3].choice.family),weight,true),'Installed italic weight '+weight+' must match')
+        for(const weight of [300,400,500,600,700])assert(raster(family(),weight,true)===raster(JSON.stringify(nativeFontData[2].choice.family),weight,true),'Installed italic weight '+weight+' must match')
         checks.push('five-actual-weights-and-italic-rasters')
     }else if(typographyProbeMode==='specialist'||typographyProbeMode==='specialist-cold'){
-        const expected='"BusyBooks Specialist"',reference=raster(expected)
+        const {cssString}=await import('./typography.mjs')
+        // This is a publication CSS alias over original Noto bytes. It does
+        // not establish discovery of punctuation in native font metadata.
+        const expected=cssString('BusyBooks "Ä", \\ Serif')
+        const loaded=await doc().fonts.load('28px '+expected)
+        assert(loaded.length>0&&loaded.every(face=>face.status==='loaded'),'Punctuation/Unicode CSS alias loads the original embedded font')
+        const reference=raster(expected)
         assert(style(doc().querySelector('.symbol')).fontFamily===expected,'Cold open must preserve the publication specialist family')
         await apply(1)
         await busybooks.dispatch({action:'goto',anchor:{index:1}})

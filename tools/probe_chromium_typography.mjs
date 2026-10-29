@@ -11,7 +11,7 @@ const root=fs.mkdtempSync(path.join(os.tmpdir(),'busybooks-chromium-typography-'
 try{
     const html=`<!doctype html><pre id="result">pending</pre><script type="module">
     import {createLocalFont,installLocalFont,cssString} from 'data:text/javascript;base64,${Buffer.from(module).toString('base64')}';
-    const resolved=${JSON.stringify(data[3].resolved).replaceAll('<','\\u003c')};
+    const resolved=${JSON.stringify(data[2].resolved).replaceAll('<','\\u003c')};
     const raster=(family,weight,italic=false)=>{const c=document.createElement('canvas');c.width=700;c.height=70;const x=c.getContext('2d');x.font=(italic?'italic ':'')+weight+' 28px '+family;x.fillText('A quiet library — 0123456789.',2,45);return c.toDataURL()};
     try{const font=createLocalFont(resolved);await installLocalFont(document,font);const actual=[],comparisons=[];
       for(const w of [300,400,500,600,700]){actual.push(raster(font.family,w));comparisons.push({weight:w,normal:raster(font.family,w)===raster(cssString(resolved.family),w),italic:raster(font.family,w,true)===raster(cssString(resolved.family),w,true)})}

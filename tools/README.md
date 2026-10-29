@@ -44,8 +44,9 @@ requests, and content search when display animation frames are unavailable.
 through the existing controlled-resource Chromium runner. Run it with the pinned
 Dart on PATH and
 `BUSYBOOKS_REVIEW_PROOF="$PWD/tools/pdf_selection_native_proof.js" node tools/probe_chromium_format_review.mjs "$PWD/test/fixtures/text.pdf"`.
-It checks exact multi-page endpoints/direction, original source anchors, clear and
-replacement behavior, hidden resume, keyboard-link navigation/history, and absence
+It checks exact multi-page endpoints/direction, original source anchors, application
+annotation overlays across resize, clear and replacement behavior, hidden resume,
+keyboard-link navigation/history, and absence
 of focus or popup activation. The controlled defects probe also checks a queued
 internal link and failed/stale layout cleanup against actual adapter functions.
 Native pane focus/clipboard acceptance still requires the actual desktop apps.
@@ -221,8 +222,13 @@ and [reading-data provenance](../test/fixtures/reading-data/PROVENANCE.md).
 - `make_resource_budget_fixtures.py`: bounded-write expansion/discard fixtures,
   with optional RAR authoring.
 - `make_review_fixtures.py OUTPUT_DIRECTORY`: disposable reader regression inputs.
-- `make_typography_fixtures.py OUTPUT_DIRECTORY`: disposable licensed derived fonts
-  and publications; requires fontTools and retains notices, without installing fonts.
+- `make_typography_fixtures.py OUTPUT_DIRECTORY`: disposable publications and
+  byte-identical licensed fonts; Python standard library only. Uses Noto Serif
+  from the root EPUB, bundled Liberation Sans and the official `fonts-lato`
+  package's Light/Regular/Medium/Semibold/Bold and italic faces. Set
+  `BUSYBOOKS_LATO_ROOT` to an extracted package's `usr/share` to run without
+  installing fonts. Copies all notices. Punctuation/Unicode and publisher-name
+  collisions use publication CSS aliases, without rewriting native font metadata.
 - `make_comic_locator_upgrade_fixture.py`: previous-version database/backup fixtures;
   requires the documented local Git revisions and offline populated package cache.
 - `make_windows_icon.py`: regenerates the Windows ICO from the owned SVG on Linux

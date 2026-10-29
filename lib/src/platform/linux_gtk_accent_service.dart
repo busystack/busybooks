@@ -4,7 +4,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 /// All Linux accent reads start concurrently. Unresolved sources/settings get
-/// five seconds, matching rich_clipboard_service.dart's platform I/O timeout.
+/// five seconds so an unresponsive GTK or portal read cannot hold startup open.
 /// Expiry makes them temporarily unavailable; watchers and unsuperseded late
 /// reads remain active and can restore their normal precedence.
 const linuxAccentInitializationDeadline = Duration(seconds: 5);

@@ -37,7 +37,6 @@ enum BusyBooksLinuxHeaderIcon {
   next,
   sidebar,
   search,
-  searchEntryFind,
   searchClear,
   mainMenu,
   reading,
@@ -56,7 +55,6 @@ extension BusyBooksLinuxHeaderIconNames on BusyBooksLinuxHeaderIcon {
     BusyBooksLinuxHeaderIcon.next => const ['go-next-symbolic'],
     BusyBooksLinuxHeaderIcon.sidebar => const ['sidebar-show-symbolic'],
     BusyBooksLinuxHeaderIcon.search => const ['system-search-symbolic'],
-    BusyBooksLinuxHeaderIcon.searchEntryFind => const ['edit-find-symbolic'],
     BusyBooksLinuxHeaderIcon.searchClear => const ['edit-clear-symbolic'],
     BusyBooksLinuxHeaderIcon.mainMenu => const ['open-menu-symbolic'],
     BusyBooksLinuxHeaderIcon.reading => const ['view-paged-symbolic'],
@@ -178,13 +176,9 @@ class GtkHeaderIconService extends ChangeNotifier {
   bool _reloadRunning = false;
   int? _queuedRevision;
   int _highestSeenRevision = 0;
-  int _reloadCount = 0;
   bool _disposed = false;
 
   GtkHeaderIconCatalog get catalog => _catalog;
-
-  @visibleForTesting
-  int get reloadCount => _reloadCount;
 
   Future<bool> initialize({
     Duration timeout = const Duration(seconds: 5),
@@ -260,7 +254,6 @@ class GtkHeaderIconService extends ChangeNotifier {
   Future<GtkHeaderIconCatalog> _loadCatalog(int revision) async {
     final loadBatch = _loadBatch;
     if (loadBatch == null) return GtkHeaderIconCatalog.empty();
-    _reloadCount += 1;
     final response = await loadBatch(_requests());
     if (response is! Map) {
       throw const FormatException('GTK header-icon response was not a map.');
@@ -351,14 +344,4 @@ class GtkHeaderIconScope extends InheritedNotifier<GtkHeaderIconService> {
             ?.notifier ??
         GtkHeaderIconService.fallbackInstance;
   }
-}
-
-String resolvedNativeHeaderIconName(
-  BuildContext context,
-  BusyBooksLinuxHeaderIcon icon,
-) {
-  final asset = GtkHeaderIconScope.of(
-    context,
-  ).catalog.assetFor(icon, Directionality.of(context));
-  return asset?.resolvedName ?? icon.gtkNames.first;
 }

@@ -14,15 +14,6 @@ import '../platform/native_menu_service.dart';
 import 'busybooks_glyphs.dart';
 import 'path_label.dart';
 
-/// Resolve an explicit six-digit RGB color chosen in a document/export control.
-/// This does not inherit the application's theme accent.
-Color busyBooksRgbHexColor(String value) {
-  if (!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-    throw ArgumentError.value(value, 'value');
-  }
-  return Color(int.parse(value.substring(1), radix: 16) | 0xff000000);
-}
-
 abstract final class BusyBooksSpacing {
   static const double xxs = 2;
   static const double xs = 4;
@@ -40,20 +31,17 @@ abstract final class BusyBooksSpacing {
 }
 
 abstract final class BusyBooksRadius {
-  static const double sm = 4;
   static const double tooltip = kYaruButtonRadius;
   static const double md = 8;
   static const double lg = kYaruContainerRadius;
   static const double headerButton = kYaruButtonRadius;
   // Compatibility name for sidebar callers; geometry remains Yaru-owned.
   static const double nativeHeaderButton = kYaruButtonRadius;
-  static const double window = kYaruWindowRadius;
   static const double pill = 999;
 }
 
 abstract final class BusyBooksSizes {
   static const double contentWidth = 760;
-  static const double documentContentWidth = contentWidth;
   static const double sidebarWidth = 300;
   // The workspace header also needs room for document actions and window controls.
   static const double workspaceSidebarBreakpoint = sidebarWidth + 480;
@@ -61,31 +49,16 @@ abstract final class BusyBooksSizes {
   static const double settingsWidth = 760;
   static const double settingsSidebarBreakpoint = sidebarWidth + 520;
   static const double toolbarHeight = kYaruTitleBarHeight;
-  static const double paneHeaderHeight = 38;
-  static const double documentStatusBarHeight = 28;
   static const double iconButton = kYaruTitleBarItemHeight;
   static const double compactIconButton = 24;
   static const double compactIcon = 13;
   static const double iconSm = 16;
-  static const double iconMd = 20;
   static const double tooltipMinHeight = 30;
-  static const double previewMinWidth = 320;
-  static const double modalMaxWidth = 860;
-  static const double modalHorizontalInset = 40;
-  static const double modalVerticalInset = 24;
-  static const double modalMaxHeightFraction = 0.86;
   static const double dialog = 520;
-  static const double dialogNarrow = 480;
-  static const double dialogCompact = 460;
-  static const double dialogWide = 560;
   static const double popupMenuMinWidth = 180;
-  static const double editorContextMenuWidth = 260;
   static const double languagePopupMinWidth = 220;
   static const double languagePopupMaxWidth = 280;
   static const double languageButtonMaxWidth = 256;
-  static const double aboutLogoViewport = 136;
-  static const double aboutLogoAsset = 216;
-  static const double sidebarSeparatorHeight = 22;
   // The surrounding hairline insets bring tree rows to the same outer height
   // as sidebar header controls.
   static const double sidebarTreeRowHeight =
@@ -94,42 +67,8 @@ abstract final class BusyBooksSizes {
   static const double sidebarTreeDepthIndent = 14;
   static const double sidebarTreeControl = 18;
   static const double sidebarTreeArrow = 14;
-  static const double problemsListWidth = 700;
-  static const double problemsListHeight = 420;
-  static const double sourceGutterWidth = 50;
-  static const double sourceFoldButton = 16;
-  static const double sourceFoldButtonRightInset = 1;
-  static const double documentHeadingTop = 18;
-  static const double documentHeadingBottom = 6;
-  static const double documentListMarkerWidth = 28;
-  static const double documentListMarkerTopInset = 0;
-  static const double documentListIndent =
-      documentListMarkerWidth + BusyBooksSpacing.sm;
-  static const double documentImageMinWidth = 80;
-  static const double documentImageMaxWidth = documentContentWidth;
-  static const double documentImageMinHeight = iconButton;
   static const double previewInlineImageMaxHeight = 180;
-  static const double previewInlineImageHeight = 96;
-  static const double wysiwygToolbarReserve =
-      iconButton + BusyBooksSpacing.xs * 2;
-  static const double wysiwygToolbarClearance =
-      BusyBooksSpacing.sm + wysiwygToolbarReserve + BusyBooksSpacing.sm;
-  static const double wysiwygPrefixWidth = 30;
-  static const double tableDialogWidth = 360;
-  static const double tablePickerHeight = 224;
-  static const double tableMinWidth = 360;
-  static const double markerDot = 6;
-  static const double listMarkerTopInset = 7;
-  static const double thematicBreakHandleWidth = 44;
   static const double controlRowWidth = 256;
-  static const double sliderRowWidth = 260;
-  static const double toolbarPlacementRowWidth = 430;
-  static const double settingsControlBreakpoint = 560;
-  static const double toolbarPlacementBreakpoint = 620;
-  static const int tableMinColumns = 1;
-  static const int tableMaxColumns = 12;
-  static const int tableMinRows = 1;
-  static const int tableMaxRows = 50;
 }
 
 abstract final class BusyBooksFormLayout {
@@ -143,10 +82,7 @@ abstract final class BusyBooksElevation {
 
 abstract final class BusyBooksStroke {
   static const double hairline = 1;
-  static const double tableGrid = 0.5;
   static const double focus = kYaruFocusBorderWidth;
-  static const double sourceCursor = 1.4;
-  static const double thematicBreak = 1.6;
 }
 
 abstract final class BusyBooksAlpha {
@@ -154,15 +90,6 @@ abstract final class BusyBooksAlpha {
   static const double tooltipBackground = 0.80;
   static const double tooltipBorder = 0.10;
   static const double textSelection = 0.32;
-  static const double sourceCollapsedLine = 0.045;
-  static const double sourceCursor = 0.82;
-  static const double sourceSyntaxBackground = 0.10;
-  static const double syntaxCommentDark = 0.82;
-  static const double syntaxCommentLight = 0.76;
-  static const double previewHighlight = 0.24;
-  static const double thematicBreak = 0.34;
-  static const double thematicBreakHandle = 0.24;
-  static const double thematicBreakSelected = 0.72;
 }
 
 /// Native libadwaita/Yaru shadow layers shared by grouped card surfaces.
@@ -200,94 +127,21 @@ abstract final class BusyBooksShadow {
 }
 
 abstract final class BusyBooksTypography {
-  static const String fontFamily = 'Ubuntu';
-  static const String monoFontFamily = 'Ubuntu Mono';
-  static const List<String> fontFamilyFallback = [
-    'Noto Sans Arabic',
-    'Noto Sans',
-    'DejaVu Sans',
-  ];
-  static const List<String> monoFontFamilyFallback = [
-    'Noto Sans Arabic',
-    'Noto Sans Mono',
-    'DejaVu Sans Mono',
-    'DejaVu Sans',
-  ];
-  static const double codeLineHeight = 1.45;
-  static const double sourceEditorLineHeight = 1.6;
-  static const double bodyLineHeight = 1.5;
   static const double defaultFontSize = 14;
   static const double tooltipFontSize = defaultFontSize;
-  static const double sourceCursorHeightScale = 1.34;
-  static const double sourceLineNumberScale = 0.92;
-  static const double hiddenLayoutFontSize = 0.01;
-  static const double hiddenLayoutHeight = 0.01;
-
-  static double markdownHeadingScale(int level) {
-    return switch (level) {
-      1 => 1.55,
-      2 => 1.36,
-      3 => 1.22,
-      4 => 1.10,
-      5 => 1.08,
-      _ => 1.06,
-    };
-  }
-
-  static double markdownHeadingLineHeight(int level) {
-    return switch (level) {
-      1 => 1.20,
-      2 => 1.23,
-      3 => 1.28,
-      4 => 1.37,
-      5 => 1.39,
-      _ => 1.42,
-    };
-  }
-}
-
-/// Keeps a known left-to-right value stable inside surrounding RTL text.
-String busyBooksLtrIsolate(Object value) => '\u2066$value\u2069';
-
-/// Isolates a machine value only when the surrounding interface is RTL.
-String busyBooksLtrIsolateFor(BuildContext context, Object value) {
-  return Directionality.maybeOf(context) == TextDirection.rtl
-      ? busyBooksLtrIsolate(value)
-      : value.toString();
-}
-
-/// Lets the first strong character choose direction without affecting neighbors.
-String busyBooksBidiIsolate(Object value) => '\u2068$value\u2069';
-
-/// Applies first-strong isolation only inside an RTL interface.
-String busyBooksBidiIsolateFor(BuildContext context, Object value) {
-  return Directionality.maybeOf(context) == TextDirection.rtl
-      ? busyBooksBidiIsolate(value)
-      : value.toString();
 }
 
 abstract final class BusyBooksMotion {
   static const Duration fast = Duration(milliseconds: 100);
   static const Duration sidebar = Duration(milliseconds: 200);
-  static const Duration search = Duration(milliseconds: 160);
-  static const Duration crossfade = Duration(milliseconds: 140);
   static const Curve presentationCurve = Curves.easeOutCubic;
-  static const Duration dialogInsets = Duration(milliseconds: 160);
   static const Duration bannerReveal = Duration(milliseconds: 250);
   static const Duration sidebarExpand = Duration(milliseconds: 120);
-  static const Duration scroll = Duration(milliseconds: 180);
-  static const Duration previewSearchDelay = Duration(milliseconds: 80);
   static const Duration tooltipWait = Duration(milliseconds: 450);
-  static const Curve dialogInsetsCurve = Curves.easeOutCubic;
   static const Curve bannerRevealCurve = Curves.easeOutCubic;
 }
 
 abstract final class BusyBooksInsets {
-  static const input = EdgeInsets.symmetric(
-    horizontal: BusyBooksSpacing.md,
-    vertical: BusyBooksSpacing.smPlus,
-  );
-  static const listTile = EdgeInsets.symmetric(horizontal: BusyBooksSpacing.md);
   static const settingsPage = EdgeInsets.fromLTRB(
     BusyBooksSpacing.xl,
     BusyBooksSpacing.mdPlus,
@@ -299,12 +153,6 @@ abstract final class BusyBooksInsets {
     BusyBooksSpacing.lgPlus,
     BusyBooksSpacing.xl,
     BusyBooksSpacing.xxl,
-  );
-  static const sidebarTabs = EdgeInsets.fromLTRB(
-    BusyBooksSpacing.smPlus,
-    0,
-    BusyBooksSpacing.smPlus,
-    BusyBooksSpacing.sm,
   );
   static const sidebarHeader = EdgeInsetsDirectional.fromSTEB(
     BusyBooksSpacing.mdPlus,
@@ -318,96 +166,23 @@ abstract final class BusyBooksInsets {
     BusyBooksSpacing.sm,
     BusyBooksSpacing.smPlus,
   );
-  static const tocHeader = EdgeInsetsDirectional.fromSTEB(
-    0,
-    0,
-    0,
-    BusyBooksSpacing.sm,
-  );
-  static const documentCodeBlock = EdgeInsets.symmetric(
-    vertical: BusyBooksSpacing.sm,
-  );
-  static const documentCodeContent = EdgeInsets.all(BusyBooksSpacing.mdPlus);
-  static const documentCalloutBlock = EdgeInsets.symmetric(
-    vertical: BusyBooksSpacing.sm,
-  );
-  static const documentCalloutContent = EdgeInsets.all(BusyBooksSpacing.md);
-  static const documentTableCell = EdgeInsets.all(BusyBooksSpacing.smPlus);
   static const sectionLabel = EdgeInsets.fromLTRB(
     BusyBooksSpacing.md,
     BusyBooksSpacing.mdPlus,
     BusyBooksSpacing.md,
     6,
   );
-  static const documentHeadingBlock = EdgeInsets.only(
-    top: BusyBooksSizes.documentHeadingTop,
-    bottom: BusyBooksSizes.documentHeadingBottom,
-  );
-  static const documentParagraphBlock = EdgeInsets.symmetric(
-    vertical: BusyBooksSizes.documentHeadingBottom,
-  );
-  static const documentImageBlock = EdgeInsets.symmetric(
-    vertical: BusyBooksSpacing.smPlus,
-  );
-  static const documentThematicBreakBlock = EdgeInsets.symmetric(
-    vertical: BusyBooksSpacing.mdPlus,
-  );
-  static const wysiwygContainerBlock = documentCalloutBlock;
-  static const wysiwygTableBlock = EdgeInsets.symmetric(
-    vertical: BusyBooksSpacing.md,
-  );
-  static const wysiwygDefaultBlock = EdgeInsets.symmetric(
-    vertical: BusyBooksSpacing.xs,
-  );
-  static const wysiwygContainerContent = documentCalloutContent;
-  static const sourceEditor = EdgeInsets.fromLTRB(
-    BusyBooksSourceEditorMetrics.paddingLeft,
-    BusyBooksSourceEditorMetrics.paddingTop,
-    BusyBooksSourceEditorMetrics.paddingRight,
-    BusyBooksSourceEditorMetrics.paddingBottom,
-  );
-  static const searchResultRow = EdgeInsets.symmetric(
-    horizontal: BusyBooksSpacing.lg,
-    vertical: BusyBooksSpacing.sm,
-  );
-}
-
-abstract final class BusyBooksSourceEditorMetrics {
-  static const double paddingTop = BusyBooksSpacing.lg;
-  static const double paddingBottom = BusyBooksSpacing.lg;
-  static const double paddingLeft = BusyBooksSpacing.md;
-  static const double paddingRight = BusyBooksSpacing.lg;
 }
 
 abstract final class BusyBooksLinuxPalette {
-  static Color fromArgb(int value) => Color(value);
-
   static const transparent = Color(0x00000000);
   static const white = Color(0xFFFFFFFF);
-  static const blueAccent = Color(0xFF3584E4);
   static const ubuntuBlueAccent = Color(0xFF0073E5);
-  static const ubuntuTealAccent = Color(0xFF2190A4);
   static const ubuntuGreenAccent = Color(0xFF3A944A);
   static const ubuntuYellowAccent = Color(0xFFC88800);
-  static const ubuntuOrangeAccent = Color(0xFFED5B00);
-  static const ubuntuRedAccent = Color(0xFFDA3450);
-  static const ubuntuPinkAccent = Color(0xFFD56199);
-  static const ubuntuPurpleAccent = Color(0xFF7764D8);
-  static const ubuntuSlateAccent = Color(0xFF6F8396);
-  static const ubuntuBrownAccent = Color(0xFF986A44);
-  static const ubuntuMagentaAccent = Color(0xFFB34CB3);
-  static const ubuntuOliveAccent = Color(0xFF4B8501);
-  static const ubuntuPrussianGreenAccent = Color(0xFF308280);
-  static const ubuntuSageAccent = Color(0xFF657B69);
-  static const ubuntuWartyBrownAccent = Color(0xFFB39169);
   static const destructiveForegroundLight = Color(0xFFC30000);
   static const destructiveForegroundDark = Color(0xFFFF938C);
   static const red = Color(0xFFC01C28);
-  static const yellow = Color(0xFFE5A50A);
-  static const green = Color(0xFF2EC27E);
-  static const light2 = Color(0xFFF6F5F4);
-  static const light4 = Color(0xFFC0BFBC);
-  static const dark4 = Color(0xFF242424);
   static const black = Color(0xFF000000);
 }
 
@@ -877,29 +652,6 @@ WidgetStateProperty<Color?> busyBooksHeaderButtonBackground(
 ) {
   return Theme.of(context).filledButtonTheme.style?.backgroundColor ??
       WidgetStatePropertyAll(BusyBooksSurfaceColors.of(context).control);
-}
-
-/// Resolves a contained control state against its semantic host surface.
-///
-/// Yaru control fills are translucent state layers, which is appropriate when
-/// a parent control surface owns the background. Free-floating controls, such
-/// as the editing toolbar over a document, have no such parent and must resolve
-/// that layer once so document content cannot show through the button.
-WidgetStateProperty<Color?> busyBooksContainedControlBackground(
-  BuildContext context, {
-  required Color surface,
-}) {
-  final background = busyBooksHeaderButtonBackground(context);
-  return WidgetStateProperty.resolveWith((states) {
-    final stateColor = background.resolve(states);
-    return stateColor == null ? null : Color.alphaBlend(stateColor, surface);
-  });
-}
-
-WidgetStateProperty<Color?> busyBooksTransparentHeaderButtonBackground(
-  BuildContext _,
-) {
-  return const WidgetStatePropertyAll(BusyBooksLinuxPalette.transparent);
 }
 
 Color busyBooksSelectedBackground(BuildContext context) {
@@ -3902,185 +3654,7 @@ class BusyBooksSwitchRow extends StatelessWidget {
   }
 }
 
-/// A Yaru radio button with GTK-style state colors and no external halo.
-class BusyBooksRadioButton<T> extends StatefulWidget {
-  const BusyBooksRadioButton({
-    super.key,
-    required this.value,
-    required this.groupValue,
-    required this.onChanged,
-    required this.title,
-    this.subtitle,
-    this.contentPadding,
-    this.autofocus = false,
-    this.focusNode,
-    this.mouseCursor,
-    this.hasFocusBorder,
-  });
-
-  final T value;
-  final T? groupValue;
-  final ValueChanged<T?>? onChanged;
-  final Widget title;
-  final Widget? subtitle;
-  final EdgeInsetsGeometry? contentPadding;
-  final bool autofocus;
-  final FocusNode? focusNode;
-  final MouseCursor? mouseCursor;
-  final bool? hasFocusBorder;
-
-  @override
-  State<BusyBooksRadioButton<T>> createState() =>
-      _BusyBooksRadioButtonState<T>();
-}
-
-class _BusyBooksRadioButtonState<T> extends State<BusyBooksRadioButton<T>> {
-  bool _hovered = false;
-  int? _pressedPointer;
-
-  bool get _pressed => _pressedPointer != null;
-
-  @override
-  void didUpdateWidget(BusyBooksRadioButton<T> oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.onChanged == null) {
-      _pressedPointer = null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final inheritedRadioTheme = YaruRadioTheme.of(context);
-    final checkedColor = _busyBooksCheckedRadioColor(
-      theme.colorScheme.primary,
-      brightness: theme.brightness,
-      hovered: _hovered,
-      pressed: _pressed,
-    );
-
-    return MouseRegion(
-      onEnter: (_) => _setHovered(true),
-      onExit: (_) => _setHovered(false),
-      child: Listener(
-        onPointerDown: widget.onChanged == null ? null : _handlePointerDown,
-        onPointerUp: widget.onChanged == null ? null : _handlePointerUp,
-        onPointerCancel: widget.onChanged == null ? null : _handlePointerCancel,
-        child: YaruRadioTheme(
-          data: inheritedRadioTheme.copyWith(
-            color: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.disabled)) {
-                return inheritedRadioTheme.color?.resolve(states);
-              }
-              if (states.contains(WidgetState.selected)) {
-                return checkedColor;
-              }
-              return inheritedRadioTheme.color?.resolve(states);
-            }),
-            indicatorColor: const WidgetStatePropertyAll(Colors.transparent),
-          ),
-          child: YaruRadioButton<T>(
-            value: widget.value,
-            groupValue: widget.groupValue,
-            onChanged: widget.onChanged,
-            title: widget.title,
-            subtitle: widget.subtitle,
-            contentPadding: widget.contentPadding,
-            autofocus: widget.autofocus,
-            focusNode: widget.focusNode,
-            mouseCursor: widget.mouseCursor,
-            hasFocusBorder: widget.hasFocusBorder,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _setHovered(bool hovered) {
-    if (_hovered != hovered) {
-      setState(() => _hovered = hovered);
-    }
-  }
-
-  void _handlePointerDown(PointerDownEvent event) {
-    if (_pressedPointer != null || event.buttons != kPrimaryButton) {
-      return;
-    }
-    setState(() => _pressedPointer = event.pointer);
-  }
-
-  void _handlePointerUp(PointerUpEvent event) {
-    if (_pressedPointer == event.pointer) {
-      setState(() => _pressedPointer = null);
-    }
-  }
-
-  void _handlePointerCancel(PointerCancelEvent event) {
-    if (_pressedPointer == event.pointer) {
-      setState(() => _pressedPointer = null);
-    }
-  }
-}
-
-Color _busyBooksCheckedRadioColor(
-  Color accent, {
-  required Brightness brightness,
-  required bool hovered,
-  required bool pressed,
-}) {
-  final normalLightnessDelta = brightness == Brightness.light ? 0.05 : 0.0;
-  final stateLightnessDelta = pressed ? -0.07 : (hovered ? 0.07 : 0.0);
-  final hsl = HSLColor.fromColor(accent);
-  return hsl
-      .withLightness(
-        (hsl.lightness + normalLightnessDelta + stateLightnessDelta).clamp(
-          0.0,
-          1.0,
-        ),
-      )
-      .toColor();
-}
-
-class BusyBooksCheckbox extends StatelessWidget {
-  const BusyBooksCheckbox({
-    super.key,
-    required this.value,
-    required this.onChanged,
-    this.tooltip,
-    this.tristate = false,
-  });
-
-  final bool? value;
-  final bool tristate;
-  final String? tooltip;
-  final ValueChanged<bool?>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final checkbox = YaruCheckbox(
-      value: value,
-      tristate: tristate,
-      onChanged: onChanged,
-    );
-    final message = tooltip;
-    if (message == null || message.isEmpty) {
-      return checkbox;
-    }
-    return Tooltip(message: message, child: checkbox);
-  }
-}
-
 enum BusyBooksStatusKind { information, success, warning, error }
-
-Color busyBooksStatusColor(BuildContext context, BusyBooksStatusKind kind) {
-  final colors = YaruColors.of(context);
-  return switch (kind) {
-    BusyBooksStatusKind.information => colors.link,
-    BusyBooksStatusKind.success => colors.success,
-    BusyBooksStatusKind.warning => colors.warning,
-    BusyBooksStatusKind.error => colors.error,
-  };
-}
 
 class BusyBooksStatusBox extends StatelessWidget {
   const BusyBooksStatusBox({
@@ -4389,97 +3963,6 @@ class _BusyBooksDialogButtonContent extends StatelessWidget {
         const SizedBox(width: BusyBooksSpacing.sm),
         Flexible(child: text),
       ],
-    );
-  }
-}
-
-class BusyBooksFloatingTextEntryGroup extends StatelessWidget {
-  const BusyBooksFloatingTextEntryGroup({super.key, required this.children})
-    : assert(children.length > 1);
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return AutofillGroup(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var index = 0; index < children.length; index++) ...[
-            if (index > 0) const SizedBox(height: BusyBooksSpacing.sm),
-            children[index],
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class BusyBooksFloatingTextEntry extends StatelessWidget {
-  const BusyBooksFloatingTextEntry({
-    super.key,
-    required this.label,
-    required this.controller,
-    this.errorText,
-    this.hintText,
-    this.enabled = true,
-    this.autofocus = false,
-    this.keyboardType,
-    this.minLines = 1,
-    this.maxLines = 1,
-    this.textInputAction,
-    this.textDirection,
-    this.textStyle,
-    this.onSubmitted,
-  }) : assert(minLines > 0),
-       assert(maxLines >= minLines);
-
-  final String label;
-  final TextEditingController controller;
-  final String? errorText;
-  final String? hintText;
-  final bool enabled;
-  final bool autofocus;
-  final TextInputType? keyboardType;
-  final int minLines;
-  final int maxLines;
-  final TextInputAction? textInputAction;
-  final TextDirection? textDirection;
-  final TextStyle? textStyle;
-  final ValueChanged<String>? onSubmitted;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      enabled: enabled,
-      autofocus: autofocus,
-      keyboardType: keyboardType,
-      minLines: minLines,
-      maxLines: maxLines,
-      textInputAction: textInputAction,
-      textDirection: textDirection,
-      style: textStyle,
-      onFieldSubmitted: enabled ? onSubmitted : null,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hintText,
-        errorText: errorText,
-      ),
-    );
-  }
-}
-
-class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: BusyBooksInsets.sectionLabel,
-      child: Text(text, style: busyBooksSectionHeaderStyle(context)),
     );
   }
 }

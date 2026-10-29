@@ -7,7 +7,7 @@ jobs:
       - uses: actions/checkout@v7
       - run: python3 tools/verify_vendor.py
       - run: python3 -m unittest discover -s test/tools -p '*_test.py'
-      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libhandy-1-dev libwebkit2gtk-4.1-dev libspeechd2 speech-dispatcher-espeak-ng libxtst6 libxml2-utils xvfb dbus-x11
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libhandy-1-dev libwebkit2gtk-4.1-dev libspeechd2 speech-dispatcher-espeak-ng libxtst6 libxml2-utils fonts-lato xvfb dbus-x11
       - uses: subosito/flutter-action@v2
         with:
           channel: stable

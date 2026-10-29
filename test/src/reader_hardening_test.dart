@@ -171,24 +171,21 @@ Future<void> until(bool Function() condition) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('oversized first spine is rejected before native opening', () async {
+    final reader = await _Reader.create(
+      'test/fixtures/resource-budgets/epub-spine-256m.epub',
+    );
+    try {
+      await reader.open();
+      expect(reader.opened, isEmpty);
+      expect(reader.state.ready, isFalse);
+      expect(reader.state.error, contains('media limit'));
+    } finally {
+      await reader.dispose();
+    }
+  });
   test(
-    'F23: oversized first spine is rejected before native opening',
-    () async {
-      final reader = await _Reader.create(
-        'test/fixtures/resource-budgets/epub-spine-256m.epub',
-      );
-      try {
-        await reader.open();
-        expect(reader.opened, isEmpty);
-        expect(reader.state.ready, isFalse);
-        expect(reader.state.error, contains('media limit'));
-      } finally {
-        await reader.dispose();
-      }
-    },
-  );
-  test(
-    'F19: source watch starts before native opening and rendering stays pinned',
+    'source watch starts before native opening and rendering stays pinned',
     () async {
       final reader = await _Reader.create('test/fixtures/text.pdf');
       var pinned = false;
@@ -221,7 +218,7 @@ void main() {
   );
 
   test(
-    'F20: real controller delivers large selection and chunks a valid legacy PDF goto',
+    'real controller delivers large selection and chunks a valid legacy PDF goto',
     () async {
       final reader = await _Reader.create('test/fixtures/text.pdf');
       try {
@@ -294,7 +291,7 @@ void main() {
   );
 
   test(
-    'F20: bridge failure followed by flushed cannot save stale progress',
+    'bridge failure followed by flushed cannot save stale progress',
     () async {
       final reader = await _Reader.create('test/fixtures/text.pdf');
       try {
@@ -316,7 +313,7 @@ void main() {
   );
 
   test(
-    'F21: cache parsing failure forces one regeneration and manual Retry forces another',
+    'cache parsing failure forces one regeneration and manual Retry forces another',
     () async {
       final reader = await _Reader.create('test/fixtures/reflowable.epub');
       try {

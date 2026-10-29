@@ -17,9 +17,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get reader => 'Lesen';
 
   @override
-  String get continueReading => 'Weiterlesen';
-
-  @override
   String get allBooks => 'Alle Bücher';
 
   @override
@@ -141,9 +138,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get sort => 'Sortieren';
-
-  @override
-  String get noMatches => 'Keine passenden Bücher';
 
   @override
   String get general => 'Allgemein';
@@ -286,13 +280,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Diese PDF-Seite enthält keine Textebene. Lesen und Seitenlesezeichen sind möglich. Textauswahl, Wörterbuch und Suche benötigen Text.';
 
   @override
-  String get searchPlaceholder => 'Gesamtes Buch durchsuchen';
-
-  @override
   String get searching => 'Suche läuft';
-
-  @override
-  String get noSearchResults => 'Keine Ergebnisse';
 
   @override
   String get note => 'Notiz';
@@ -313,17 +301,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get pink => 'Rosa';
 
   @override
-  String get copyText => 'Ausgewählten Text kopieren';
-
-  @override
   String get selectText =>
       'Wählen Sie im Buch Text aus, um ihn hervorzuheben, zu kopieren oder nachzuschlagen.';
 
   @override
   String get noAnnotations => 'Noch keine Markierungen oder Notizen';
-
-  @override
-  String get openPassage => 'Textstelle öffnen';
 
   @override
   String get play => 'Wiedergabe';
@@ -342,9 +324,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get speed => 'Geschwindigkeit';
-
-  @override
-  String get spokenPassage => 'Vorgelesene Textstelle';
 
   @override
   String get dictionarySource =>
@@ -414,13 +393,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Systemvorgabe für reduzierte Animationen beachten';
 
   @override
-  String get readingState => 'Lesestatus';
-
-  @override
-  String get notAvailable =>
-      'Keine Sprachressource verfügbar. Installieren Sie eine Ressource und versuchen Sie es erneut.';
-
-  @override
   String get speechUnavailable =>
       'Vorlesen konnte nicht gestartet werden. Prüfen Sie den installierten Sprachdienst und die Stimmen.';
 
@@ -450,14 +422,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die Einstellungen konnten nicht geladen werden. Die ursprüngliche Einstellungsdatei bleibt erhalten.';
 
   @override
-  String get restoreRestart =>
-      'Wiederhergestellte Darstellungseinstellungen werden sofort angewendet.';
-
-  @override
-  String get annotationsExportHelp =>
-      'Notizen und hervorgehobene Textstellen als lesbares Markdown exportieren.';
-
-  @override
   String get countBooks => 'Bücher';
 
   @override
@@ -471,20 +435,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Unterstützt werden DRM-freie EPUB 2/3, PDF, FB2 (.fb2, .fb2.zip, .fbz), CBZ und CBR.';
 
   @override
-  String get goToHelp =>
-      'Geben Sie eine EPUB-CFI, Kapitelnummer, PDF-Seitenbezeichnung oder Seitennummer ein.';
-
-  @override
   String get source => 'Quelle';
-
-  @override
-  String get defaultVoice => 'Systemstimme';
-
-  @override
-  String get useSelection => 'Ab der Auswahl oder aktuellen Textstelle';
-
-  @override
-  String get version => 'Version';
 
   @override
   String get noSpeechText =>
@@ -596,23 +547,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get openChangedBook => 'Geändertes Buch öffnen';
 
   @override
-  String get invalidCollectionName =>
-      'Wählen Sie einen Sammlungsnamen ohne Pfadtrennzeichen.';
-
-  @override
   String get sidebar => 'Seitenleiste';
 
   @override
   String get books => 'Bücher';
-
-  @override
-  String get searchResults => 'Suchergebnisse';
-
-  @override
-  String get searchHint => 'Wörter eingeben, um eine Textstelle zu finden.';
-
-  @override
-  String get searchCancelled => 'Suche abgebrochen.';
 
   @override
   String get searchFailed => 'Suche fehlgeschlagen. Erneut versuchen.';
@@ -682,10 +620,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die physische Seitennummer verwenden, beginnend mit 1.';
 
   @override
-  String get pageLabelHelp =>
-      'Eine vorhandene Bezeichnung wie iv verwenden. Sie kann von der Seitennummer abweichen.';
-
-  @override
   String get invalidPage =>
       'Physische Seite im gültigen Bereich oder genaue Druckseitenbezeichnung eingeben. Für numerische Bezeichnungen = voranstellen.';
 
@@ -708,10 +642,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get speechOptions => 'Stimme und Geschwindigkeit';
 
   @override
-  String get dictionaryExternal =>
-      'Definitionen aus dem englischen Wiktionary erscheinen im Lesebereich und benötigen eine Verbindung. „Vollständigen Eintrag öffnen“ öffnet die Quelle im Browser.';
-
-  @override
   String get annotation => 'Anmerkung';
 
   @override
@@ -729,9 +659,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get pdfDefaults => 'PDF-Standardeinstellungen';
-
-  @override
-  String get epubDefaults => 'EPUB-Standardeinstellungen';
 
   @override
   String get footnote => 'Fußnote';
@@ -764,9 +691,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get viewMode => 'Ansicht';
 
   @override
-  String get allItems => 'Alle';
-
-  @override
   String get highlights => 'Markierungen';
 
   @override
@@ -777,14 +701,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get searchNotebook => 'Im Notizbuch suchen';
-
-  @override
-  String get notebookSearchScope =>
-      'Gespeicherte Passagen und private Notizen dieses Buches';
-
-  @override
-  String get notebookEmpty =>
-      'Keine passenden gespeicherten Einträge. Beim Lesen gespeicherte Markierungen und Lesezeichen erscheinen hier.';
 
   @override
   String get missingBookNotebook =>
@@ -897,10 +813,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Lesedaten wurden wiederhergestellt. Einstellungen konnten nicht angewendet werden; dies wird beim nächsten Start erneut versucht.';
 
   @override
-  String get noteActionFailed =>
-      'Diese Aktion konnte nicht abgeschlossen werden. Ihr Notizentwurf bleibt erhalten. Versuchen Sie es erneut oder speichern Sie die Notiz.';
-
-  @override
   String get backToCollection => 'Zurück zur Sammlung';
 
   @override
@@ -943,9 +855,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die Seitenvorschau konnte nicht geladen werden.';
 
   @override
-  String get openInNotebook => 'Im Notizbuch öffnen';
-
-  @override
   String get loadingOutline => 'Gliederung wird geladen…';
 
   @override
@@ -962,9 +871,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get navigation => 'Navigation';
-
-  @override
-  String get readingAssistance => 'Lesehilfen';
 
   @override
   String get annotationActions => 'Anmerkungsaktionen';

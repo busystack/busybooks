@@ -56,6 +56,5 @@ def pdf(name,image=False,pages=4,mixed=False):
  for off in offsets[1:]:out+=f'{off:010d} 00000 n \n'.encode()
  out+=f'trailer\n<< /Size {len(objects)+1} /Root {catalog} 0 R /Info {info} 0 R >>\nstartxref\n{xref}\n%%EOF\n'.encode();(ROOT/f'{name}.pdf').write_bytes(out)
 epub('reflowable');epub('fixed-layout',fixed=True);epub('long',long=True);epub('protected',protected=True);pdf('text');pdf('image-only',image=True);pdf('long',pages=400);pdf('mixed-pages',pages=8,mixed=True)
-(ROOT/'damaged.epub').write_bytes(b'PK\x03\x04broken');(ROOT/'damaged.pdf').write_bytes(b'%PDF-1.7\nbroken');(ROOT/'unsupported.txt').write_text('Not a supported book.\n')
-with zipfile.ZipFile(ROOT/'unsafe.epub','w') as z:z.writestr('../escape','unsafe')
+(ROOT/'damaged.pdf').write_bytes(b'%PDF-1.7\nbroken')
 print(json.dumps({p.name:p.stat().st_size for p in sorted(ROOT.iterdir()) if p.is_file()},indent=2))

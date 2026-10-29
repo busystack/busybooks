@@ -107,7 +107,7 @@ class WiktionaryService implements DictionaryService {
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       request.headers.set(
         HttpHeaders.userAgentHeader,
-        'BusyBooks/0.1 (https://github.com/albert-gee/busybooks)',
+        'BusyBooks/0.1 (https://github.com/busystack/busybooks)',
       );
       final response = await request.close();
       if ([301, 302, 307, 308].contains(response.statusCode)) {

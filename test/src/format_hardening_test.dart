@@ -17,7 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
-  test('F21: EPUB closure decodes URL path components exactly once', () {
+  test('EPUB closure decodes URL path components exactly once', () {
     for (final entry in {
       'chapter%232.xhtml#chapter%3Atwo': 'OPS/chapter#2.xhtml',
       '%70er%25cent.xhtml': 'OPS/per%cent.xhtml',
@@ -34,7 +34,7 @@ void main() {
     );
   });
   test(
-    'F18: inspection retains no EPUB bytes and file-backed reads are repeatable',
+    'inspection retains no EPUB bytes and file-backed reads are repeatable',
     () async {
       var retained = false;
       final path = p.absolute('test/fixtures/reflowable.epub');
@@ -77,7 +77,7 @@ void main() {
   );
 
   test(
-    'F19: PDF rendering uses verified snapshot after a timestamp-preserving replacement',
+    'PDF rendering uses verified snapshot after a timestamp-preserving replacement',
     () async {
       final owned = await Directory.systemTemp.createTemp(
         'busybooks-pinned-pdf-',
@@ -131,7 +131,7 @@ void main() {
     'cbz': 'test/fixtures/formats/comic-codecs.cbz',
   }.entries) {
     test(
-      'F21: ${fixture.key} repairs same-length corruption and a sealed incomplete descriptor',
+      '${fixture.key} repairs same-length corruption and a sealed incomplete descriptor',
       () async {
         final owned = await Directory.systemTemp.createTemp(
           'busybooks-cache-integrity-',
@@ -209,7 +209,7 @@ void main() {
   }
 
   test(
-    'F22: EXIF orientation and geometry share marker-fill and standalone-marker parsing',
+    'EXIF orientation and geometry share marker-fill and standalone-marker parsing',
     () async {
       final source = p.absolute('test/fixtures/formats/orientation6-fill.cbz');
       final zip = await FileBackedZip.open(source);
@@ -234,7 +234,7 @@ void main() {
   );
 
   test(
-    'F20: large Unicode selections, narration and legacy commands fit bounded frames losslessly',
+    'large Unicode selections, narration and legacy commands fit bounded frames losslessly',
     () {
       final text = '📚' * 400000;
       final anchor = {
@@ -296,7 +296,7 @@ void main() {
   );
 
   test(
-    'F20: incomplete transfers cannot be acknowledged by flush or cross sessions',
+    'incomplete transfers cannot be acknowledged by flush or cross sessions',
     () {
       final frames = readerBridgeFrames(
         {'type': 'location', 'session': 'first', 'text': 'a' * 200000},

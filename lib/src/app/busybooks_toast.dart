@@ -39,30 +39,6 @@ class BusyBooksToastOverlay extends StatefulWidget {
     );
   }
 
-  static bool maybeShow(
-    BuildContext context, {
-    required String message,
-    String? actionLabel,
-    VoidCallback? onAction,
-    Duration duration = const Duration(seconds: 5),
-    BusyBooksToastPriority priority = BusyBooksToastPriority.normal,
-  }) {
-    final host = context
-        .dependOnInheritedWidgetOfExactType<_BusyBooksToastScope>()
-        ?._state;
-    if (host == null) {
-      return false;
-    }
-    host._show(
-      message: message,
-      actionLabel: actionLabel,
-      onAction: onAction,
-      duration: duration,
-      priority: priority,
-    );
-    return true;
-  }
-
   @override
   State<BusyBooksToastOverlay> createState() => _BusyBooksToastOverlayState();
 }

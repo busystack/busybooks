@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CC0 F23/F24 fixtures, authored with bounded writes. Optional RAR is dev-only."""
+"""CC0 publication-resource fixtures, authored with bounded writes. RAR is dev-only."""
 import argparse
 import hashlib
 import os

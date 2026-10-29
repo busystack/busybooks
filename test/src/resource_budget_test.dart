@@ -66,7 +66,7 @@ Future<void> useDirectory(Future<void> Function(Directory) action) async {
 
 void main() {
   test(
-    'F23: EPUB media and navigation budgets also constrain misleading filenames',
+    'EPUB media and navigation budgets also constrain misleading filenames',
     () {
       expect(epubResourceLimit('chapter.xhtml'), epubTextBytes);
       expect(
@@ -105,7 +105,7 @@ void main() {
     'svg': epubTextBytes,
   }.entries) {
     test(
-      'F23: oversized ${entry.key} is rejected before publishing a cache',
+      'oversized ${entry.key} is rejected before publishing a cache',
       () async => useDirectory((root) async {
         final extra = entry.key == 'chapter'
             ? const <String, List<int>>{}
@@ -154,7 +154,7 @@ void main() {
     );
   }
   test(
-    'F23: small but pathological XML is rejected before a renderer DOM exists',
+    'small but pathological XML is rejected before a renderer DOM exists',
     () async => useDirectory((root) async {
       final bytes = zip(
         epub(
@@ -178,7 +178,7 @@ void main() {
     }),
   );
   test(
-    'F23: warm caches cannot increase the validated media budget',
+    'warm caches cannot increase the validated media budget',
     () async => useDirectory((root) async {
       final source = File(p.absolute('test/fixtures/reflowable.epub'));
       final id = await fileSha256(source, () => false);
@@ -211,7 +211,7 @@ void main() {
     }),
   );
   test(
-    'F24: irrelevant comic payloads are verified and never retained',
+    'irrelevant comic payloads are verified and never retained',
     () async => useDirectory((root) async {
       final source = File(p.join(root.path, 'book.cbz'));
       await source.writeAsBytes(
@@ -233,7 +233,7 @@ void main() {
     }),
   );
   test(
-    'F24: ignored payload CRC failures still reject the archive',
+    'ignored payload CRC failures still reject the archive',
     () async => useDirectory((root) async {
       final bytes = zip({
         'page.png': image.encodePng(image.Image(width: 10, height: 10)),
@@ -267,7 +267,7 @@ void main() {
     }),
   );
   test(
-    'F24: page, discarded data, ComicInfo and disk reserve have separate bounds',
+    'page, discarded data, ComicInfo and disk reserve have separate bounds',
     () {
       final budget = ComicResourceBudget();
       expect(budget.add('page.png', 64 * 1024 * 1024), ComicResource.page);
@@ -306,7 +306,7 @@ void main() {
     },
   );
   test(
-    'F25: FB2 source size is rejected before hashing, buffering or parsing',
+    'FB2 source size is rejected before hashing, buffering or parsing',
     () async => useDirectory((root) async {
       expect(maximumBookBytes('fb2'), fb2XmlBytes);
       final source = File(p.join(root.path, 'oversized.fb2'));
@@ -328,7 +328,7 @@ void main() {
     }),
   );
   test(
-    'F25: impossible encoded sizes fail before fingerprinting',
+    'impossible encoded sizes fail before fingerprinting',
     () async => useDirectory((root) async {
       for (final entry in {
         'UTF-16': fb2DecodedUnits * 2 + 2,
@@ -372,7 +372,7 @@ void main() {
     'fiction.fbz',
   ]) {
     test(
-      'F25: $fixture streams once and preserves its original prepared representation',
+      '$fixture streams once and preserves its original prepared representation',
       () async => useDirectory((root) async {
         final source = p.absolute('test/fixtures/formats', fixture);
         PreparedFb2? retained;
@@ -412,7 +412,7 @@ void main() {
     );
   }
   test(
-    'F25: decoding is correct at individual UTF-16 bytes, surrogate pairs and text-node boundaries',
+    'decoding is correct at individual UTF-16 bytes, surrogate pairs and text-node boundaries',
     () async {
       final text =
           '<?xml version="1.0" encoding="UTF-16"?><FictionBook xmlns="$fb2Namespace"><body><section><p>${'word' * 20000}📚 סוף</p></section></body></FictionBook>';
@@ -441,7 +441,7 @@ void main() {
     },
   );
   test(
-    'F26: every FILE_ID_128 bit and the full volume serial participate in identity',
+    'every FILE_ID_128 bit and the full volume serial participate in identity',
     () {
       final first = Uint8List.fromList(List.generate(24, (i) => i));
       final upper = Uint8List.fromList(first);
@@ -455,7 +455,7 @@ void main() {
     },
   );
   test(
-    'F26: Windows returns a full stable identity and detects replacements',
+    'Windows returns a full stable identity and detects replacements',
     () async => useDirectory((root) async {
       final first = File(p.join(root.path, 'one'));
       await first.writeAsString('first');

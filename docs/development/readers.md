@@ -95,7 +95,7 @@ release archives, rather than by hashing a locally modified vendor tree.
 | Dependency | Verified official baseline |
 | --- | --- |
 | Foliate.js | Commit `78914aef4466eb960965702401634c2cb348e9b1`, tree `72c695f2511bcfc0e3dc37385b81daa5f6fe6930`; all twelve distributed files, including licenses and README |
-| PDF.js | Official `pdfjs-5.5.207-dist.zip`, SHA-256 `b37ad762eb7c16fccbf09452c4386e910cc86c9cb736843b77440ac373c6f046`; two layer stylesheets from source commit `5279646985f4744386a9fe3cf61b28bf1ff88d6e` |
+| PDF.js | Official `pdfjs-5.5.207-dist.zip`, SHA-256 `b37ad762eb7c16fccbf09452c4386e910cc86c9cb736843b77440ac373c6f046`; text-layer stylesheet from source commit `5279646985f4744386a9fe3cf61b28bf1ff88d6e` |
 | UnRAR | Official `unrarsrc-7.2.6.tar.gz`, SHA-256 `d1afa67ef4121ebc5986815699e05db0ce8648499e5dca854f282a4c3f72c003`; original license and acknowledgement bytes |
 | WebView2 SDK | Official Microsoft NuGet package `1.0.3537.50`, SHA-256 `5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa`; verified by CMake before extraction |
 
@@ -305,11 +305,14 @@ checks; changing the manifest alone does not establish compatibility.
 
 ## Direct-file workspace integration
 
-Both native hosts receive `path` (the original publication), `cacheDirectory`
-(the owned disposable publication resource directory) and a reader `session`. They no
-longer derive cache locations from a private book-copy directory. `/publication`
-serves the original PDF; EPUB book-index/resource requests serve the verified
-cache. FB2/comic book-index and resource requests use these same endpoints. The adapter reports its session with every event so a replaced surface
+Preparation returns `path` (the original publication), `publicationPath` (the
+renderer input) and `cacheDirectory` (the owned disposable resource directory).
+Both native hosts receive this descriptor and a reader `session`. For PDF,
+`publicationPath` names the verified, content-addressed `publication.pdf` snapshot
+in the cache; `/publication` serves that snapshot, so replacing the original
+pathname cannot change the open renderer's bytes. EPUB, FB2 and comic book-index
+and resource requests serve the verified cache through the same endpoints.
+The adapter reports its session with every event so a replaced surface
 cannot attach positions to the next book. Obsolete native initialization futures
 also cannot close or replace the active reader; WebView2 initialization is
 serialized and close cancels a pending result. Reading data remains keyed by content

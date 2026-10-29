@@ -19,7 +19,6 @@ abstract final class BusyBooksGlyphs {
   static const IconData ai = YaruIcons.star_filled;
   static const IconData appearance = YaruIcons.desktop_appearance;
   static const IconData blockquote = YaruIcons.chat_text;
-  static const IconData blankLine = YaruIcons.insert_text;
   static const IconData bold = YaruIcons.bold;
   static const IconData branch = Icons.fork_right;
   static const IconData category = YaruIcons.tag;
@@ -67,7 +66,6 @@ abstract final class BusyBooksGlyphs {
   static const IconData keyboard = YaruIcons.keyboard_shortcuts;
   static const IconData link = YaruIcons.insert_link;
   static const IconData markdownFile = YaruIcons.text_editor;
-  static const IconData math = Icons.functions;
   static const IconData play = YaruIcons.media_play;
   static const IconData menuHorizontal = YaruIcons.view_more_horizontal;
   static const IconData menuVertical = YaruIcons.view_more;
@@ -88,20 +86,17 @@ abstract final class BusyBooksGlyphs {
   static const IconData searchUnavailable = YaruIcons.find_replace;
   static const IconData selectAll = YaruIcons.selection;
   static const IconData settings = YaruIcons.settings;
-  static const IconData sidebarLocalHistory = YaruIcons.history;
   static const IconData sidebar = YaruIcons.sidebar;
   static const IconData startTopic = YaruIcons.document;
   static const IconData strikethrough = YaruIcons.strikethrough;
   static const IconData sourceView = YaruIcons.code;
   static const IconData splitView = YaruIcons.sidebar_right;
   static const IconData symbols = YaruIcons.symbols;
-  static const IconData tab = YaruIcons.tab_new;
   static const IconData table = YaruIcons.office_spreadsheet;
   static const IconData tag = YaruIcons.tag;
   static const IconData task = YaruIcons.checkbox;
   static const IconData text = YaruIcons.text_editor;
   static const IconData thematicBreak = YaruIcons.minus;
-  static const IconData tip = YaruIcons.light_bulb_on;
   static const IconData toolbarPlacement = YaruIcons.go_top;
   static const IconData tree = YaruIcons.tree;
   static const IconData underline = YaruIcons.underline;
@@ -350,16 +345,6 @@ abstract final class BusyBooksGlyphs {
     return null;
   }
 
-  /// Resolves a navigation glyph against the surrounding reading direction.
-  ///
-  /// Yaru's directional glyphs do not opt in to Flutter's automatic icon
-  /// mirroring, so callers must select the matching physical glyph instead.
-  static IconData backFor(TextDirection direction) {
-    return direction == TextDirection.rtl
-        ? YaruIcons.arrow_right
-        : YaruIcons.arrow_left;
-  }
-
   /// Compact application-header Back glyph matching GTK's
   /// `go-previous-symbolic`, rather than the full navigation arrow.
   static IconData headerBackFor(TextDirection direction) {
@@ -384,25 +369,5 @@ abstract final class BusyBooksGlyphs {
     return direction == TextDirection.rtl
         ? YaruIcons.indent_less
         : YaruIcons.indent_more;
-  }
-
-  static IconData outdentFor(TextDirection direction) {
-    return direction == TextDirection.rtl
-        ? YaruIcons.indent_more
-        : YaruIcons.indent_less;
-  }
-
-  static IconData undoFor(TextDirection direction) {
-    return direction == TextDirection.rtl ? YaruIcons.redo : YaruIcons.undo;
-  }
-
-  static IconData redoFor(TextDirection direction) {
-    return direction == TextDirection.rtl ? YaruIcons.undo : YaruIcons.redo;
-  }
-
-  static IconData wordWrapFor(TextDirection direction) {
-    return direction == TextDirection.rtl
-        ? YaruIcons.text_direction_rtl
-        : YaruIcons.text_direction_ltr;
   }
 }

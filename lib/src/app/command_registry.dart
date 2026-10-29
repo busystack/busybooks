@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'busybooks_shortcuts.dart';
 import 'localization.dart';
 import 'shortcut_binding.dart';
-import 'shortcut_capture.dart';
 
 typedef BusyBooksCommandCallback = FutureOr<void> Function();
 typedef BusyBooksCommandPredicate = bool Function();
@@ -20,47 +19,7 @@ class BusyBooksCommandIntent extends Intent {
   final String commandId;
 }
 
-class BusyBooksContextCommandIntent extends Intent {
-  const BusyBooksContextCommandIntent(this.commandId);
-
-  final String commandId;
-}
-
-class BusyBooksContextCommandAction
-    extends Action<BusyBooksContextCommandIntent> {
-  BusyBooksContextCommandAction({
-    required this.isCommandEnabled,
-    required this.onCommand,
-    this.captureTarget,
-  });
-
-  final bool Function(String commandId) isCommandEnabled;
-  final void Function(String commandId) onCommand;
-  final BusyBooksContextCommandSnapshot Function()? captureTarget;
-
-  @override
-  bool isEnabled(BusyBooksContextCommandIntent intent) {
-    return isCommandEnabled(intent.commandId);
-  }
-
-  @override
-  Object? invoke(BusyBooksContextCommandIntent intent) {
-    onCommand(intent.commandId);
-    return null;
-  }
-}
-
-/// Text controls capture their selection before the query receives focus.
-/// Validation never restores a different selection.
-class BusyBooksContextCommandSnapshot {
-  const BusyBooksContextCommandSnapshot(this._validate);
-  final bool Function() _validate;
-  bool get isCurrent => _validate();
-}
-
 enum BusyBooksCommandScope { application, documentView, sidebar, textEditing }
-
-enum BusyBooksCommandResourceContext { any }
 
 @immutable
 class BusyBooksCommand {
@@ -71,7 +30,6 @@ class BusyBooksCommand {
     required this.scope,
     this.shortcut,
     this.defaultYieldsToOverrides = false,
-    this.resourceContext = BusyBooksCommandResourceContext.any,
     this.description,
     this.disabledReason,
     this.execute,
@@ -85,7 +43,6 @@ class BusyBooksCommand {
   final BusyBooksCommandScope scope;
   final BusyBooksShortcutDefinition? shortcut;
   final bool defaultYieldsToOverrides;
-  final BusyBooksCommandResourceContext resourceContext;
 
   BusyBooksCommand withShortcut(BusyBooksShortcutDefinition? value) =>
       BusyBooksCommand(
@@ -95,7 +52,6 @@ class BusyBooksCommand {
         scope: scope,
         shortcut: value,
         defaultYieldsToOverrides: defaultYieldsToOverrides,
-        resourceContext: resourceContext,
         description: description,
         disabledReason: disabledReason,
         execute: execute,
@@ -160,68 +116,10 @@ class BusyBooksCommandRegistry {
     for (final c in this.commands) {
       _aliases[c.id] = _defaultAliases(c);
     }
-    _compileKeyCandidates();
   }
 
   final List<BusyBooksCommand> commands;
   final Map<String, List<ShortcutActivator>> _aliases = {};
-  final Map<(BusyBooksCommandScope, LogicalKeyboardKey), List<String>>
-  _keyCandidates = {};
-  void _compileKeyCandidates() {
-    _keyCandidates.clear();
-    for (final c in commands) {
-      for (final activator in activators(c.id)) {
-        for (final trigger in activator.triggers ?? <LogicalKeyboardKey>[]) {
-          (_keyCandidates[(c.scope, trigger)] ??= []).add(c.id);
-        }
-      }
-    }
-  }
-
-  final Map<String, BusyBooksCommand> _replacedDefaults = {};
-  final Map<String, List<ShortcutActivator>> _retiredBindings = {};
-  final Map<int, List<ShortcutActivator>> _blockedBindings = {};
-  List<ShortcutActivator> _blockedFor(Set<BusyBooksCommandScope> scopes) {
-    final key = scopes.fold(0, (int bits, scope) => bits | 1 << scope.index);
-    return _blockedBindings.putIfAbsent(key, () {
-      final receivers = {
-        ...scopes,
-        BusyBooksCommandScope.application,
-        BusyBooksCommandScope.documentView,
-        BusyBooksCommandScope.sidebar,
-      };
-      bool replaced(BusyBooksCommand old, ShortcutActivator retired) =>
-          commands.any(
-            (c) =>
-                receivers.contains(c.scope) &&
-                contextsOverlap(old, c) &&
-                activators(c.id).any(
-                  (a) => a is SingleActivator && retired is SingleActivator
-                      ? BusyBooksKeyBinding.fromActivator(a) ==
-                            BusyBooksKeyBinding.fromActivator(retired)
-                      : a == retired,
-                ),
-          );
-      return [
-        for (final c in _replacedDefaults.values)
-          if (scopes.contains(c.scope))
-            for (final a in _retiredBindings[c.id] ?? <ShortcutActivator>[])
-              if (!replaced(c, a)) a,
-      ];
-    });
-  }
-
-  Map<ShortcutActivator, Intent> blockedDefaultIntents(
-    Set<BusyBooksCommandScope> scopes,
-  ) => {
-    for (final a in _blockedFor(scopes))
-      a: const DoNothingAndStopPropagationIntent(),
-  };
-  bool blocksReplacedDefault(
-    KeyEvent event,
-    HardwareKeyboard keyboard,
-    Set<BusyBooksCommandScope> scopes,
-  ) => _blockedFor(scopes).any((a) => a.accepts(event, keyboard));
   List<ShortcutActivator> activators(String id) => [
     if (_byId[id]?.shortcut case final value?) value.activator,
     ...?_aliases[id],
@@ -246,23 +144,14 @@ class BusyBooksCommandRegistry {
     ]);
     result._aliases.clear();
     for (final command in result.commands) {
-      if (overrides.containsKey(command.id)) {
-        result._replacedDefaults[command.id] = this[command.id]!;
-        result._retiredBindings[command.id] = activators(command.id);
-      } else {
+      if (!overrides.containsKey(command.id)) {
         result._aliases[command.id] = _defaultAliases(command);
       }
     }
-    result._compileKeyCandidates();
     return result;
   }
 
-  Map<ShortcutActivator, Intent> bindingIntents(String id, Intent intent) => {
-    for (final activator in activators(id)) activator: intent,
-  };
-
-  /// Actual receiving contexts overlap across scopes. Tree browsing is the one
-  /// disjoint document context; line movement edits the Source .tree buffer.
+  /// Commands can receive shortcuts across overlapping workspace scopes.
   static bool contextsOverlap(BusyBooksCommand a, BusyBooksCommand b) => true;
 
   List<BusyBooksCommand> conflicts(String id, BusyBooksKeyBinding binding) {
@@ -310,55 +199,6 @@ class BusyBooksCommandRegistry {
     }
     await command.execute!();
     return true;
-  }
-
-  bool canExecuteInContext(String id, BuildContext? contextTarget) {
-    final command = _byId[id];
-    if (command == null || command.execute == null) {
-      return false;
-    }
-    if (!isContextual(command) || contextTarget == null) {
-      return command.enabled();
-    }
-    final action = Actions.maybeFind<BusyBooksContextCommandIntent>(
-      contextTarget,
-    );
-    return action?.isEnabled(BusyBooksContextCommandIntent(id)) ?? false;
-  }
-
-  Future<bool> executeInContext(String id, BuildContext? contextTarget) async {
-    final command = _byId[id];
-    if (command == null || !canExecuteInContext(id, contextTarget)) {
-      return false;
-    }
-    if (isContextual(command) && contextTarget != null) {
-      Actions.maybeInvoke(contextTarget, BusyBooksContextCommandIntent(id));
-      return true;
-    }
-    await command.execute!();
-    return true;
-  }
-
-  bool isContextual(BusyBooksCommand command) => false;
-  bool requiresDocumentTarget(BusyBooksCommand command) =>
-      command.scope == BusyBooksCommandScope.documentView;
-  bool requiresWorkspaceTarget(BusyBooksCommand command) => false;
-
-  bool shortcutAccepts(String id, KeyEvent event, HardwareKeyboard keyboard) {
-    return !BusyBooksShortcutCapture.suppressing &&
-        activators(id).any((a) => a.accepts(event, keyboard));
-  }
-
-  String? matchingCommandId(
-    KeyEvent event,
-    HardwareKeyboard keyboard, {
-    required BusyBooksCommandScope scope,
-  }) {
-    if (BusyBooksShortcutCapture.suppressing) return null;
-    for (final id in _keyCandidates[(scope, event.logicalKey)] ?? <String>[]) {
-      if (shortcutAccepts(id, event, keyboard)) return id;
-    }
-    return null;
   }
 
   Map<ShortcutActivator, Intent> shortcutIntents({
