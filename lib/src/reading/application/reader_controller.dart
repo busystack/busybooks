@@ -1249,6 +1249,13 @@ class ReaderController extends Notifier<ReaderState> {
           if (event['keyboard'] == true && _routeVisible && !_suspended) {
             _restoreLookupFocus(_session, _presentation);
           }
+        } else if (event['presentation'] == _presentation &&
+            _popoverActive &&
+            _popoverNativeOwner) {
+          // GTK can close its frame before the child handles Escape. Its
+          // retained editor still owns input: seal/capture through the normal
+          // handoff before releasing the logical popup and accepting keys.
+          await dismissPopover(restoreFocus: event['keyboard'] == true);
         }
       case 'ready':
         if (_suspended ||
@@ -2255,6 +2262,7 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> dismissPopover({bool restoreFocus = true}) async {
     final session = _session, presentation = _presentation;
+    final focusRevision = _focusRevision;
     final lookupFocus = _popoverKind == 'lookup';
     await _capturePopoverDraft(seal: true);
     if (session != _session || presentation != _presentation) return;
@@ -2265,10 +2273,16 @@ class ReaderController extends Notifier<ReaderState> {
     _popoverKind = null;
     _popoverSelection = null;
     _annotationId = null;
+    final restore =
+        restoreFocus && focusRevision == _focusRevision && interactive;
     await readerChannel.invokeMethod<void>('dismissPopover', {
-      'restoreFocus': restoreFocus,
+      'restoreFocus': restore,
     });
-    if (_routeVisible && restoreFocus) {
+    if (restore &&
+        session == _session &&
+        dismissedPresentation == _presentation &&
+        focusRevision == _focusRevision &&
+        interactive) {
       if (lookupFocus) {
         _restoreLookupFocus(session, dismissedPresentation);
       } else {

@@ -287,6 +287,12 @@ surface without exposing empty interactive controls: GTK maps a transparent,
 nonmodal view; Windows uses the existing first-frame callback and redraw sequence.
 Channel ready only delivers data. A presentation-specific Flutter paint
 acknowledgement, plus native frame readiness, permits presentation and focus.
+When GTK closes a non-lookup popup before its child receives Escape, the primary
+controller captures and seals retained note input before releasing that popup's
+ownership. Failed capture keeps protected recovery intact. A later Notebook or
+chrome handoff cancels the old popup's focus return; stale hidden notifications
+cannot dismiss a replacement presentation.
+
 Each presentation has a keyboard scope below its dismissal shortcuts, so Escape
 works before a selection control is focused. The fallback adds no traversal stop;
 editor and default-button autofocus retain their normal targets and composition.

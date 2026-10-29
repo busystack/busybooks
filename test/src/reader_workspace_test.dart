@@ -2662,6 +2662,187 @@ void main() {
     },
   );
 
+  for (final kind in ['selection', 'appearance', 'goto']) {
+    test(
+      'native $kind dismissal releases current ownership and rejects stale hidden events',
+      () async {
+        final f = await _ReaderFixture.create('text.pdf');
+        final events = <Map>[];
+        final subscription = f.reader.events.stream.listen(events.add);
+        try {
+          await f.select();
+          if (kind != 'selection') await f.reader.showPopover(kind);
+          final owner = f.popup['presentation'];
+          f.calls.clear();
+          await f.event('popoverHidden', {
+            'presentation': owner - 1,
+            'keyboard': true,
+          });
+          expect(f.calls.where((c) => c.method == 'capturePopover'), isEmpty);
+          await f.event('key', {'key': 'F9'});
+          expect(events.where((e) => e['type'] == 'key'), isEmpty);
+          await f.event('popoverHidden', {
+            'presentation': owner,
+            'keyboard': true,
+          });
+          final capture = f.calls.singleWhere(
+            (c) => c.method == 'capturePopover',
+          );
+          expect((capture.arguments as Map)['seal'], true);
+          expect((capture.arguments as Map)['presentation'], owner);
+          final dismiss = f.calls.singleWhere(
+            (c) => c.method == 'dismissPopover',
+          );
+          expect((dismiss.arguments as Map)['restoreFocus'], true);
+          expect(f.calls.indexOf(capture), lessThan(f.calls.indexOf(dismiss)));
+          await f.event('key', {'key': 'F9'});
+          await _until(() => events.any((e) => e['type'] == 'key'));
+          expect(events.where((e) => e['type'] == 'key').single['key'], 'F9');
+          expect(f.state.selection?['text'], 'ABC');
+          expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
+          await f.reader.showPopover('appearance');
+          f.calls.clear();
+          await f.event('popoverHidden', {
+            'presentation': owner,
+            'keyboard': true,
+          });
+          expect(f.calls.where((c) => c.method == 'capturePopover'), isEmpty);
+          await f.event('key', {'key': 'F9'});
+          expect(events.where((e) => e['type'] == 'key'), hasLength(1));
+        } finally {
+          await subscription.cancel();
+          await f.dispose();
+        }
+      },
+    );
+  }
+
+  test(
+    'native hidden capture failure retains protected creation until a sealed retry',
+    () async {
+      late AnnotationStoreGate gate;
+      final f = await _ReaderFixture.create(
+        'text.pdf',
+        wrapStore: (store) => gate = AnnotationStoreGate(store),
+      );
+      final events = <Map>[];
+      final subscription = f.reader.events.stream.listen(events.add);
+      try {
+        gate.failPut = true;
+        await f.select();
+        final anchor = jsonEncode(f.state.selection!['anchor']);
+        await f.action('noteDraft', {
+          'note': 'Already protected failed creation',
+        });
+        await _until(() => f.drafts.drafts.values.any((d) => d.error != null));
+        final id = f.drafts.drafts.keys.single;
+        final presentation = f.popup['presentation'];
+        f.onNativeCall = (call) async {
+          if (call.method == 'capturePopover') {
+            throw PlatformException(code: 'capture-failed');
+          }
+          return null;
+        };
+        f.calls.clear();
+        await f.event('popoverHidden', {
+          'presentation': presentation,
+          'keyboard': true,
+        });
+        await _until(() => f.state.warning?.contains('capture-failed') == true);
+        expect(f.calls.where((c) => c.method == 'dismissPopover'), isEmpty);
+        expect(f.drafts.drafts[id]!.text, 'Already protected failed creation');
+        await f.event('key', {'key': 'F9'});
+        expect(events.where((e) => e['type'] == 'key'), isEmpty);
+        f.onNativeCall = (call) async {
+          if (call.method == 'capturePopover') {
+            return {
+              ...call.arguments as Map,
+              'revision': 4,
+              'note': 'Latest local text after native delivery failed',
+              'color': 'yellow',
+            };
+          }
+          return null;
+        };
+        await f.reader.dismissPopover(restoreFocus: false);
+        expect(f.drafts.drafts.keys, [id]);
+        expect(
+          f.drafts.drafts[id]!.text,
+          'Latest local text after native delivery failed',
+        );
+        expect(jsonEncode(f.drafts.sources[id]!.anchor), anchor);
+        expect(
+          (f.calls.lastWhere((c) => c.method == 'dismissPopover').arguments
+              as Map)['restoreFocus'],
+          false,
+        );
+        gate.failPut = false;
+        await f.notes.flush();
+        final saved =
+            (await f.store.call('annotations', f.state.bookId) as List).single
+                as Map;
+        expect(saved['id'], id);
+        expect(saved['note'], 'Latest local text after native delivery failed');
+        expect(jsonEncode(saved['anchor']), anchor);
+      } finally {
+        gate.failPut = false;
+        f.onNativeCall = null;
+        await subscription.cancel();
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'native keyboard dismissal cannot restore reader focus over a later Notebook handoff',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      final entered = Completer<void>(), release = Completer<void>();
+      final events = <Map>[];
+      final subscription = f.reader.events.stream.listen(events.add);
+      Future<void>? hidden;
+      try {
+        await f.select();
+        final presentation = f.popup['presentation'];
+        f.onNativeCall = (call) async {
+          if (call.method == 'capturePopover') {
+            if (!entered.isCompleted) entered.complete();
+            await release.future;
+          }
+          return null;
+        };
+        f.calls.clear();
+        hidden = f.event('popoverHidden', {
+          'presentation': presentation,
+          'keyboard': true,
+        });
+        await entered.future.timeout(const Duration(seconds: 5));
+        f.container.read(bookPresentationProvider.notifier)
+          ..enterBook(f.state.bookId!, BookView.split)
+          ..focusPane(f.state.bookId!, BookPane.notebook);
+        await f.reader.focusChrome();
+        f.nativeFocused = false;
+        release.complete();
+        await hidden;
+        final dismiss = f.calls.singleWhere(
+          (c) => c.method == 'dismissPopover',
+        );
+        expect((dismiss.arguments as Map)['restoreFocus'], false);
+        expect(events.where((e) => e['type'] == 'focusBook'), isEmpty);
+        expect(
+          f.container.read(bookPresentationProvider).lastPane,
+          BookPane.notebook,
+        );
+      } finally {
+        if (!release.isCompleted) release.complete();
+        await hidden;
+        f.onNativeCall = null;
+        await subscription.cancel();
+        await f.dispose();
+      }
+    },
+  );
+
   for (final action in ['search', 'lookup']) {
     test(
       'selection $action handoff preserves a failed note draft and refuses failed capture',
