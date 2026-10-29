@@ -11,13 +11,11 @@ import '../../app/app_theme.dart';
 import '../../app/busybooks_design.dart';
 import '../../app/busybooks_glyphs.dart';
 import '../../app/localization.dart';
-import '../../core/typography.dart';
 import '../../library/domain/annotation_limits.dart';
 import '../../platform/native_menu_service.dart';
 import '../domain/publication_outline.dart';
 import '../domain/reader_action.dart';
 import '../domain/reading_navigation.dart';
-import 'compact_reading_appearance.dart';
 import 'publication_location.dart';
 
 const readerPopoverChannel = MethodChannel(
@@ -29,6 +27,53 @@ bool _savesNote(String action) =>
     action == 'annotationNote' || action == 'highlight';
 typedef _LocalNote = ({int revision, String note, String color});
 
+// Native hosts own geometry/focus for this view; this guard also rejects a
+// reply queued before a presentation was hidden or replaced.
+class _ReaderPopoverMenuService extends NativeMenuService {
+  var _generation = 0;
+  var _accepting = false;
+  final _sessions = <NativeMenuSession>{};
+
+  void activate() => _accepting = true;
+
+  void invalidate() {
+    _accepting = false;
+    _generation++;
+    for (final session in _sessions.toList()) {
+      unawaited(dismiss(session));
+    }
+  }
+
+  @override
+  Future<NativeMenuResult> show({
+    required NativeMenuSession session,
+    required Rect anchor,
+    required List<NativeMenuEntry> entries,
+    bool focusFirst = false,
+    bool preferAbove = false,
+    TextDirection? textDirection,
+  }) async {
+    if (!_accepting) return const NativeMenuResult.available();
+    final generation = _generation;
+    _sessions.add(session);
+    try {
+      final result = await super.show(
+        session: session,
+        anchor: anchor,
+        entries: entries,
+        focusFirst: focusFirst,
+        preferAbove: preferAbove,
+        textDirection: textDirection,
+      );
+      return generation == _generation
+          ? result
+          : const NativeMenuResult.available();
+    } finally {
+      _sessions.remove(session);
+    }
+  }
+}
+
 /// A small owned Flutter view above WebKit/WebView2, using the application's
 /// existing controls. It has no store, window chrome, network or book access.
 class ReaderPopoverApp extends StatefulWidget {
@@ -39,6 +84,7 @@ class ReaderPopoverApp extends StatefulWidget {
 
 class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
   Map<String, dynamic>? data;
+  final _menuService = _ReaderPopoverMenuService();
   int _serial = 0;
   final _pending = <int, Completer<void>>{};
   final _saving = <int, _PopoverOwner>{};
@@ -77,11 +123,9 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
     readerPopoverChannel.setMethodCallHandler((call) async {
       if (call.method == 'hidden' && call.arguments is Map) {
         final owner = call.arguments as Map;
-        if (mounted &&
-            data?['kind'] == 'appearance' &&
-            owner['session'] == data?['session'] &&
+        if (owner['session'] == data?['session'] &&
             owner['presentation'] == data?['presentation']) {
-          setState(() => data = {...data!, 'appearanceVisible': false});
+          _menuService.invalidate();
         }
         return null;
       }
@@ -212,7 +256,13 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
         return null;
       }
       if (call.method == 'update' && call.arguments is Map && mounted) {
-        setState(() => data = (call.arguments as Map).cast<String, dynamic>());
+        final next = (call.arguments as Map).cast<String, dynamic>();
+        if (next['session'] != data?['session'] ||
+            next['presentation'] != data?['presentation']) {
+          _menuService.invalidate();
+        }
+        setState(() => data = next);
+        _menuService.activate();
         _pruneFinishedPresentations();
       }
     });
@@ -267,6 +317,7 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
 
   @override
   void dispose() {
+    _menuService.invalidate();
     readerPopoverChannel.setMethodCallHandler(null);
     if (identical(ErrorWidget.builder, _errorBuilder)) {
       ErrorWidget.builder = _previousErrorBuilder;
@@ -424,7 +475,7 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
         child: child!,
       ),
       home: BusyBooksMenuHostScope(
-        service: const NativeMenuService(supportedPlatform: false),
+        service: _menuService,
         child: Builder(
           builder: (context) => Shortcuts(
             shortcuts: const {
@@ -513,8 +564,6 @@ class _PopoverContentsState extends State<_PopoverContents> {
   String? error, operationError;
   bool invalidNote = false, navigating = false;
   late String color = widget.data['color'] as String? ?? 'yellow';
-  late Map<String, dynamic> preferences =
-      (widget.data['appearance'] as Map? ?? {}).cast<String, dynamic>();
   @override
   void initState() {
     super.initState();
@@ -566,8 +615,7 @@ class _PopoverContentsState extends State<_PopoverContents> {
       );
     },
     child: Column(
-      mainAxisSize:
-          ['goto', 'lookup', 'appearance'].contains(widget.data['kind'])
+      mainAxisSize: ['goto', 'lookup'].contains(widget.data['kind'])
           ? MainAxisSize.min
           : MainAxisSize.max,
       children: [
@@ -592,7 +640,7 @@ class _PopoverContentsState extends State<_PopoverContents> {
               ),
           ],
         ),
-        if (['goto', 'lookup', 'appearance'].contains(widget.data['kind']))
+        if (['goto', 'lookup'].contains(widget.data['kind']))
           Flexible(child: _contents(context))
         else
           Expanded(child: _contents(context)),
@@ -604,26 +652,6 @@ class _PopoverContentsState extends State<_PopoverContents> {
     final saving = widget.isSaving();
     final kind = d['kind'];
     if (kind == 'lookup') return _lookup(context);
-    if (kind == 'appearance') {
-      if (d['appearanceVisible'] == false) return const SizedBox.expand();
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(BusyBooksSpacing.lg),
-        child: CompactReadingAppearance(
-          key: _naturalContents,
-          preferences: preferences,
-          capabilities: TypographyCapabilities.fromJson(d['typography']),
-          pdf: d['pdf'] == true,
-          comic: d['comic'] == true,
-          onChanged: (value) async {
-            await widget.action('appearance', {'value': value});
-            if (mounted) {
-              setState(() => preferences = {...preferences, ...value});
-            }
-          },
-          onMore: () => act('readingSettings'),
-        ),
-      );
-    }
     if (kind == 'goto') return _goTo(context);
     if (kind == 'speech') {
       return ListView(

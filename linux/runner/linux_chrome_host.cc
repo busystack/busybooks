@@ -292,6 +292,14 @@ BusyBooksLinuxChromeHost* busybooks_linux_chrome_host_new(
 
 void busybooks_linux_chrome_host_free(BusyBooksLinuxChromeHost* host) {
   if (host == nullptr) return;
+  // FlMethodChannel/FlEventChannel remain referenced by their messenger until
+  // engine shutdown. Clear callbacks before deleting their application owner.
+  fl_method_channel_set_method_call_handler(host->settings_channel, nullptr, nullptr, nullptr);
+  fl_method_channel_set_method_call_handler(host->icons_channel, nullptr, nullptr, nullptr);
+  for (auto* channel : {host->preferences_channel, host->animations_channel,
+                        host->icons_changed_channel}) {
+    fl_event_channel_set_stream_handlers(channel, nullptr, nullptr, nullptr, nullptr);
+  }
   if (host->animation_signal != 0 && host->settings != nullptr) {
     g_signal_handler_disconnect(host->settings, host->animation_signal);
   }

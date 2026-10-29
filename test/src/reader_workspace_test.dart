@@ -2603,7 +2603,7 @@ void main() {
                   .openPath(p.absolute('test/fixtures/mixed-pages.pdf'));
               await f.reader.open(next.books.single.id);
             case 'different popover':
-              await f.reader.showPopover('appearance');
+              await f.reader.showPopover('speech');
           }
           final calls = f.calls.length;
           service.complete(0);
@@ -2662,7 +2662,7 @@ void main() {
     },
   );
 
-  for (final kind in ['selection', 'appearance', 'goto']) {
+  for (final kind in ['selection', 'speech', 'goto']) {
     test(
       'native $kind dismissal releases current ownership and rejects stale hidden events',
       () async {
@@ -2700,7 +2700,7 @@ void main() {
           expect(events.where((e) => e['type'] == 'key').single['key'], 'F9');
           expect(f.state.selection?['text'], 'ABC');
           expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
-          await f.reader.showPopover('appearance');
+          await f.reader.showPopover('speech');
           f.calls.clear();
           await f.event('popoverHidden', {
             'presentation': owner,
@@ -2965,6 +2965,266 @@ void main() {
     },
   );
 
+  testWidgets(
+    'appearance header and command use checked primary native menus and reject a closed owner',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        await f.event('metadata', {'fixed': true});
+      });
+      List<Map>? rows;
+      Map? payload;
+      Completer<int?>? delayed;
+      try {
+        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+              const MethodChannel(nativeMenuChannelName),
+              (call) async {
+                if (call.method == 'dismiss') return true;
+                if (call.method != 'show') return null;
+                payload = call.arguments as Map;
+                rows = _nativeLeaves(payload!['entries'] as List);
+                return delayed?.future ??
+                    rows!.indexWhere((e) => e['label'] == 'Sepia');
+              },
+            );
+        f.calls.clear();
+        await tester.tap(_headerButton('View Options'));
+        await _pumpUntil(tester, () => rows != null);
+        await _pumpUntil(tester, () => f.reader.appearance['color'] == 'sepia');
+        expect(
+          rows!.singleWhere((row) => row['label'] == 'Fit width')['selected'],
+          true,
+        );
+        expect(
+          rows!.singleWhere((row) => row['label'] == 'Rotation')['children'],
+          isNotEmpty,
+        );
+        expect((payload!['anchor'] as Map)['width'], greaterThan(1));
+        expect(f.calls.where((call) => call.method == 'popover'), isEmpty);
+        rows = null;
+        delayed = Completer<int?>();
+        var done = false;
+        final opening = _appCommands(
+          tester,
+        ).execute(BusyBooksCommandIds.appearance).then((_) => done = true);
+        await _pumpUntil(tester, () => rows != null);
+        expect(
+          rows!.singleWhere((row) => row['label'] == 'Sepia')['selected'],
+          true,
+        );
+        await _readerAction(tester, () => f.reader.show(false));
+        delayed.complete(rows!.indexWhere((row) => row['label'] == 'Dark'));
+        await _pumpUntil(tester, () => done);
+        await opening;
+        expect(f.reader.appearance['color'], 'sepia');
+      } finally {
+        if (delayed != null && !delayed.isCompleted) delayed.complete();
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  testWidgets(
+    'closed appearance menu releases publication input while a preference write is pending',
+    (tester) async {
+      late _ReaderFixture f;
+      late AnnotationStoreGate gate;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          wrapStore: (store) => gate = AnnotationStoreGate(store),
+        );
+        await f.event('metadata', {'fixed': true});
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+        gate.appearanceEntered = Completer<void>();
+        gate.appearanceProceed = Completer<void>();
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+              const MethodChannel(nativeMenuChannelName),
+              (call) async {
+                if (call.method != 'show') return null;
+                final entries = _nativeLeaves(
+                  (call.arguments as Map)['entries'] as List,
+                );
+                return entries.indexWhere((entry) => entry['label'] == 'Sepia');
+              },
+            );
+        await tester.tap(_headerButton('View Options'));
+        await _pumpUntil(tester, () => gate.appearanceEntered!.isCompleted);
+        final request = {
+          'session': f.reader.sessionId,
+          'presentation': f.reader.presentationId,
+          'focusRevision': f.reader.focusRevision,
+        };
+        expect(f.reader.ownsContentFocus(request), true);
+        f.calls.clear();
+        await _readerAction(tester, () => f.reader.send('focus'));
+        expect(f.calls.where((call) => call.method == 'focus'), hasLength(1));
+        gate.appearanceProceed!.complete();
+        await _pumpUntil(tester, () => f.reader.appearance['color'] == 'sepia');
+      } finally {
+        if (gate.appearanceProceed != null &&
+            !gate.appearanceProceed!.isCompleted) {
+          gate.appearanceProceed!.complete();
+        }
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  test(
+    'appearance menu seals draft ownership and closes with route and geometry changes',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      var dismissed = 0;
+      Future<void> dismiss() async {
+        dismissed++;
+      }
+
+      try {
+        await f.select();
+        f.calls.clear();
+        final owner = await f.reader.prepareAppearanceMenu(dismiss: dismiss);
+        expect(owner, isNotNull);
+        expect(f.reader.ownsAppearanceMenu(owner!), true);
+        final capture = f.calls.singleWhere(
+          (c) => c.method == 'capturePopover',
+        );
+        final hide = f.calls.singleWhere((c) => c.method == 'dismissPopover');
+        expect((capture.arguments as Map)['seal'], true);
+        expect(f.calls.indexOf(capture), lessThan(f.calls.indexOf(hide)));
+        await f.reader.show(false);
+        expect(dismissed, 1);
+        expect(f.reader.ownsAppearanceMenu(owner), false);
+        await f.reader.show(true);
+        final resized = await f.reader.prepareAppearanceMenu(dismiss: dismiss);
+        expect(resized, isNotNull);
+        await f.reader.updateViewport(
+          const Rect.fromLTWH(0, 0, 720, 500),
+          bookId: f.state.bookId!,
+        );
+        expect(dismissed, 2);
+        expect(f.reader.ownsAppearanceMenu(resized!), false);
+      } finally {
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'appearance menu excludes queued publication focus and shortcut input until dismissal',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      final events = <Map>[];
+      final subscription = f.reader.events.stream.listen(events.add);
+      try {
+        final owner = await f.reader.prepareAppearanceMenu(
+          dismiss: () async {},
+        );
+        expect(owner, isNotNull);
+        f.calls.clear();
+        final request = {
+          'session': f.reader.sessionId,
+          'presentation': f.reader.presentationId,
+          'focusRevision': f.reader.focusRevision,
+        };
+        expect(f.reader.ownsFocusRequest(request), false);
+        expect(f.reader.ownsContentFocus(request), false);
+        await f.reader.focusPublication(isCurrent: () => true);
+        await f.reader.send('focus');
+        await f.reader.focusChrome();
+        await f.event('key', {'key': 'F9'});
+        expect(
+          f.calls.where(
+            (call) => call.method == 'focus' || call.method == 'focusChrome',
+          ),
+          isEmpty,
+        );
+        expect(
+          f.dispatches.where((command) => command['action'] == 'focus'),
+          isEmpty,
+        );
+        expect(events.where((event) => event['type'] == 'key'), isEmpty);
+        f.reader.finishAppearanceMenu(owner!);
+        await f.event('key', {'key': 'F9'});
+        await _until(() => events.any((event) => event['type'] == 'key'));
+        expect(events.where((event) => event['type'] == 'key'), hasLength(1));
+      } finally {
+        await subscription.cancel();
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'appearance menu refuses failed draft handoff and never dismisses its editor',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      var dismissed = false;
+      try {
+        await f.select();
+        final presentation = f.reader.presentationId;
+        f.calls.clear();
+        f.onNativeCall = (call) async {
+          if (call.method == 'capturePopover') {
+            throw PlatformException(code: 'capture-failed');
+          }
+          return null;
+        };
+        await expectLater(
+          f.reader.prepareAppearanceMenu(
+            dismiss: () async {
+              dismissed = true;
+            },
+          ),
+          throwsException,
+        );
+        expect(dismissed, false);
+        expect(f.reader.presentationId, presentation);
+        expect(f.calls.where((c) => c.method == 'dismissPopover'), isEmpty);
+      } finally {
+        f.onNativeCall = null;
+        await f.dispose();
+      }
+    },
+  );
+
+  test(
+    'current page no-text status clears on text pages and never disables document search',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      try {
+        await f.event('location', {
+          'anchor': {'page': 0},
+          'noText': true,
+        });
+        expect(f.reader.currentPageHasNoText, true);
+        f.reader.search('library');
+        await _until(() => f.dispatches.any((c) => c['action'] == 'search'));
+        await f.event('location', {
+          'anchor': {'page': 1},
+          'noText': false,
+        });
+        expect(f.reader.currentPageHasNoText, false);
+        await f.event('location', {
+          'anchor': {'page': 2},
+        });
+        expect(f.reader.currentPageHasNoText, false);
+      } finally {
+        await f.dispose();
+      }
+    },
+  );
+
   test(
     'lookup consent target cannot act after replacement or leaving Reading',
     () async {
@@ -2973,9 +3233,9 @@ void main() {
       try {
         await f.select();
         final target = await f.reader.prepareLookup();
-        await f.reader.showPopover('appearance');
+        await f.reader.showPopover('speech');
         await f.reader.lookup(target!);
-        expect(f.popup['kind'], 'appearance');
+        expect(f.popup['kind'], 'speech');
         await f.select();
         final leaving = await f.reader.prepareLookup();
         await f.reader.suspend();
@@ -4497,7 +4757,7 @@ void main() {
     'image-only.pdf',
   ]) {
     testWidgets(
-      'right header anchored Appearance first use, failure and retry preserve the $fixture passage',
+      'right header native Appearance first use, host recovery and live resize preserve the $fixture passage',
       (tester) async {
         late _ReaderFixture f;
         await _readerAction(tester, () async {
@@ -4509,54 +4769,81 @@ void main() {
             'fixed': fixture != 'reflowable.epub',
           });
         });
-        final anchor = Map.of(f.state.location);
+        final location = Map.of(f.state.location);
         var fail = true;
         final requests = <Map>[];
-        f.onNativeCall = (c) async {
-          if (c.method == 'popover') {
-            requests.add(c.arguments as Map);
-            if (fail) {
-              throw PlatformException(
-                code: 'popover-initialization',
-                message: 'Fixture host failure',
-              );
-            }
-          }
-          return null;
-        };
         try {
           await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(
+                const MethodChannel(nativeMenuChannelName),
+                (call) async {
+                  if (call.method != 'show') return null;
+                  requests.add(call.arguments as Map);
+                  if (fail) {
+                    throw PlatformException(
+                      code: 'fixture-menu',
+                      message: 'Fixture host failure',
+                    );
+                  }
+                  return null;
+                },
+              );
           final label = fixture == 'reflowable.epub'
               ? 'Appearance'
               : 'View Options';
           final trigger = tester.getRect(_headerButton(label));
+          f.calls.clear();
           await tester.tap(_headerButton(label));
-          await _pumpUntil(tester, () => f.state.popoverError != null);
+          await _pumpUntil(
+            tester,
+            () => find.text('Page color').evaluate().isNotEmpty,
+          );
+          expect(f.state.popoverError, isNull);
           expect(f.state.ready, true);
           expect(f.state.error, isNull);
-          expect(f.state.location, anchor);
-          expect(requests.single['x'], closeTo(trigger.left, .01));
-          expect(requests.single['y'], closeTo(trigger.top, .01));
+          expect(f.state.location, location);
+          expect(
+            (requests.single['anchor'] as Map)['x'],
+            closeTo(trigger.left, .01),
+          );
+          expect(
+            (requests.single['anchor'] as Map)['y'],
+            closeTo(trigger.top, .01),
+          );
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
           fail = false;
           tester.view.physicalSize = const Size(1100, 850);
           await tester.pumpAndSettle();
           final relocated = tester.getRect(_headerButton(label));
-          await tester.tap(find.text('Retry'));
+          await tester.tap(_headerButton(label));
           await _pumpUntil(tester, () => requests.length == 2);
-          expect(requests.last['x'], closeTo(relocated.left, .01));
-          expect(requests.last['y'], closeTo(relocated.top, .01));
           expect(
-            (requests.last['typography'] as Map)['fontFamily'],
+            (requests.last['anchor'] as Map)['x'],
+            closeTo(relocated.left, .01),
+          );
+          expect(
+            (requests.last['anchor'] as Map)['y'],
+            closeTo(relocated.top, .01),
+          );
+          final entries = _nativeLeaves(requests.last['entries'] as List);
+          expect(
+            entries.any((row) => row['label'] == 'Font size'),
             fixture == 'reflowable.epub',
           );
-          expect(requests.last['pdf'], fixture.endsWith('.pdf'));
-          await _readerAction(tester, f.reader.dismissPopover);
-          await tester.tap(_headerButton(label));
-          await _pumpUntil(tester, () => requests.length == 3);
-          expect(f.state.location, anchor);
+          expect(
+            entries.any((row) => row['label'] == 'Rotation'),
+            fixture.endsWith('.pdf'),
+          );
+          await _readerAction(tester, () async {
+            await _appCommands(tester).execute(BusyBooksCommandIds.appearance);
+          });
+          expect(requests, hasLength(3));
+          expect(f.calls.where((call) => call.method == 'popover'), isEmpty);
+          expect(f.state.location, location);
           expect(f.state.error, isNull);
         } finally {
-          f.onNativeCall = null;
           await _disposeHeaderApplication(tester, f);
         }
       },
@@ -6190,15 +6477,22 @@ void main() {
       gate.frame = Completer<void>();
       var replaced = false;
       final next = f.reader
-          .showPopover('appearance')
+          .showPopover(
+            'speech',
+            extra: const {
+              'voices': [''],
+              'voice': '',
+              'speed': 1,
+            },
+          )
           .then((_) => replaced = true);
-      await _pumpUntil(tester, () => gate.payload?['kind'] == 'appearance');
+      await _pumpUntil(tester, () => gate.payload?['kind'] == 'speech');
       gate.painted(old);
       expect(replaced, isFalse);
       gate.frame.complete();
       await _pumpUntil(tester, () => replaced);
       await next;
-      expect(find.text('Zoom'), findsOneWidget);
+      expect(find.text('Voice and Speed'), findsOneWidget);
       await _readerAction(tester, f.reader.dismissPopover);
       expect(f.state.popoverError, isNull);
       await tester.pumpWidget(const SizedBox());
@@ -6999,20 +7293,30 @@ void main() {
         final hidden = f.calls
             .where((c) => c.method == 'visible' && c.arguments == false)
             .length;
-        final handoffError = throwsA(
-          predicate<Object>(
-            (e) => e.toString().contains('Note handoff failed'),
-          ),
-        );
+        final handoffErrors = <String, Object>{};
         await _readerAction(tester, () async {
-          await expectLater(f.reader.showPopover('appearance'), handoffError);
-          await expectLater(f.reader.flush(), handoffError);
-          await expectLater(f.reader.close(), handoffError);
+          // Observe failures in the driven operation itself. Widget pumping in
+          // _readerAction must not overlap expectLater's own test-API guard.
+          for (final operation in <String, Future<void> Function()>{
+            'replacement': () => f.reader.showPopover('speech'),
+            'flush': f.reader.flush,
+            'close': f.reader.close,
+          }.entries) {
+            try {
+              await operation.value();
+            } catch (error) {
+              handoffErrors[operation.key] = error;
+            }
+          }
           final other = await f.container
               .read(workspaceControllerProvider.notifier)
               .openPath(p.absolute('test/fixtures/image-only.pdf'));
           await f.reader.open(other.books.single.id);
         });
+        expect(handoffErrors.keys, ['replacement', 'flush', 'close']);
+        for (final error in handoffErrors.values) {
+          expect(error.toString(), contains('Note handoff failed'));
+        }
         expect(f.state.bookId, bookId);
         expect(f.state.ready, isTrue);
         expect(f.state.error, isNull);

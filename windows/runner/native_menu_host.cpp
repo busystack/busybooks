@@ -144,7 +144,8 @@ struct NativeMenuHost::Request {
   ~Request(){if(menu)DestroyMenu(menu);}
   void Cancel(){if(result){result->Success();result.reset();}}
 };
-NativeMenuHost::NativeMenuHost(HWND anchor,flutter::BinaryMessenger* messenger):anchor_(anchor){
+NativeMenuHost::NativeMenuHost(HWND anchor,flutter::BinaryMessenger* messenger, HWND active_owner)
+    :anchor_(anchor),active_owner_(active_owner){
   WNDCLASSW wc{};wc.lpfnWndProc=Procedure;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"BusyBooksMenuMessages";
   RegisterClassW(&wc);
   messages_=CreateWindowW(wc.lpszClassName,L"",0,0,0,0,0,HWND_MESSAGE,nullptr,wc.hInstance,this);
@@ -164,6 +165,7 @@ NativeMenuHost::NativeMenuHost(HWND anchor,flutter::BinaryMessenger* messenger):
     auto list=entries?std::get_if<EncodableList>(entries):nullptr;
     auto rect=anchor_value?std::get_if<EncodableMap>(anchor_value):nullptr;
     if(!messages_||!IsWindow(anchor_)){result->Error("unavailable","The menu window is unavailable");return;}
+    if(!enabled_||!IsWindowVisible(anchor_)){result->Success();return;}
     if(!list||!rect){result->Error("bad-arguments","Menu entries and an anchor are required");return;}
     size_t entry_count = 0;
     if (!Validate(*list, 0, entry_count)) { result->Error("bad-arguments", "Invalid menu definition"); return; }
@@ -190,16 +192,26 @@ NativeMenuHost::~NativeMenuHost(){
   if(pending_)pending_->Cancel();if(active_){active_->Cancel();EndMenu();}
   if(messages_)DestroyWindow(messages_);
 }
+void NativeMenuHost::SetEnabled(bool enabled){
+  enabled_=enabled;
+  if(enabled)return;
+  if(pending_){pending_->Cancel();pending_.reset();}
+  if(active_){active_->Cancel();EndMenu();}
+}
 void NativeMenuHost::Present(){
   if(active_||!pending_)return;
   auto request=std::move(pending_);auto alive=alive_;
   HWND owner=GetAncestor(anchor_,GA_ROOT);
-  if(IsIconic(owner)||GetForegroundWindow()!=owner){request->Cancel();return;}
+  const HWND foreground=GetForegroundWindow();
+  if(!enabled_||!IsWindowVisible(anchor_)||IsIconic(owner)||
+      (foreground!=owner&&(!active_owner_||foreground!=active_owner_))){request->Cancel();return;}
   active_=request;
   if(request->focus_first)PostMessageW(owner,WM_KEYDOWN,VK_DOWN,0);
   const UINT chosen=static_cast<UINT>(TrackPopupMenuEx(request->menu,request->flags,request->point.x,request->point.y,owner,nullptr));
   if(!*alive)return;
   active_.reset();
+  if(active_owner_&&enabled_&&IsWindowVisible(anchor_)&&
+      (GetForegroundWindow()==owner||GetForegroundWindow()==active_owner_))SetFocus(anchor_);
   if(request->result){
     if(chosen)request->result->Success(EncodableValue(static_cast<int32_t>(chosen-1)));else request->result->Success();
     request->result.reset();

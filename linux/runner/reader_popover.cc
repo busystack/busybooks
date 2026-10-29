@@ -1,4 +1,5 @@
 #include "reader_popover.h"
+#include "native_menu_host.h"
 #include "../../native/reader_action_limits.h"
 #include "../../native/reader_popover_events.h"
 #include "../../native/reader_popover_geometry.h"
@@ -6,10 +7,31 @@
 #include <cstring>
 #include <algorithm>
 #include <cmath>
+// Opt-in, bounded stage diagnostics. Never serialize publication/draft payloads.
+void ReaderPopover::Trace(const char* stage) const {
+  if (g_strcmp0(g_getenv("BUSYBOOKS_READER_DIAGNOSTICS"), "1") != 0) return;
+  auto* kind = data_ ? fl_value_lookup_string(data_, "kind") : nullptr;
+  auto* session = data_ ? fl_value_lookup_string(data_, "session") : nullptr;
+  auto* owner = data_ ? fl_value_lookup_string(data_, "presentation") : nullptr;
+  g_message("reader-popup stage=%s kind=%s session=%s presentation=%" G_GINT64_FORMAT
+      " backend=%s build=%s ready=%d frame=%d painted=%d requested=%d mapped=%d",
+      stage, kind && fl_value_get_type(kind) == FL_VALUE_TYPE_STRING ? fl_value_get_string(kind) : "none",
+      session && fl_value_get_type(session) == FL_VALUE_TYPE_STRING ? fl_value_get_string(session) : "none",
+      owner && fl_value_get_type(owner) == FL_VALUE_TYPE_INT ? fl_value_get_int(owner) : 0,
+      G_OBJECT_TYPE_NAME(gtk_widget_get_display(anchor_)),
+#ifdef NDEBUG
+      "release",
+#else
+      "debug",
+#endif
+      ready_, frame_, painted_, requested_, popover_ && gtk_widget_get_mapped(popover_));
+}
 ReaderPopover::ReaderPopover(GtkWidget* anchor, std::function<void(const char*)> event)
     : anchor_(GTK_WIDGET(g_object_ref(anchor))), event_(std::move(event)) {}
 ReaderPopover::~ReaderPopover() {
+  Trace("destroy");
   *alive_ = false;
+  busybooks_native_menu_host_clear(&menu_channel_);
   Complete("popover-cancelled");
   if (channel_) fl_method_channel_set_method_call_handler(channel_, nullptr, nullptr, nullptr);
   if (view_) g_signal_handlers_disconnect_by_data(view_, this);
@@ -21,6 +43,8 @@ ReaderPopover::~ReaderPopover() {
 }
 void ReaderPopover::EnsureView() {
   if (restart_) {
+    Trace("restart");
+    busybooks_native_menu_host_clear(&menu_channel_);
     if (channel_) fl_method_channel_set_method_call_handler(channel_, nullptr, nullptr, nullptr);
     if (view_) g_signal_handlers_disconnect_by_data(view_, this);
     if (popover_) { gtk_widget_destroy(popover_); g_object_unref(popover_); popover_ = nullptr; }
@@ -28,6 +52,7 @@ void ReaderPopover::EnsureView() {
     ready_ = false; frame_ = false; restart_ = false;
   }
   if (popover_) return;
+  Trace("create");
   popover_ = gtk_popover_new(anchor_);
   g_object_ref_sink(popover_);
   gtk_popover_set_position(GTK_POPOVER(popover_), GTK_POS_BOTTOM);
@@ -57,6 +82,8 @@ void ReaderPopover::EnsureView() {
   channel_ = fl_method_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view_)),
       "io.busystack.busybooks/reader_popover", FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(channel_, Call, this, nullptr);
+  menu_channel_ = busybooks_native_menu_host_new(view_);
+  busybooks_native_menu_host_set_enabled(menu_channel_, FALSE);
   g_signal_connect(view_, "first-frame", G_CALLBACK(Frame), this);
   gtk_container_add(GTK_CONTAINER(popover_), GTK_WIDGET(view_));
   gtk_widget_show(GTK_WIDGET(view_));
@@ -66,6 +93,7 @@ void ReaderPopover::EnsureView() {
   // remaining compositor initialization on explicit realization.
   gdk_gl_context_clear_current();
   gtk_widget_realize(popover_);
+  Trace("realized");
 }
 void ReaderPopover::Show(FlMethodCall* call) {
   auto* data = fl_method_call_get_args(call);
@@ -95,6 +123,7 @@ void ReaderPopover::Show(FlMethodCall* call) {
   data_ = fl_value_ref(data);
   pending_ = FL_METHOD_CALL(g_object_ref(call));
   requested_ = true;
+  Trace("show-valid-viewport");
   painted_ = false;
   GdkRectangle work{};
   auto* monitor = gdk_display_get_monitor_at_window(gtk_widget_get_display(anchor_), gtk_widget_get_window(parent));
@@ -122,7 +151,14 @@ void ReaderPopover::Show(FlMethodCall* call) {
 void ReaderPopover::Complete(const char* code) {
   if (timeout_) { g_source_remove(timeout_); timeout_ = 0; }
   if (!pending_) return;
-  if (code) fl_method_call_respond_error(pending_, code, "Reader controls could not be presented. Try again.", nullptr, nullptr);
+  Trace(code ? code : "presented");
+  if (code) {
+    g_autoptr(FlValue) details = fl_value_new_map();
+    fl_value_set_string_take(details, "ready", fl_value_new_bool(ready_));
+    fl_value_set_string_take(details, "firstFrame", fl_value_new_bool(frame_));
+    fl_value_set_string_take(details, "painted", fl_value_new_bool(painted_));
+    fl_method_call_respond_error(pending_, code, "Reader controls could not be presented. Try again.", details, nullptr);
+  }
   else fl_method_call_respond_success(pending_, nullptr, nullptr);
   g_clear_object(&pending_);
 }
@@ -138,6 +174,7 @@ bool ReaderPopover::Matches(FlValue* value) const {
 gboolean ReaderPopover::Timeout(gpointer data) {
   auto* self = static_cast<ReaderPopover*>(data);
   self->timeout_ = 0;
+  self->Trace("timeout");
   self->restart_ = !self->ready_;
   self->Complete("popover-timeout");
   self->Hide();
@@ -147,6 +184,8 @@ void ReaderPopover::Present() {
   if (!requested_ || !painted_ || !frame_ || !gtk_widget_get_mapped(anchor_) || !gtk_widget_get_mapped(popover_)) return;
   auto* parent = gtk_widget_get_toplevel(anchor_);
   if (!GTK_IS_WINDOW(parent) || !gtk_window_is_active(GTK_WINDOW(parent))) { Hide(); return; }
+  if (pending_) Trace("reveal");
+  busybooks_native_menu_host_set_enabled(menu_channel_, TRUE);
   gtk_popover_set_modal(GTK_POPOVER(popover_), TRUE);
   gtk_widget_set_opacity(popover_, 1);
   if (pending_) gtk_widget_grab_focus(GTK_WIDGET(view_));
@@ -173,6 +212,8 @@ void ReaderPopover::Capture(FlMethodCall* call) {
       }, g_object_ref(call));
 }
 void ReaderPopover::Hide() {
+  if (requested_) Trace("hide");
+  busybooks_native_menu_host_set_enabled(menu_channel_, FALSE);
   const bool notify = requested_;
   const bool keyboard = keyboard_dismissal_;
   keyboard_dismissal_ = false;
@@ -193,6 +234,7 @@ void ReaderPopover::Hide() {
 }
 void ReaderPopover::Update() {
   if (!ready_ || !requested_ || !data_) return;
+  Trace("payload-send");
   struct Reply { ReaderPopover* self; std::shared_ptr<bool> alive; FlValue* owner; };
   auto* reply = new Reply{this, alive_, fl_value_ref(data_)};
   fl_method_channel_invoke_method(channel_, "update", data_, nullptr,
@@ -201,6 +243,7 @@ void ReaderPopover::Update() {
         g_autoptr(GError) error = nullptr;
         g_autoptr(FlMethodResponse) response = fl_method_channel_invoke_method_finish(FL_METHOD_CHANNEL(object), result, &error);
         auto* self = reply->self;
+        if (*reply->alive && self->requested_ && self->Matches(reply->owner)) self->Trace(response && !FL_IS_METHOD_ERROR_RESPONSE(response) ? "payload-ack" : "payload-failed");
         if (*reply->alive && self->requested_ && self->Matches(reply->owner) &&
             (!response || FL_IS_METHOD_ERROR_RESPONSE(response))) {
           self->Complete("popover-payload"); self->Hide();
@@ -211,6 +254,7 @@ void ReaderPopover::Update() {
 void ReaderPopover::Frame(FlView*, gpointer data) {
   auto* self = static_cast<ReaderPopover*>(data);
   self->frame_ = true;
+  self->Trace("native-first-frame");
   self->Present();
 }
 void ReaderPopover::Call(FlMethodChannel* channel, FlMethodCall* call, gpointer data) {
@@ -219,6 +263,7 @@ void ReaderPopover::Call(FlMethodChannel* channel, FlMethodCall* call, gpointer 
   const char* name = fl_method_call_get_name(call);
   if (strcmp(name, "ready") == 0) {
     self->ready_ = true;
+    self->Trace("ready");
     fl_method_call_respond_success(call, nullptr, nullptr);
     self->Update();
     return;
@@ -226,12 +271,13 @@ void ReaderPopover::Call(FlMethodChannel* channel, FlMethodCall* call, gpointer 
   auto* value = fl_method_call_get_args(call);
   if ((strcmp(name, "presented") == 0 || strcmp(name, "failed") == 0)) {
     if (self->requested_ && self->Matches(value)) {
+      self->Trace(strcmp(name, "failed") == 0 ? "dart-content-failed" : "dart-painted");
       if (strcmp(name, "failed") == 0) { self->Complete("popover-content"); self->Hide(); }
       else {
         auto* height = fl_value_lookup_string(value, "height");
         auto* kind = fl_value_lookup_string(self->data_, "kind");
         if (height && fl_value_get_type(height) == FL_VALUE_TYPE_FLOAT && kind &&
-            (strcmp(fl_value_get_string(kind), "goto") == 0 || strcmp(fl_value_get_string(kind), "lookup") == 0 || strcmp(fl_value_get_string(kind), "appearance") == 0)) {
+            (strcmp(fl_value_get_string(kind), "goto") == 0 || strcmp(fl_value_get_string(kind), "lookup") == 0)) {
           const double n = fl_value_get_float(height);
           if (std::isfinite(n) && n > 0) {
             int width = 0, maximum = 0; gtk_widget_get_size_request(GTK_WIDGET(self->view_), &width, &maximum);

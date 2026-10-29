@@ -1,1 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect x="8" y="8" width="112" height="112" rx="24" fill="#3584e4"/><path d="M28 32q18-8 36 4 18-12 36-4v58q-18-8-36 4-18-12-36-4z" fill="#fff"/><path d="M64 36v58" fill="none" stroke="#3584e4" stroke-width="4"/></svg>
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="106 108 300 300" width="512" height="512" role="img" aria-labelledby="title" aria-describedby="description">
+  <title id="title">BusyBooks logo</title>
+  <desc id="description">Three stacked rounded squares in forest green, sage green and gold, with an ivory section symbol on the top square.</desc>
+  <defs>
+    <path id="layer" d="M274.96 127.17 383.04 190.83Q402 202 383.04 213.17L274.96 276.83Q256 288 237.04 276.83L128.96 213.17Q110 202 128.96 190.83L237.04 127.17Q256 116 274.96 127.17Z"/>
+    <linearGradient id="top" x1="130" y1="130" x2="382" y2="274" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#145449"/>
+      <stop offset=".52" stop-color="#0C352E"/>
+      <stop offset="1" stop-color="#031712"/>
+    </linearGradient>
+    <linearGradient id="middle" x1="130" y1="168" x2="382" y2="310" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#73A18B"/>
+      <stop offset="1" stop-color="#3E6B58"/>
+    </linearGradient>
+    <linearGradient id="bottom" x1="130" y1="204" x2="382" y2="346" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C6A15B"/>
+      <stop offset=".55" stop-color="#A67C2E"/>
+      <stop offset="1" stop-color="#6F4E1F"/>
+    </linearGradient>
+    <filter id="shadow" x="70" y="90" width="372" height="306" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset in="SourceAlpha" dx="0" dy="14" result="offset1"/>
+      <feGaussianBlur in="offset1" stdDeviation="13" result="blur1"/>
+      <feFlood flood-color="#020617" flood-opacity=".18" result="color1"/>
+      <feComposite in="color1" in2="blur1" operator="in" result="shadow1"/>
+      <feOffset in="SourceAlpha" dx="0" dy="3" result="offset2"/>
+      <feGaussianBlur in="offset2" stdDeviation="4" result="blur2"/>
+      <feFlood flood-color="#020617" flood-opacity=".1" result="color2"/>
+      <feComposite in="color2" in2="blur2" operator="in" result="shadow2"/>
+      <feMerge>
+        <feMergeNode in="shadow1"/>
+        <feMergeNode in="shadow2"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="top-clip">
+      <path d="M274.96 127.17 383.04 190.83Q402 202 383.04 213.17L274.96 276.83Q256 288 237.04 276.83L128.96 213.17Q110 202 128.96 190.83L237.04 127.17Q256 116 274.96 127.17Z"/>
+    </clipPath>
+  </defs>
+  <g filter="url(#shadow)" stroke="#020617" stroke-opacity=".1" stroke-width="2">
+    <path d="M274.96 127.17 383.04 190.83Q402 202 383.04 213.17L274.96 276.83Q256 288 237.04 276.83L128.96 213.17Q110 202 128.96 190.83L237.04 127.17Q256 116 274.96 127.17Z" transform="translate(0 100)" fill="url(#bottom)"/>
+    <path d="M274.96 127.17 383.04 190.83Q402 202 383.04 213.17L274.96 276.83Q256 288 237.04 276.83L128.96 213.17Q110 202 128.96 190.83L237.04 127.17Q256 116 274.96 127.17Z" transform="translate(0 50)" fill="url(#middle)"/>
+    <path d="M274.96 127.17 383.04 190.83Q402 202 383.04 213.17L274.96 276.83Q256 288 237.04 276.83L128.96 213.17Q110 202 128.96 190.83L237.04 127.17Q256 116 274.96 127.17Z" fill="url(#top)"/>
+  </g>
+  <g clip-path="url(#top-clip)">
+    <g transform="matrix(76 -44.8 76 44.8 256 202)" fill="#F8F1E3" opacity=".98">
+      <path d="M-0.10776 -0.22327Q-0.15918 -0.18571 -0.18449 -0.14898Q-0.2098 -0.11224 -0.2098 -0.07469Q-0.2098 -0.01265 -0.15306 0.04163Q-0.09633 0.09592 0.10776 0.20612Q0.15918 0.16939 0.18449 0.13224Q0.2098 0.0951 0.2098 0.05755Q0.2098 -0.00367 0.15143 -0.05918Q0.09306 -0.11469 -0.10776 -0.22327ZM0.25959 -0.65265V-0.51878Q0.19184 -0.55061 0.13347 -0.56653Q0.0751 -0.58245 0.02939 -0.58245Q-0.0498 -0.58245 -0.09388 -0.5498Q-0.13796 -0.51714 -0.13796 -0.45918Q-0.13796 -0.38571 0.0302 -0.29184Q0.05143 -0.27959 0.06286 -0.27306Q0.2351 -0.17592 0.28857 -0.11306Q0.34204 -0.0502 0.34204 0.03224Q0.34204 0.10571 0.30449 0.16286Q0.26694 0.22 0.19102 0.26327Q0.24163 0.30571 0.2649 0.3502Q0.28816 0.39469 0.28816 0.44694Q0.28816 0.56286 0.2049 0.63143Q0.12163 0.7 -0.01959 0.7Q-0.07918 0.7 -0.14204 0.68816Q-0.2049 0.67633 -0.27673 0.65265V0.51878Q-0.20571 0.55061 -0.14531 0.56653Q-0.0849 0.58245 -0.03755 0.58245Q0.04571 0.58245 0.09184 0.54816Q0.13796 0.51388 0.13796 0.45184Q0.13796 0.36857 -0.04245 0.26816L-0.06286 0.25673Q-0.23755 0.15878 -0.2898 0.09633Q-0.34204 0.03388 -0.34204 -0.04939Q-0.34204 -0.12367 -0.30408 -0.18204Q-0.26612 -0.24041 -0.19184 -0.28041Q-0.24 -0.31633 -0.26408 -0.36204Q-0.28816 -0.40776 -0.28816 -0.46408Q-0.28816 -0.5702 -0.20653 -0.6351Q-0.1249 -0.7 0.01061 -0.7Q0.0702 -0.7 0.13265 -0.68816Q0.1951 -0.67633 0.25959 -0.65265Z"/>
+    </g>
+  </g>
+</svg>

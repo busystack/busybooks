@@ -35,5 +35,7 @@ Test fixtures include Noto Serif under the accompanying FONT-LICENSE,
 also embedded in each generated EPUB. Fixture text/artwork is CC0.
 WebKitGTK, GTK, libhandy, SQLite and Speech Dispatcher are system runtime
 components on Linux; their upstream/distribution licenses continue to apply.
+The Linux portable bundle includes the unchanged system SQLite runtime.
+SQLite is in the public domain: https://sqlite.org/copyright.html
 WebView2 and Visual C++ runtime redistribution uses official Microsoft
 installers supplied to the Windows packaging tool.

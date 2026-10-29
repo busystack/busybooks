@@ -42,6 +42,8 @@ headers, libhandy 1 development headers and WebKitGTK 4.1 development headers.
 Local typography also uses PangoCairo/PangoFc 1.48+ and Fontconfig 2.13+ development
 libraries (included by the GTK development dependencies on Ubuntu 24.04).
 Runtime: GTK 3, libhandy 1, WebKitGTK 4.1, SQLite 3 and bundled Flutter libraries.
+Portable Ubuntu installations also need `librsvg2-common` for GTK's SVG icon
+loader (minimal installations using `--no-install-recommends` can omit it).
 The bundled RAR-only helper is built from pinned UnRAR source; no external
 `unrar` command or runtime decoder download is needed. Its redistribution license
 and acknowledgements ship under `share/licenses/unrar`.
@@ -73,6 +75,23 @@ Use disposable profiles and fixture books for testing. Windows instructions are
 in [windows.md](docs/development/windows.md). Linux package inputs are
 `tools/package_linux.sh` and `snap/snapcraft.yaml`; neither installs or publishes
 an application. Native smoke checks use `tools/probe_linux_engines.sh`.
+
+To register an extracted Linux bundle with the application grid, put the whole
+bundle in a stable location and run
+`python3 tools/install_linux_desktop.py /absolute/path/to/bundle`.
+This installs the desktop entry and approved icon under `$XDG_DATA_HOME` (normally
+`~/.local/share`), with a quoted absolute executable path and file arguments.
+It refreshes the desktop database and GTK hicolor icon cache when their tools
+are installed, so an older user icon cache does not hide the new artwork.
+Rerun it after relocating the bundle. Existing different BusyBooks launchers or
+icons are preserved unless `--replace` is explicitly selected. It does not change
+default file associations. Snap desktop registration is handled by snapd.
+
+Linux bundles include the unchanged system SQLite runtime and a relative
+`lib/libsqlite3.so` alias. The executable resolves that exact name using its
+bundle RUNPATH before Flutter starts, so the locked system native asset works
+without a host development package, loader environment overrides or changes to
+SQLite. Keep the complete bundle together when moving it.
 
 The cross-volume move probe requires two writable directories on different
 filesystems. It creates disposable files within them; choose locations suitable

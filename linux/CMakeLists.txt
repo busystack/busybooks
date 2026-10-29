@@ -94,6 +94,26 @@ install(CODE "
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
+# Keep sqlite3's system-runtime strategy, including the exact locked hook name
+# libsqlite3.so. Runtime-only Ubuntu has the SONAME but no development alias.
+# Package the unchanged official runtime and an application-owned relative alias.
+find_library(BUSYBOOKS_SQLITE_RUNTIME NAMES libsqlite3.so.0)
+if(NOT BUSYBOOKS_SQLITE_RUNTIME)
+  message(FATAL_ERROR "Install the SQLite 3 runtime (libsqlite3-0) to build BusyBooks")
+endif()
+get_filename_component(BUSYBOOKS_SQLITE_RUNTIME_REAL "${BUSYBOOKS_SQLITE_RUNTIME}" REALPATH)
+install(FILES "${BUSYBOOKS_SQLITE_RUNTIME_REAL}"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" RENAME "libsqlite3.so.0"
+  COMPONENT Runtime)
+install(CODE "
+  execute_process(COMMAND \"${CMAKE_COMMAND}\" -E create_symlink
+    \"libsqlite3.so.0\" \"${INSTALL_BUNDLE_LIB_DIR}/libsqlite3.so\"
+    RESULT_VARIABLE busybooks_sqlite_alias_result)
+  if(NOT busybooks_sqlite_alias_result EQUAL 0)
+    message(FATAL_ERROR \"Could not create BusyBooks SQLite runtime alias\")
+  endif()
+  " COMPONENT Runtime)
+
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 

@@ -4,7 +4,6 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:yaru/yaru.dart';
 
@@ -307,8 +306,8 @@ class _LinuxWindowControlCluster extends ConsumerWidget {
       GtkWindowDecorationElement.windowIcon => SizedBox.square(
         dimension: BusyBooksLinuxWindowMetrics.controlSize,
         child: Center(
-          child: SvgPicture.asset(
-            'assets/branding/busybooks_logo.svg',
+          child: Image.asset(
+            'assets/branding/busybooks_logo.png',
             width: BusyBooksSizes.iconSm,
             height: BusyBooksSizes.iconSm,
             excludeFromSemantics: true,

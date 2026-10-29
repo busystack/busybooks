@@ -16,7 +16,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yaru/yaru.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -220,11 +219,11 @@ void main() {
     expect(left, findsOneWidget);
     expect(right, findsOneWidget);
     expect(
-      find.descendant(of: left, matching: find.byType(SvgPicture)),
+      find.descendant(of: left, matching: find.byType(Image)),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: right, matching: find.byType(SvgPicture)),
+      find.descendant(of: right, matching: find.byType(Image)),
       findsNothing,
     );
     expect(tester.getRect(left).left, 0);
@@ -252,7 +251,7 @@ void main() {
     );
     expect(leftControls, findsOneWidget);
     expect(
-      tester.getCenter(find.byType(SvgPicture)).dx,
+      tester.getCenter(find.byType(Image)).dx,
       lessThan(tester.getCenter(leftControls).dx),
     );
   });

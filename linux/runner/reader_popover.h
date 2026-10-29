@@ -17,6 +17,7 @@ class ReaderPopover {
   void Result(FlValue* data);
   void Capture(FlMethodCall* call);
  private:
+  void Trace(const char* stage) const;
   void EnsureView();
   void Update();
   void Complete(const char* code = nullptr);
@@ -29,6 +30,7 @@ class ReaderPopover {
   GtkWidget* popover_ = nullptr;
   FlView* view_ = nullptr;
   FlMethodChannel* channel_ = nullptr;
+  FlMethodChannel* menu_channel_ = nullptr;
   FlValue* data_ = nullptr;
   bool ready_ = false, frame_ = false, requested_ = false, painted_ = false, restart_ = false;
   bool keyboard_dismissal_ = false;

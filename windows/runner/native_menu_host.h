@@ -6,13 +6,16 @@
 #include <memory>
 class NativeMenuHost {
  public:
-  NativeMenuHost(HWND anchor, flutter::BinaryMessenger* messenger);
+  NativeMenuHost(HWND anchor, flutter::BinaryMessenger* messenger,
+                 HWND active_owner = nullptr);
   ~NativeMenuHost();
+  void SetEnabled(bool enabled);
  private:
   struct Request;
   static LRESULT CALLBACK Procedure(HWND, UINT, WPARAM, LPARAM);
   void Present();
-  HWND anchor_, messages_ = nullptr;
+  HWND anchor_, active_owner_, messages_ = nullptr;
+  bool enabled_ = true;
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
   std::shared_ptr<Request> pending_, active_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;

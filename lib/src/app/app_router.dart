@@ -30,9 +30,17 @@ class _ReaderRouteObserver extends NavigatorObserver {
   final ReaderController reader;
   int _revision = 0;
 
-  Future<void> _showTop(bool visible, int revision) async {
+  Future<void> _showTop(
+    bool visible,
+    int revision,
+    ReaderAppearanceMenuOwner? menuOwner,
+  ) async {
     if (!visible) {
-      await reader.show(false);
+      if (menuOwner == null) {
+        await reader.show(false);
+      } else {
+        await reader.showAppearanceMenuFallback(menuOwner);
+      }
       return;
     }
     // Retained geometry belongs to the previous allocation. ReadingContent
@@ -56,6 +64,9 @@ class _ReaderRouteObserver extends NavigatorObserver {
     _showTop(
       topRoute.settings.name == 'reader' || topRoute.settings.name == 'split',
       ++_revision,
+      topRoute.settings.arguments is ReaderAppearanceMenuOwner
+          ? topRoute.settings.arguments as ReaderAppearanceMenuOwner
+          : null,
     ),
   );
 }

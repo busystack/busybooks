@@ -277,7 +277,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get noText =>
-      'Diese PDF-Seite enthält keine Textebene. Lesen und Seitenlesezeichen sind möglich. Textauswahl, Wörterbuch und Suche benötigen Text.';
+      'Diese PDF-Seite enthält keine Textebene. Lesen und Seitenlesezeichen sind möglich. Textauswahl und Wörterbuch benötigen Text auf dieser Seite; die Suche kann weiterhin Text auf anderen Seiten finden.';
+
+  @override
+  String get noTextPageStatus => 'Keine Textebene auf dieser Seite';
 
   @override
   String get searching => 'Suche läuft';

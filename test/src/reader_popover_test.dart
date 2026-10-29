@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:busybooks/src/app/busybooks_design.dart';
-import 'package:busybooks/src/core/reading_preferences.dart';
 import 'package:busybooks/src/reading/presentation/reader_popover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -159,59 +158,6 @@ void main() {
         2,
       );
       expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets('appearance accepts Escape before any control gains focus', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const ProviderScope(child: ReaderPopoverApp()));
-    await _update(tester, {
-      'kind': 'appearance',
-      'typography': {'fontFamily': true, 'textMetrics': true},
-      'pdf': false,
-      'appearance': defaultReadingAppearance,
-    });
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pumpAndSettle();
-    expect(actions, contains(containsPair('action', 'dismiss')));
-    final dismissed = actions.singleWhere((a) => a['action'] == 'dismiss');
-    expect(dismissed['session'], '1');
-    expect(dismissed['presentation'], 1);
-    expect(tester.takeException(), isNull);
-  });
-  testWidgets(
-    'compact appearance ignores stale hide and disposes the owned presentation',
-    (tester) async {
-      await tester.pumpWidget(const ProviderScope(child: ReaderPopoverApp()));
-      await _update(tester, {
-        'kind': 'appearance',
-        'typography': {'fontFamily': true, 'textMetrics': true},
-        'pdf': false,
-        'appearance': defaultReadingAppearance,
-      });
-      expect(find.text('Font size'), findsOneWidget);
-      expect(find.text('Font family'), findsNothing);
-      Future<void> hidden(int presentation) async {
-        ServicesBinding.instance.channelBuffers.push(
-          readerPopoverChannel.name,
-          readerPopoverChannel.codec.encodeMethodCall(
-            MethodCall('hidden', {
-              'session': '1',
-              'presentation': presentation,
-            }),
-          ),
-          (_) {},
-        );
-        await tester.pumpAndSettle();
-      }
-
-      await hidden(0);
-      expect(find.text('Font size'), findsOneWidget);
-      await hidden(1);
-      expect(find.text('Font size'), findsNothing);
-      expect(actions, isEmpty);
-      // Font-family editing and Escape/focus remain covered by font_chooser_test
-      // in the full Settings controls where advanced typography now belongs.
     },
   );
   testWidgets('selection exposes Search in This Book and deliberate Look Up', (
@@ -611,78 +557,6 @@ void main() {
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'Preserve my unsaved note',
       );
-      expect(tester.takeException(), isNull);
-    },
-  );
-  for (final (name, reflow, pdf, noText) in [
-    ('reflowable EPUB', true, false, false),
-    ('fixed EPUB', false, false, false),
-    ('text PDF', false, true, false),
-    ('scanned PDF', false, true, true),
-  ]) {
-    testWidgets(
-      'Appearance actual form and reuse expose applicable controls for $name',
-      (tester) async {
-        tester.view.physicalSize = const Size(460, 700);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        await tester.pumpWidget(const ProviderScope(child: ReaderPopoverApp()));
-        for (final presentation in [1, 2]) {
-          await _update(tester, {
-            'kind': 'appearance',
-            'presentation': presentation,
-            'typography': {'fontFamily': reflow, 'textMetrics': reflow},
-            'pdf': pdf,
-            'location': {'noText': noText},
-            'appearance': reflow
-                ? defaultReadingAppearance
-                : defaultPdfAppearance,
-          });
-          expect(
-            find.text('Font size'),
-            reflow ? findsOneWidget : findsNothing,
-          );
-          if (!reflow) {
-            await tester.scrollUntilVisible(find.text('Zoom'), 150);
-            expect(find.text('Zoom'), findsOneWidget);
-          }
-          if (pdf) {
-            await tester.scrollUntilVisible(find.text('Rotation'), 100);
-            expect(find.text('Rotation'), findsOneWidget);
-          } else {
-            expect(find.text('Rotation'), findsNothing);
-          }
-          expect(
-            presented.where((e) => e['presentation'] == presentation),
-            isNotEmpty,
-          );
-          expect(tester.takeException(), isNull);
-        }
-      },
-    );
-  }
-  testWidgets(
-    'compact appearance exposes common controls and routes advanced typography to Settings',
-    (tester) async {
-      tester.view.physicalSize = const Size(460, 600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(const ProviderScope(child: ReaderPopoverApp()));
-      await _update(tester, {
-        'kind': 'appearance',
-        'typography': {'fontFamily': true, 'textMetrics': true},
-        'pdf': false,
-        'appearance': defaultReadingAppearance,
-      });
-      expect(find.text('Font size'), findsOneWidget);
-      expect(find.text('Font weight'), findsNothing);
-      expect(find.text('More Typography'), findsNothing);
-      await tester.scrollUntilVisible(find.text('More Reading Settings…'), 200);
-      await tester.tap(find.text('More Reading Settings…'));
-      await tester.pumpAndSettle();
-      expect(actions.single['action'], 'readingSettings');
       expect(tester.takeException(), isNull);
     },
   );

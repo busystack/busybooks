@@ -16,7 +16,7 @@ ReaderPopover::~ReaderPopover() {
   *alive_ = false;
   Complete("popover-cancelled");
   if (channel_) channel_->SetMethodCallHandler(nullptr);
-  channel_.reset(); controller_.reset();
+  menus_.reset(); channel_.reset(); controller_.reset();
   if (window_) DestroyWindow(window_);
 }
 bool ReaderPopover::EnsureView() {
@@ -44,6 +44,9 @@ bool ReaderPopover::EnsureView() {
   channel_ = std::make_unique<flutter::MethodChannel<EncodableValue>>(
       controller_->engine()->messenger(), "io.busystack.busybooks/reader_popover",
       &flutter::StandardMethodCodec::GetInstance());
+  menus_ = std::make_unique<NativeMenuHost>(child, controller_->engine()->messenger(),
+      GetAncestor(anchor_, GA_ROOT));
+  menus_->SetEnabled(false);
   const auto engine_generation = ++engine_generation_;
   channel_->SetMethodCallHandler([this, engine_generation](const auto& call, auto result) {
     if (engine_generation != engine_generation_) { result->Error("popover-cancelled", "Reader controls were replaced"); return; }
@@ -85,7 +88,7 @@ void ReaderPopover::Show(const EncodableValue& data, std::unique_ptr<flutter::Me
   Hide();
   if (restart_) {
     if (channel_) channel_->SetMethodCallHandler(nullptr);
-    channel_.reset(); controller_.reset();
+    menus_.reset(); channel_.reset(); controller_.reset();
     if (window_) { DestroyWindow(window_); window_ = nullptr; }
     ready_ = false; restart_ = false;
   }
@@ -148,7 +151,7 @@ void ReaderPopover::Present(const EncodableValue& value) {
   const auto* map = std::get_if<EncodableMap>(&value);
   const auto* current = std::get_if<EncodableMap>(&data_);
   const auto kind = current->find(EncodableValue("kind"));
-  if (kind != current->end() && (kind->second == EncodableValue("goto") || kind->second == EncodableValue("lookup") || kind->second == EncodableValue("appearance"))) {
+  if (kind != current->end() && (kind->second == EncodableValue("goto") || kind->second == EncodableValue("lookup"))) {
     auto it = map->find(EncodableValue("height"));
     const auto* n = it == map->end() ? nullptr : std::get_if<double>(&it->second);
     if (n && std::isfinite(*n) && *n > 0) {
@@ -180,6 +183,7 @@ void ReaderPopover::Present(const EncodableValue& value) {
     HWND parent = GetAncestor(anchor_, GA_ROOT), foreground = GetForegroundWindow();
     if (IsIconic(parent) || (foreground != parent && foreground != window_)) { Hide(); return; }
     ShowWindow(window_, SW_SHOWNOACTIVATE);
+    if (menus_) menus_->SetEnabled(true);
     if (pending_) SetFocus(controller_->view()->GetNativeWindow());
     Complete();
   });
@@ -187,6 +191,7 @@ void ReaderPopover::Present(const EncodableValue& value) {
 }
 void ReaderPopover::Hide() {
   const bool notify = requested_;
+  if (menus_) menus_->SetEnabled(false);
   requested_ = false; Complete("popover-cancelled");
   if (window_) ShowWindow(window_, SW_HIDE);
   const auto* map = std::get_if<EncodableMap>(&data_);

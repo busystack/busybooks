@@ -1133,6 +1133,7 @@ Future<T?> showBusyBooksMenu<T>({
   Rect? anchorRect,
   NativeMenuService nativeMenuService = const NativeMenuService(),
   BusyBooksMenuSession? session,
+  Object? fallbackOwner,
   bool focusFirst = false,
   bool preferAbove = false,
   double? width,
@@ -1198,6 +1199,7 @@ Future<T?> showBusyBooksMenu<T>({
           )
         : anchor;
     final route = _BusyBooksNestedMenuRoute<T>(
+      settings: RouteSettings(arguments: fallbackOwner),
       anchor: localAnchor,
       items: itemSnapshot,
       themes: InheritedTheme.capture(from: context, to: navigator.context),
@@ -1542,6 +1544,7 @@ class _BusyBooksSubmenuItemState<T> extends State<BusyBooksSubmenuItem<T>> {
 
 class _BusyBooksNestedMenuRoute<T> extends PopupRoute<T> {
   _BusyBooksNestedMenuRoute({
+    super.settings,
     required this.anchor,
     required this.items,
     required this.themes,

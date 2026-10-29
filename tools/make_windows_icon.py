@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Encode the owned SVG logo into a PNG-compressed multi-resolution ICO.
+"""Rasterize the canonical SVG into a header PNG and multi-resolution ICO.
 
 Requires system gdk-pixbuf/librsvg loaders and C++ build tools on Linux.
 Does not modify an installed application or shared dependency cache.
@@ -29,6 +29,10 @@ if(!ok){g_printerr("%s",error->message);return 1;}return 0;}
         png = temp / f'{size}.png'
         subprocess.run([str(temp / 'rasterize'), str(ROOT / 'assets/branding/busybooks_logo.svg'), str(png), str(size)], check=True)
         images.append(png.read_bytes())
+    # flutter_svg does not support the approved artwork's SVG shadow filter.
+    # Keep the SVG unchanged and let librsvg render this faithful derivative.
+    subprocess.run([str(temp / 'rasterize'), str(ROOT / 'assets/branding/busybooks_logo.svg'),
+                    str(ROOT / 'assets/branding/busybooks_logo.png'), '512'], check=True)
     offset = 6 + 16 * len(SIZES)
     output = struct.pack('<HHH', 0, 1, len(SIZES))
     for size, image in zip(SIZES, images):

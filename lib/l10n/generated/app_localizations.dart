@@ -624,8 +624,14 @@ abstract class AppLocalizations {
   /// No description provided for @noText.
   ///
   /// In en, this message translates to:
-  /// **'This PDF page has no text layer. Reading and page bookmarks are available; text selection, dictionary and search require text.'**
+  /// **'This PDF page has no text layer. Reading and page bookmarks are available. Text selection and dictionary need text on this page; search can still find text on other pages.'**
   String get noText;
+
+  /// No description provided for @noTextPageStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'No text layer on this page'**
+  String get noTextPageStatus;
 
   /// No description provided for @searching.
   ///

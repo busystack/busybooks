@@ -252,10 +252,19 @@ compilation/painting requires a Windows environment. Win32 bitmap item behavior
 uses [MENUITEMINFO](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-menuiteminfoa).
 
 
-Header actions share that command boundary. Appearance retains a live header
-anchor, including Retry after resize; input capture and native session guards
-remain unchanged. Header space accounts for window-control obstructions and
-text scaling. Secondary Reading controls move to Book Actions in narrow layouts;
+Header actions share that command boundary. Appearance/View Options uses the
+primary window's existing native menu host, with checked choices and submenus.
+It does not create a secondary Flutter view. All invocation paths resolve the
+current header bounds after draft capture and dismissal; narrow layouts use the
+Book Actions trigger. Results belong to the captured route, workspace, book,
+renderer session and presentation. Closing, replacing or resizing that owner
+dismisses its menu and rejects late selections. The existing fallback menu route
+may hide the native reader without retiring its own matching menu; other route
+changes retire it. Publication focus callbacks and forwarded reader shortcuts
+cannot reclaim input while the menu owns it. A selected preference captures its
+existing transaction before menu input ownership ends; waiting for rendering or
+storage does not leave an invisible menu consuming reader input. Header space
+accounts for window-control obstructions and text scaling. Secondary Reading controls move to Book Actions in narrow layouts;
 Search, Home and Main Menu remain reachable. Page controls retain their ordering
 when the compact location is hidden.
 
@@ -329,7 +338,11 @@ keeps that guard until the primary reply. Failure unlocks the owning editor;
 success seals its closing presentation until replacement. Actions retain their
 original session/presentation, and ignored queued actions are acknowledged
 without changing current data. Close/Escape still preserves shared drafts.
-Native menus retain the existing hosts.
+Speech Voice and Speed use the same native menu implementation as the main
+window, registered for each owned reader view. Anchors are local to that view;
+the host translates them into native window coordinates and returns focus to
+the active owner. Hiding or replacing a reader presentation cancels its menus
+and rejects queued selections. Hidden views cannot open a native menu.
 
 Reading and storage share the existing 1,000,000 UTF-16-unit note bound (no
 null characters). The Reading field refuses unsupported changes without
@@ -461,11 +474,18 @@ qualification boundaries. Controlled checks do not establish native acceptance.
 ## Local font selection
 
 Settings → Reading owns the advanced searchable local-family chooser and bounded
-native sample. The compact native reading popover presents only theme, size,
-spacing, width/margins and publisher style, or applicable fit/zoom/rotation/spread
-controls for fixed layouts. More Reading Settings opens the current-book scope
-explicitly; global defaults remain separately selected. Candidate movement never
-saves or repaginates; explicit activation
+native sample. The compact header menu presents only page color, size,
+spacing, width/margins and publisher style for reflowable text, or applicable
+fit/zoom/spread controls for fixed layouts. Rotation remains PDF-specific;
+comics retain their direction controls and omit page-color/text controls. Valid
+numeric preferences between presets remain exact checked choices. Changing size
+or line spacing also disables publisher style through the existing preference
+transaction. More Reading Settings opens the current-book scope explicitly;
+global defaults remain separately selected. A known no-text PDF page adds a
+noninteractive status row; the existing per-book Reading Settings shows its full
+explanation. Text pages, other formats and global defaults omit that status.
+Whole-document search remains available for text on other PDF pages. Candidate
+movement never saves or repaginates; explicit activation
 uses the existing book/default writer. Publisher mode retains the custom choice;
 unavailable choices retain their identity and show a local fallback explanation.
 Renderer-supplied typography capabilities gate the controls and application path.

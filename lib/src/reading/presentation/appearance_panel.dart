@@ -189,7 +189,7 @@ class _ReadingAppearanceControlsState extends State<ReadingAppearanceControls> {
             key: const ValueKey('appearance-write-error'),
             title: l.writeFailed,
           ),
-        if (widget.noText) Text(l.noText),
+        if (widget.pdf && !widget.defaults && widget.noText) Text(l.noText),
         if (widget.capabilities.textMetrics || widget.capabilities.fontFamily)
           BusyBooksGroupedList(
             children: [
@@ -453,6 +453,7 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
             pdf: pdf,
             comic: comic,
             defaults: widget.defaults,
+            noText: !widget.defaults && reader.currentPageHasNoText,
             onChanged: (v) => widget.defaults
                 ? ref
                       .read(appSettingsControllerProvider.notifier)

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include "native_menu_host.h"
 class ReaderPopover {
  public:
   ReaderPopover(HWND anchor, std::function<void(const std::string&)> event);
@@ -29,6 +30,7 @@ class ReaderPopover {
   std::function<void(const std::string&)> event_;
   std::unique_ptr<flutter::FlutterViewController> controller_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
+  std::unique_ptr<NativeMenuHost> menus_;
   flutter::EncodableValue data_;
   bool ready_ = false, requested_ = false, restart_ = false;
   int maximum_height_ = 480;

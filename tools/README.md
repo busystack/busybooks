@@ -144,6 +144,20 @@ technology and physical display/GPU behavior require explicit qualification.
 
 ## Linux workspace and shutdown diagnostics
 
+Set `BUSYBOOKS_READER_DIAGNOSTICS=1` for an explicit diagnostic launch of the
+release executable to log reader-surface ownership and readiness stages. The
+GTK host records kind, session/presentation, backend, build mode and the
+creation/realization, ready, payload, native frame, Dart paint, reveal, hide and
+failure boundaries. Dart reports the original caught failure code/message/details
+and stack before presenting the localized reader-controls feedback. The logs do
+not serialize book passages or note/annotation payloads. Keep them with the
+launch identity, profile-isolation status, desktop/scaling/theme details and
+screenshots in a temporary evidence directory outside maintained source.
+Compare first opening, reopening after idle and current geometry after resize;
+read readiness stages separately rather than treating a generic feedback banner
+as a native failure classification. The header Appearance/View Options menu uses
+the primary native menu host and has no secondary-surface readiness sequence.
+
 `prepare_workspace_probe.dart ABSOLUTE_EMPTY_DIRECTORY` copies fixture books and
 seeds a new profile using the production store. Set `BUSYBOOKS_COMIC_DECODER` to
 the built helper. `probe_linux_workspace.py SEED EVIDENCE` drives the actual
@@ -231,8 +245,13 @@ and [reading-data provenance](../test/fixtures/reading-data/PROVENANCE.md).
   collisions use publication CSS aliases, without rewriting native font metadata.
 - `make_comic_locator_upgrade_fixture.py`: previous-version database/backup fixtures;
   requires the documented local Git revisions and offline populated package cache.
-- `make_windows_icon.py`: regenerates the Windows ICO from the owned SVG on Linux
-  using gdk-pixbuf/librsvg and C++ tools.
+- `make_windows_icon.py`: regenerates the Windows ICO and Flutter header PNG
+  from the canonical approved SVG using gdk-pixbuf/librsvg and C++ tools.
+  The PNG preserves the SVG shadow filter that Flutter's SVG decoder omits.
+- `install_linux_desktop.py BUNDLE`: explicitly registers a stable portable
+  bundle in the user's XDG applications/icon directories. Supports `--data-home`
+  for disposable registration tests and preserves existing different files
+  unless `--replace` is requested. It leaves default file associations alone.
 
 ## Upstream integrity
 

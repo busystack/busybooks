@@ -17,6 +17,7 @@ import '../platform/gtk_header_icon_service.dart';
 import '../platform/speech_service.dart';
 import '../reading/application/narration_controller.dart';
 import '../reading/application/reader_controller.dart';
+import '../reading/presentation/appearance_menu.dart';
 import '../search/book_search_session.dart';
 import '../search/book_search_widgets.dart';
 import '../workspace/workspace_controller.dart';
@@ -312,10 +313,8 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             .read(bookSidebarProvider(activeBook()!).notifier)
             .selectPanel(BookSidebarPanel.marks);
       },
-      BusyBooksCommandIds.appearance: () => reader.showPopover(
-        'appearance',
-        anchor: reader.appearanceAnchor?.call(),
-      ),
+      BusyBooksCommandIds.appearance: () =>
+          showReadingAppearanceMenu(context, reader, isCurrent: ownsContext),
       BusyBooksCommandIds.bookmark: () => reader.annotation('bookmark'),
       BusyBooksCommandIds.highlight: () => reader.annotation('highlight'),
       BusyBooksCommandIds.dictionary: () => dictionary(context, ref),

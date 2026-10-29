@@ -276,7 +276,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noText =>
-      'This PDF page has no text layer. Reading and page bookmarks are available; text selection, dictionary and search require text.';
+      'This PDF page has no text layer. Reading and page bookmarks are available. Text selection and dictionary need text on this page; search can still find text on other pages.';
+
+  @override
+  String get noTextPageStatus => 'No text layer on this page';
 
   @override
   String get searching => 'Searching';

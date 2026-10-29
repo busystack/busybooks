@@ -87,6 +87,17 @@ class ReaderSelectionTarget {
   final Rect? rect;
 }
 
+/// Ownership of one primary-window appearance menu, after draft handoff.
+class ReaderAppearanceMenuOwner {
+  const ReaderAppearanceMenuOwner._(
+    this.bookId,
+    this.session,
+    this.presentation,
+  );
+  final String bookId, session;
+  final int presentation;
+}
+
 class ReaderState {
   const ReaderState({
     this.bookId,
@@ -557,7 +568,8 @@ class ReaderController extends Notifier<ReaderState> {
     final settled = Completer<void>();
     _viewportSettled = settled;
     try {
-      if (_popoverActive && _popoverNativeOwner) {
+      if (_appearanceMenuOwner != null && rect != _viewport ||
+          _popoverActive && _popoverNativeOwner) {
         await dismissPopover(restoreFocus: false);
         if (!current()) return false;
       }
@@ -820,19 +832,14 @@ class ReaderController extends Notifier<ReaderState> {
         // Go To settles through popoverResult. Acknowledge its delivery now so
         // the same inbound channel can deliver the correlated renderer result;
         // the existing action tail still serializes all mutations/dismissals.
-        if (msg['type'] == 'popoverAction' &&
-            [
-              'goto',
-              'appearance',
-              'resetAppearance',
-              'saveDefaults',
-            ].contains(msg['action'])) {
+        if (msg['type'] == 'popoverAction' && msg['action'] == 'goto') {
           return;
         }
         await operation;
       }
     });
     ref.onDispose(() {
+      unawaited(_dismissAppearanceMenu());
       _pendingJump?.cancel();
       _finishSearchWaiters(false);
       _invalidateLookup();
@@ -941,6 +948,8 @@ class ReaderController extends Notifier<ReaderState> {
         ref.mounted && revision == _openRevision && (isCurrent?.call() ?? true);
     final replacing = state.bookId != id || !state.ready;
     try {
+      await _dismissAppearanceMenu();
+      if (!ownedOpening()) return;
       // Capture while the old session still owns the book and passage. The
       // preparing phase below intentionally invalidates old native callbacks.
       await _capturePopoverDraft(seal: replacing);
@@ -1695,6 +1704,7 @@ class ReaderController extends Notifier<ReaderState> {
           presentation == _presentation &&
           state.bookId == id &&
           !_popoverActive &&
+          _appearanceMenuOwner == null &&
           ref.read(bookPresentationProvider).lastPane == BookPane.reading &&
           isCurrent(),
     );
@@ -1727,7 +1737,9 @@ class ReaderController extends Notifier<ReaderState> {
     }
     if (!current()) return;
     if (action == 'focus') {
-      if (!_routeVisible || !state.ready) return;
+      if (!_routeVisible || !state.ready || _appearanceMenuOwner != null) {
+        return;
+      }
       await readerChannel.invokeMethod<void>('focus', {'session': session});
       if (!current()) return;
     }
@@ -1791,9 +1803,25 @@ class ReaderController extends Notifier<ReaderState> {
 
   // Route visibility survives a native close/open on a retained reader route.
   // Geometry and widget rebuilding do not own this state; dialogs do.
-  Future<void> show(bool value) async {
+  Future<void> show(bool value) => _showRoute(value);
+
+  /// Only the matching fallback menu route may temporarily cover its own owner.
+  Future<void> showAppearanceMenuFallback(ReaderAppearanceMenuOwner owner) =>
+      _showRoute(false, appearanceMenu: owner);
+
+  Future<void> _showRoute(
+    bool value, {
+    ReaderAppearanceMenuOwner? appearanceMenu,
+  }) async {
+    final ownedMenu =
+        appearanceMenu != null && ownsAppearanceMenu(appearanceMenu);
     _routeVisible = value;
     if (!value) {
+      if (ownedMenu) {
+        _appearanceMenuFallback = appearanceMenu;
+      } else {
+        await _dismissAppearanceMenu();
+      }
       _focusRevision++;
       _invalidateLookup();
       _appearanceNeedsReconcile |=
@@ -1950,7 +1978,11 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> focusChrome() async {
     _focusRevision++;
-    if (state.bookId == null || _popoverActive) return;
+    if (state.bookId == null ||
+        _popoverActive ||
+        _appearanceMenuOwner != null) {
+      return;
+    }
     await readerChannel.invokeMethod<void>('focusChrome', {
       'session': _session,
     });
@@ -1983,7 +2015,8 @@ class ReaderController extends Notifier<ReaderState> {
       event['session'] == _session &&
       event['focusRevision'] == _focusRevision &&
       interactive &&
-      !_popoverActive;
+      !_popoverActive &&
+      _appearanceMenuOwner == null;
 
   /// Null means ownership could not be established; it is never permission to
   /// reclaim focus. Both native hosts validate the captured renderer session.
@@ -2002,7 +2035,12 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<bool> _acceptNativeContentFocus() async {
-    if (!interactive || _popoverActive || state.bookId == null) return false;
+    if (!interactive ||
+        _popoverActive ||
+        _appearanceMenuOwner != null ||
+        state.bookId == null) {
+      return false;
+    }
     final session = _session, revision = _focusRevision, id = state.bookId!;
     bool current() =>
         ref.mounted &&
@@ -2010,7 +2048,8 @@ class ReaderController extends Notifier<ReaderState> {
         id == state.bookId &&
         revision == _focusRevision &&
         interactive &&
-        !_popoverActive;
+        !_popoverActive &&
+        _appearanceMenuOwner == null;
     final focused = await nativeContentHasFocus();
     if (focused != true || !current()) return false;
     ref.read(bookPresentationProvider.notifier).focusPane(id, BookPane.reading);
@@ -2261,6 +2300,7 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> dismissPopover({bool restoreFocus = true}) async {
+    await _dismissAppearanceMenu();
     final session = _session, presentation = _presentation;
     final focusRevision = _focusRevision;
     final lookupFocus = _popoverKind == 'lookup';
@@ -2311,12 +2351,83 @@ class ReaderController extends Notifier<ReaderState> {
       !_suspended &&
       state.ready &&
       !_popoverActive &&
+      _appearanceMenuOwner == null &&
       event['session'] == _session &&
       event['focusRevision'] == _focusRevision &&
       event['presentation'] == _presentation;
 
   Rect? Function()? goToAnchor;
   Rect? Function()? appearanceAnchor;
+  ReaderAppearanceMenuOwner? _appearanceMenuOwner;
+  ReaderAppearanceMenuOwner? _appearanceMenuFallback;
+  Future<void> Function()? _appearanceMenuDismiss;
+
+  Future<void> _dismissAppearanceMenu() async {
+    final dismiss = _appearanceMenuDismiss;
+    _appearanceMenuOwner = null;
+    _appearanceMenuFallback = null;
+    _appearanceMenuDismiss = null;
+    await dismiss?.call();
+  }
+
+  /// Uses the same sealed handoff as other reader controls. A failed capture
+  /// leaves the old editor in place and does not open a menu over its input.
+  Future<ReaderAppearanceMenuOwner?> prepareAppearanceMenu({
+    required Future<void> Function() dismiss,
+  }) async {
+    if (!interactive) return null;
+    final bookId = state.bookId!, session = _session, previous = _presentation;
+    await dismissPopover(restoreFocus: false);
+    if (state.popoverError != null) {
+      state = state.copy(clearPopoverError: true);
+      await WidgetsBinding.instance.endOfFrame.timeout(
+        const Duration(seconds: 15),
+      );
+    }
+    while (_viewportSettled != null) {
+      await _viewportSettled!.future;
+    }
+    if (!ref.mounted ||
+        !interactive ||
+        bookId != state.bookId ||
+        session != _session ||
+        _presentation != previous + 1) {
+      return null;
+    }
+    final owner = ReaderAppearanceMenuOwner._(bookId, session, _presentation);
+    _appearanceMenuOwner = owner;
+    _appearanceMenuDismiss = dismiss;
+    return owner;
+  }
+
+  bool ownsAppearanceMenu(ReaderAppearanceMenuOwner owner) =>
+      ref.mounted &&
+      identical(owner, _appearanceMenuOwner) &&
+      owner.bookId == state.bookId &&
+      owner.session == _session &&
+      owner.presentation == _presentation &&
+      (interactive ||
+          identical(owner, _appearanceMenuFallback) &&
+              state.ready &&
+              state.error == null &&
+              !_suspended);
+
+  void finishAppearanceMenu(ReaderAppearanceMenuOwner owner) {
+    if (!identical(owner, _appearanceMenuOwner)) return;
+    _appearanceMenuOwner = null;
+    _appearanceMenuFallback = null;
+    _appearanceMenuDismiss = null;
+  }
+
+  bool get currentPageHasNoText =>
+      book?.format == 'pdf' && state.location['noText'] == true;
+
+  void openAppearanceSettings(ReaderAppearanceMenuOwner owner) {
+    if (ownsAppearanceMenu(owner)) {
+      events.add({'type': 'readingSettings', 'bookId': owner.bookId});
+    }
+  }
+
   double popoverTextScale = 1;
   Future<void>? _popoverLayoutPending;
   ({String kind, Rect? anchor, Map<String, dynamic> extra})? _failedPopover;
@@ -2342,9 +2453,7 @@ class ReaderController extends Notifier<ReaderState> {
       }
       await showPopover(
         failed.kind,
-        anchor: ['goto', 'appearance'].contains(failed.kind)
-            ? null
-            : failed.anchor,
+        anchor: failed.kind == 'goto' ? null : failed.anchor,
         extra: failed.extra,
       );
     }
@@ -2357,6 +2466,7 @@ class ReaderController extends Notifier<ReaderState> {
   }) async {
     if (!state.ready || !_routeVisible) return;
     final previous = _presentation, session = _session;
+    await _dismissAppearanceMenu();
     await _capturePopoverDraft(seal: true);
     if (session != _session || previous != _presentation) return;
     // The handoff can change this very annotation's effective note. Resolve
@@ -2442,8 +2552,6 @@ class ReaderController extends Notifier<ReaderState> {
           anchor ??
           (kind == 'goto'
               ? goToAnchor?.call()
-              : kind == 'appearance'
-              ? appearanceAnchor?.call()
               : _selectionRect(state.selection?['rect'])) ??
           (kind == 'goto'
               ? Rect.fromLTWH(viewport.left + 24, viewport.top - 1, 1, 1)
@@ -2464,7 +2572,7 @@ class ReaderController extends Notifier<ReaderState> {
             'viewportWidth': viewport.width,
             'viewportHeight': viewport.height,
             'width': kind == 'goto' ? 360.0 : 460.0,
-            'height': (kind == 'goto' || kind == 'appearance')
+            'height': kind == 'goto'
                 ? (viewport.height > 0 ? viewport.height : 420.0)
                 : kind == 'selection'
                 ? 340.0
@@ -2497,13 +2605,23 @@ class ReaderController extends Notifier<ReaderState> {
               .focusPane(id, BookPane.reading);
         }
       }
-    } catch (error) {
+    } catch (error, trace) {
       if (session != _session || presentation != _presentation) return;
       if (error is PlatformException && error.code == 'popover-cancelled') {
         _popoverActive = false;
         _popoverKind = null;
         _invalidateLookup();
         return;
+      }
+      // The public message stays short; retain the native stage at the owned
+      // boundary without recording book passages, annotations or note input.
+      if (const bool.fromEnvironment('BUSYBOOKS_READER_DIAGNOSTICS') ||
+          Platform.environment['BUSYBOOKS_READER_DIAGNOSTICS'] == '1') {
+        debugPrint(
+          'Reader controls failed kind=$kind session=$session '
+          'presentation=$presentation '
+          '${error is PlatformException ? 'code=${error.code} message=${error.message} details=${error.details}' : error.toString()}\n$trace',
+        );
       }
       _failedPopover = (kind: kind, anchor: anchor, extra: extra);
       state = state.copy(popoverError: _labels.readerControlsFailed);
@@ -2672,19 +2790,6 @@ class ReaderController extends Notifier<ReaderState> {
 
     switch (event['action']) {
       case 'dismiss':
-        await finish();
-      case 'appearance':
-        await setAppearance((event['value'] as Map).cast<String, dynamic>());
-      case 'resetAppearance':
-        await resetAppearance();
-        if (current()) await showPopover('appearance');
-      case 'readingSettings':
-        await finish();
-        if (session == _session) {
-          events.add({'type': 'readingSettings', 'bookId': state.bookId});
-        }
-      case 'saveDefaults':
-        await setAppearance({}, defaults: true);
         await finish();
       case 'goto':
         final pending = Completer<void>();
@@ -2879,6 +2984,7 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> close() async {
+    await _dismissAppearanceMenu();
     _focusRevision++;
     _pendingJump?.cancel();
     final revision = ++_openRevision;
