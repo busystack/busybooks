@@ -2480,6 +2480,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Earlier results are outside this window. Search again to return to the beginning.'**
   String get searchEarlierResults;
+
+  /// No description provided for @split.
+  ///
+  /// In en, this message translates to:
+  /// **'Split'**
+  String get split;
+
+  /// No description provided for @resizeSplitPanes.
+  ///
+  /// In en, this message translates to:
+  /// **'Resize Reading and Notebook panes'**
+  String get resizeSplitPanes;
+
+  /// No description provided for @splitPaneRatio.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading {reading}%, Notebook {notebook}%'**
+  String splitPaneRatio(int reading, int notebook);
+
+  /// No description provided for @resizeSplitPanesHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Left and Right arrow keys to resize panes.'**
+  String get resizeSplitPanesHelp;
+
+  /// No description provided for @splitMinimumWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs {width} px of content width.'**
+  String splitMinimumWidth(int width);
+
+  /// No description provided for @splitCollapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Split temporarily shows {pane} while space is limited.'**
+  String splitCollapsed(String pane);
+
+  /// No description provided for @showSplitPane.
+  ///
+  /// In en, this message translates to:
+  /// **'Show {pane}'**
+  String showSplitPane(String pane);
 }
 
 class _AppLocalizationsDelegate

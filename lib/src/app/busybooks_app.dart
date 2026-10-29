@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ubuntu_localizations/ubuntu_localizations.dart';
 
 import '../../l10n/generated/app_localizations.dart';
+import '../book_workspace/application/book_presentation.dart';
 import '../book_workspace/application/book_sidebar_controller.dart';
 import '../notebook/application/notebook_controller.dart';
 import '../notebook/presentation/book_view_selector.dart';
@@ -137,47 +138,33 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
         ref.read(appRouterProvider).routeInformationProvider.value.uri ==
             origin &&
         ref.read(workspaceControllerProvider).workspace?.id == workspaceId;
-    bool reading() =>
-        ref.read(readerControllerProvider).surfaceVisible &&
-        ref.read(readerControllerProvider).ready &&
-        ref.read(readerControllerProvider).error == null &&
-        reader.stateBookId ==
-            ref
-                .read(appRouterProvider)
-                .routeInformationProvider
-                .value
-                .uri
-                .path
-                .split('/')
-                .last &&
-        ref
-            .read(appRouterProvider)
-            .routeInformationProvider
-            .value
-            .uri
-            .path
-            .startsWith('/read/');
-    String? activeBook() => ref
-        .read(appRouterProvider)
-        .routeInformationProvider
-        .value
-        .uri
-        .path
-        .split('/')
-        .last;
-    bool bookView() => RegExp(r'^/(read|notebook)/').hasMatch(
-      ref.read(appRouterProvider).routeInformationProvider.value.uri.path,
-    );
+    String routePath() =>
+        ref.read(appRouterProvider).routeInformationProvider.value.uri.path;
+    BookView? activeView() => bookViewForRoute(routePath());
+    String? activeBook() => bookIdForRoute(routePath());
+    bool reading() {
+      final state = ref.read(readerControllerProvider);
+      return activeView()?.hasReader == true &&
+          state.surfaceVisible &&
+          state.ready &&
+          state.error == null &&
+          reader.stateBookId == activeBook();
+    }
+
+    bool bookView() => activeView() != null;
     bool hasBook() =>
         bookView() &&
         ref.read(workspaceControllerProvider).bookById(activeBook()) != null;
-    bool notebook() => ref
-        .read(appRouterProvider)
-        .routeInformationProvider
-        .value
-        .uri
-        .path
-        .startsWith('/notebook/');
+    bool notebook() => activeView() == BookView.notebook;
+    bool notebookFocused() {
+      final view = activeView();
+      final presentation = ref.read(bookPresentationProvider);
+      return view == BookView.notebook ||
+          view == BookView.split &&
+              presentation.bookId == activeBook() &&
+              presentation.lastPane == BookPane.notebook;
+    }
+
     BookSearchScope defaultScope(BookSearchCategory category) {
       final data = ref.read(workspaceControllerProvider);
       if (bookView() && category != BookSearchCategory.books) {
@@ -205,6 +192,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
     const sharedBookCommands = {
       BusyBooksCommandIds.viewReading,
       BusyBooksCommandIds.viewNotebook,
+      BusyBooksCommandIds.viewSplit,
       BusyBooksCommandIds.bookProperties,
       BusyBooksCommandIds.moveBook,
       BusyBooksCommandIds.locateBook,
@@ -220,9 +208,11 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
     };
     final actions = <String, BusyBooksCommandCallback>{
       BusyBooksCommandIds.viewReading: () =>
-          openReading(context, ref, activeBook()!),
+          openReading(context, ref, activeBook()!, view: BookView.reading),
       BusyBooksCommandIds.viewNotebook: () =>
-          openNotebook(context, ref, activeBook()!),
+          openNotebook(context, ref, activeBook()!, view: BookView.notebook),
+      BusyBooksCommandIds.viewSplit: () =>
+          openReading(context, ref, activeBook()!, view: BookView.split),
       BusyBooksCommandIds.bookProperties: () async {
         final book = ref
             .read(workspaceControllerProvider)
@@ -270,11 +260,11 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
       BusyBooksCommandIds.search: () async {
         final search = ref.read(bookSearchSessionProvider.notifier);
         await search.open(
-          category: notebook()
+          category: notebookFocused()
               ? BookSearchCategory.notebook
               : BookSearchCategory.bookText,
           scope: defaultScope(
-            notebook()
+            notebookFocused()
                 ? BookSearchCategory.notebook
                 : BookSearchCategory.bookText,
           ),
@@ -351,7 +341,17 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
             ? c.l10n.viewOptions
             : c.l10n.appearance,
         BusyBooksCommandIds.search: (c) =>
-            notebook() ? c.l10n.searchNotebook : c.l10n.searchBook,
+            notebookFocused() ? c.l10n.searchNotebook : c.l10n.searchBook,
+      },
+      disabledReasons: {
+        BusyBooksCommandIds.viewSplit: (c) {
+          final presentation = ref.read(bookPresentationProvider);
+          return hasBook() && !presentation.splitAvailable
+              ? c.l10n.splitMinimumWidth(
+                  presentation.splitMetrics.minimumWidth.ceil(),
+                )
+              : null;
+        },
       },
       executions: {
         for (final entry in actions.entries)
@@ -453,6 +453,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           BusyBooksCommandIds.annotations,
           BusyBooksCommandIds.viewReading,
           BusyBooksCommandIds.viewNotebook,
+          BusyBooksCommandIds.viewSplit,
           BusyBooksCommandIds.bookProperties,
           BusyBooksCommandIds.moveBook,
           BusyBooksCommandIds.locateBook,
@@ -460,6 +461,8 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
           BusyBooksCommandIds.search,
         ])
           id: () => hasBook(),
+        BusyBooksCommandIds.viewSplit: () =>
+            hasBook() && ref.read(bookPresentationProvider).splitAvailable,
         BusyBooksCommandIds.thumbnails: () =>
             hasBook() &&
             ref
@@ -583,6 +586,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
     final settings = ref.watch(appSettingsControllerProvider),
         router = ref.watch(appRouterProvider);
     ref.watch(readerControllerProvider);
+    ref.watch(bookPresentationProvider);
     ref.watch(workspaceControllerProvider);
     final accent =
         ref.watch(systemAccentColorProvider).asData?.value ??
@@ -658,10 +662,10 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
                 shortcuts: registry.shortcutIntents(
                   scopes: {
                     BusyBooksCommandScope.application,
-                    if (router.routeInformationProvider.value.uri.path
-                            .startsWith('/read/') ||
-                        router.routeInformationProvider.value.uri.path
-                            .startsWith('/notebook/'))
+                    if (bookViewForRoute(
+                          router.routeInformationProvider.value.uri.path,
+                        ) !=
+                        null)
                       BusyBooksCommandScope.documentView,
                   },
                   intentFor: BusyBooksCommandIntent.new,

@@ -5,14 +5,42 @@ settings and dialogs. The read-only reference is BusyMark
 `7008772ce26b0d133bed9c0d01754b43d93c672b`. In particular, the header View selector
 adapts `BusyMarkHeaderPopupMenuButton<DocumentViewModePreference>` in
 `workspace_screen.dart`: labeled entries, icons, effective shortcuts and a
-trailing selection check. BusyBooks offers only Reading and Notebook.
+trailing selection check. BusyBooks offers Reading, Notebook and Split. BusyMark's
+`_EditorPreviewSplit` supplies the side-by-side pane and fixed divider reference;
+BusyBooks' adjustable, keyboard-operable divider is a BusyBooks enhancement.
 
 `/` is Home, `/workspace` is the active database collection, `/read/:id` is
-Reading, and `/notebook/:id` is Notebook. Both book URLs use one retained
+Reading, `/notebook/:id` is Notebook, and `/split/:id` is Split. All three book
+URLs use one retained
 `BookWorkspaceScreen` page/element: common `BookHeader`, persistent sidebar and
-retained Reading/Notebook content. The selector updates content without rebuilding
-the shell or reopening the native publication. Settings return targets recognize
+one Reading content tree and one Notebook content tree. `BookPaneLayout` changes
+their allocation while preserving their parents and state; Split does not create
+another reader or Notebook. Reading uses the full width, Notebook uses the full
+width, and Split places Reading on the left and Notebook on the right. Reading ↔
+Split retains the usable native publication. Settings return targets recognize
 these same routes; there is no second route adapter.
+
+The divider retains its ratio for the window session. It has a 12-logical-pixel
+hit area, a resize cursor, keyboard focus and increase/decrease semantics. Left
+and Right move it by 16 logical pixels; Shift uses 64. Allocation uses the actual
+content width after sidebar allocation. With effective text scale `s >= 1`, the
+minimum Reading width is `max(400, 320 × s)` and the minimum Notebook width is
+`max(360, 280 × s + 64)`, plus the 12-pixel divider. At ordinary text scale,
+side-by-side Split therefore needs 772 logical pixels of content width. At
+text scales of 150% and 200%, it requires 976 and 1276 logical pixels respectively.
+Display scaling is handled by the existing logical-to-native bounds path.
+
+Below that minimum, entry into Split is disabled with its required-width reason
+in the selector, Main Menu and command search. An already active Split keeps
+`/split/:id` and shows its last focused pane, defaulting to Reading. A nonblocking
+status names the visible pane and offers the other pane. This hides the other
+content tree without suspending or replacing the reader or discarding drafts,
+Notebook selection, scrolling, filters or divider ratio. Active PDF source
+selections use the reader's guarded logical selection memory across geometry
+changes, including collapse/restoration. Widening restores the two panes
+automatically. Explicit Reading or Notebook selects that full-width route and
+cancels this retained Split preference; no application-wide minimum window size
+is imposed.
 
 | Owner | Retained state |
 | --- | --- |
@@ -20,11 +48,12 @@ these same routes; there is no second route adapter.
 | `bookSidebarProvider(bookId)` | Typed panel, open state, outline expansion/focus, panel offsets, Marks filter/selection, retained publication metadata |
 | `bookSearchSessionProvider` | Active/category/query, generation, stable results/selection, loading/error, focus request/return and previous sidebar presentation |
 | `NotebookController` | Sort/type/notes filters, identity-relative scroll/reveal, selected editor and protected revisioned drafts |
+| `bookPresentationProvider` | Current book, measured Split capacity, divider ratio and last focused content pane |
 | `ReaderController` | Native engine/session, positions/history, capabilities, visibility acknowledgements and transient input handoff |
 
 The sidebar family auto-disposes. `retainActiveBookSession` holds its lease only
-for the open book, including Reading/Notebook and Settings round trips. The one
-window search controller retains lightweight category/query/scope/selection memory;
+for the open book, including all three book views and Settings round trips. The
+one window search controller retains lightweight category/query/scope/selection memory;
 closing it releases results, renderer ownership and outline subscriptions. It does
 not retain a controller or reader per visited book. Reopening a book reconstructs
 stored metadata and saved preferences; transient Marks and outline browsing starts
@@ -50,7 +79,8 @@ after successful deletion. Existing-note updates require the correct book ID
 and an existing row; they cannot insert. New annotation creation is explicit.
 Before the first insertion, the primary Notebook controller retains the complete
 captured passage, stable annotation/book IDs and revisioned note text. A failed
-insertion remains available in both views, including without the original file.
+insertion remains available across all three views, including without the original
+file.
 Retries reuse that identity; a held discard settles and removes only its own
 creation, preserving newer edits and failed-action state. Existing drafts cannot
 use this insertion path. Close, backup, export and restore wait for pending note
@@ -58,10 +88,14 @@ actions and writes. Backup and export flush the renderer before notes so final
 native draft messages are included.
 
 Book data and annotations live in WorkspaceController, independently of native
-renderer readiness. Notebook never opens a native surface. The retained Reading presentation is
-excluded from focus/ticking; its native surface is hidden, narration is stopped
-and the renderer is suspended. Stored annotations/outline metadata remain usable
-without the original file or renderer readiness.
+renderer readiness. Standalone Notebook never opens a native surface. In that
+view the retained Reading presentation is excluded from focus/ticking, its native
+surface is hidden, narration is stopped and the renderer is suspended. Split keeps
+the reader operational alongside the same Notebook. A collapsed Split hides the
+inactive pane without suspending its reader. Missing originals and renderer errors
+affect the reader pane; saved notes, Locate and reader Retry retain their existing
+owners. Stored annotations/outline metadata remain usable without the original
+file or renderer readiness.
 Suspension first drains native input and pending layout while the surface can
 still produce frames. Only then is it hidden. Renderer acknowledgement and
 durable storage remain distinct phases: a failed storage write retains its
@@ -83,7 +117,7 @@ leading header group. The controls and GTK artwork (`go-previous-symbolic` /
 `3fff55e62ae7dc6467d60309ca988b74d0950bc4`. The location between the chevrons is
 BusyBooks' approved composition. Existing focus/hover/disabled states, spacing,
 and direction-aware Yaru fallbacks remain. Home uses `go-home-symbolic` and the
-existing guarded Home command from Reading, Notebook and collection workspaces;
+existing guarded Home command from Reading, Notebook, Split and collection workspaces;
 it flushes protected input and reading state before returning to Home. Repeated
 Home/close commands share one in-flight action. Back to Collection and reading history remain separate book-context commands.
 
@@ -103,7 +137,7 @@ The Reading sidebar adapts BusyMark's `_SidebarHeader`, view menu,
 chapter icons while preserving the disclosure slot and depth indentation. Its compact icon menu selects
 Outline, Thumbnails for page-based PDF/comic publications, Marks and, inside a
 collection, Books. Search Results is not a permanent panel. Selecting the current panel reveals it; the header sidebar
-button controls visibility. Reading/Notebook stays a separate header selector.
+button controls visibility. Reading/Notebook/Split stays a separate header selector.
 Context rows use collection names and book titles, never collection paths.
 
 Outline uses ordered publication navigation with stable preorder identities,
@@ -150,6 +184,17 @@ range display an unavailable label without modifying the valid stored timestamp.
 Annotation `created` values are epoch microseconds, matching both reader creation
 paths. Calendar presentation uses that unit directly; it does not rewrite records.
 
+In side-by-side Split, deliberately selecting an annotation through its heading,
+Edit Note action or list keyboard selection reveals its validated source in the
+adjacent reader while retaining Notebook selection and editing focus. Rebuilds,
+autosave, filtering, sorting and restored selection do not initiate navigation.
+Ordinary selection preserves the active filters; new annotations appear only when
+those filters include them. Reader and Notebook scrolling remain independent.
+In collapsed Split, selection edits the note without navigating a hidden reader;
+Show in Reading deliberately reveals the Reading pane and its exact source.
+Unavailable sources do not prevent note editing. The same Show in Reading action
+keeps Split when it is active; the explicit Reading view command chooses full width.
+
 Notebook editing uses the existing debounced autosave: Saving, Saved only after
 successful persistence, Save failed and Retry. Discard is offered for a pending
 draft; there is no ordinary Save button. The controller's save/flush methods are
@@ -161,8 +206,9 @@ conflicting filters and applies once; later manual scrolling is retained relativ
 to that identity. It does not iterate estimated offsets or scan rendered rows. Sidebar changes capture transient accepted input
 before changing native geometry. No new notes store or document type is involved.
 
-Reading's trailing controls are View, Bookmark, compact Appearance, Book Actions,
-Search and Main Menu. Notebook shares the header and omits reading-only controls.
+Reading and Split with a visible reader use View, Bookmark, compact Appearance,
+Book Actions, Search and Main Menu. Standalone Notebook and a collapsed Split
+showing Notebook share the header and omit reading-only controls.
 The actual header layout decision moves secondary reading commands to Book Actions
 when width or search displaces them; its selector visibility is passed to Main
 Menu for the sole View Mode fallback. No independent menu breakpoint exists.
@@ -218,7 +264,7 @@ queued. Pending activation disables every entry point for that location; failure
 clears the guard and preserves the committed selection. Navigation does not move
 an in-flight operation to another book. View transitions retain their original
 route through queued reads; failed capture/read leaves the current view intact.
-Settings accepts only Home, collection, Reading and Notebook return targets;
+Settings accepts only Home, collection, Reading, Notebook and Split return targets;
 re-entry is disabled/no-op and cannot overwrite that original destination.
 
 Go To resolves its current header anchor for pointer, shortcut and menu entry.
@@ -230,11 +276,26 @@ unique nonnumeric strings as exact printed labels, and `=label` as an explicit
 printed label (including numeric labels). Duplicate labels are rejected. The
 current reference describes both printed and physical positions. There is no
 printed/physical mode selector. The compact surface measures its natural height, including feedback and text scaling, and
-scrolls only inside native screen bounds. Native preparation allocates a frame
+scrolls inside the acknowledged reader pane. The primary supplies its measured
+pane rectangle with each presentation; application-owned native placement caps
+the body and its natural-height update to that pane with space for native borders
+and the GTK arrow. Header anchors outside the pane cannot place controls over
+Notebook. Windows converts the logical pane to screen pixels once and intersects
+it with the monitor work area. Controls retain their text scale and wrap or scroll
+at the available width. Native preparation allocates a frame
 surface without exposing empty interactive controls: GTK maps a transparent,
 nonmodal view; Windows uses the existing first-frame callback and redraw sequence.
 Channel ready only delivers data. A presentation-specific Flutter paint
 acknowledgement, plus native frame readiness, permits presentation and focus.
+When GTK closes a non-lookup popup before its child receives Escape, the primary
+controller captures and seals retained note input before releasing that popup's
+ownership. Failed capture keeps protected recovery intact. A later Notebook or
+chrome handoff cancels the old popup's focus return; stale hidden notifications
+cannot dismiss a replacement presentation.
+
+Each presentation has a keyboard scope below its dismissal shortcuts, so Escape
+works before a selection control is focused. The fallback adds no traversal stop;
+editor and default-button autofocus retain their normal targets and composition.
 Initialization, delivery and build failure settle a bounded primary request with
 retry feedback. Retry settles the primary frame that removes this feedback before
 requesting native presentation, so its publication-bounds update cannot cancel
@@ -246,12 +307,14 @@ cancelled page work keeps the form available. Controlled tests exercise the
 channel/paint protocol; actual GTK/WebView2 placement and focus require native
 acceptance as described in [development tools](../../tools/README.md).
 
-Reading retains Foliate.js, PDF.js, the labeled sidebar,
-search, appearance, selection controls, dictionary and narration. Changing views
-stops narration, retains reading position and hides/removes native focus. Returning
-to the same usable surface restores visibility without a navigation command;
-a Notebook passage jump deliberately enters reading history. Session/generation
-guards reject stale callbacks. Native visibility remains independent of geometry.
+Reading retains Foliate.js, PDF.js, the labeled sidebar, search, appearance,
+selection controls, dictionary and narration. Entering standalone Notebook stops
+narration, retains the reading position and suspends native focus. Reading ↔ Split
+keeps the same usable reader; a deliberate Notebook passage jump enters reading
+history. Session/generation guards reject stale callbacks. Visibility intent is
+separate from geometry, but a positive native reveal requires acknowledgement of
+the current book/session's measured reader-pane bounds. Hidden panes, overlays and
+modal routes cannot receive native pointer, keyboard or accessibility focus.
 
 The existing restricted transient Flutter view above WebKit/WebView2 is retained.
 It runs the same official Flutter bundle and shared controls. Persistence remains
@@ -409,7 +472,8 @@ unavailable choices retain their identity and show a local fallback explanation.
 Renderer-supplied typography capabilities gate the controls and application path.
 See [typography.md](typography.md) for the shared model, separate-engine cache,
 Settings chooser Escape/focus and disposal and durable reflow/selection
-ownership. The header/sidebar and Reading/Notebook composition are unchanged.
+ownership. The shared header/sidebar and single Reading/Notebook content trees
+are retained across Reading, Notebook and Split.
 
 
 ## Shared search and adaptive presentation
@@ -452,6 +516,14 @@ Category selectors show current effective bindings; Books and Recent default to
 Ctrl+Shift+D and Ctrl+Shift+R, while Marks retains Ctrl+Shift+H. Other category
 commands can be assigned in Settings.
 
+In Split, Ctrl+F opens Book Text from the reader and This Book Notebook search
+from Notebook. Shared chrome uses the last focused content pane, defaulting to
+Reading. Explicit category commands retain their designated category. Reading
+and Notebook view commands default to Ctrl+Alt+1 and Ctrl+Alt+2; Split is available
+in the same registry and shortcut settings with no default assignment. Text
+editing, clipboard commands, undo and IME composition remain with the focused
+Notebook editor. Both visible panes do not imply publication keyboard ownership.
+
 Book Text searches only the active publication via application-owned reader code.
 PDF support is publication-level: an image cover, illustration or blank current
 page cannot disable, cancel or switch search. A scanned PDF may finish without
@@ -461,7 +533,10 @@ reader offers an explicit Reading action. Search does not start a hidden reader.
 For a renderer failure, Retry uses the existing reader recovery workflow and
 resumes Book Text with the retained query, including edits made during recovery,
 when the correct book's reader becomes ready. An ordinary search failure retries
-only the search operation.
+only the search operation. A same-book Reading ↔ Split change retains the active
+request/results and recovery ownership; leaving those reader views abandons a
+pending recovery, including after a later return. Readiness submits the latest
+applicable query without collapsing Split.
 Literal matching is Unicode case-insensitive and non-overlapping, without regex
 syntax, accent folding, normalization or whitespace trimming. Exact offsets refer
 to original publication text; EPUB/FB2 matches can span inline markup and PDF
@@ -488,11 +563,35 @@ suspension or unrelated navigation abandons the request, so another book cannot
 consume its anchor. Narrow dismissal preserves the owned activation until that
 request completes or is abandoned.
 
+Book Text and Chapters navigate the reader within Split, while Notebook results
+reveal the exact note there. Cross-book note/bookmark activation captures a Split
+target from its originating route, retaining the category, scope and query through
+its own handoff. Home and other non-Split origins keep their normal destinations.
+In collapsed Split, an explicit passage action selects Reading and binds a jump
+to the retained ready opening until the measured reader pane becomes visible;
+it does not force-show native content over Notebook. The explicit existing-opening
+intent differs from a request waiting for a new opening: a fresh open, close or
+session replacement still invalidates the former. Note results select Notebook
+and hide the native surface before that pane handoff. The existing narrow search
+overlay still dismisses for activation independently of this Split width policy.
+
 Native visibility uses separate route/modal and workspace gates. Opening shared
 chrome captures transient input, dismisses without restoring publication focus,
 and explicitly transfers GTK/Win32 ownership to Flutter. Session-scoped handoff
 cannot focus an inactive window or owned native popover. Flutter focus alone does
-not transfer GTK/WebView2 ownership. Closing search restores a valid origin focus
+not transfer GTK/WebView2 ownership. Trusted pointer/focus notifications identify
+only the current visible publication document; the primary verifies native focus,
+session and focus revision before accepting them. Late native keys cannot replace
+Notebook's last-focused-pane intent. Flutter mirrors each native focus revision
+once; its inactive-window blur does not itself reclaim OS focus. If that first
+mirror loses native ownership, one post-frame native query can reconcile it only
+while the same publication focus target, session, revision and presentation remain
+current. Explicit chrome/editor handoffs cancel that reconciliation. Positive
+native focus requests also validate their renderer session and exclude popovers.
+Divider/sidebar/window resizing updates native
+bounds to the reader pane before reveal and refreshes selection rectangles without
+changing their durable anchors or reopening selection popovers. Closing search
+restores a valid origin focus
 or the active publication. No query is saved into settings, recovery or backups.
 
 Settings uses typed General/Reading/Accessibility/Keyboard Shortcuts/Data pages,

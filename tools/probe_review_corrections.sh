@@ -7,7 +7,7 @@ review_dart="${BUSYBOOKS_DART_BIN:-dart}"
 export BUSYBOOKS_COMIC_DECODER="${BUSYBOOKS_COMIC_DECODER:-$PWD/build/linux/x64/release/bundle/busybooks_comic_archive}"
 python3 tools/make_review_fixtures.py "$review_root/fixtures"
 g++ -std=c++17 tools/native_engine_probe.cc -o "$review_root/probe" $(pkg-config --cflags --libs gtk+-3.0 webkit2gtk-4.1)
-fixtures=("$review_root/fixtures/reader-review.epub" "$review_root/fixtures/reader-review-epub2.epub" "$review_root/fixtures/reader-review.kepub.epub" "$review_root/fixtures/reader-review.fb2" "$review_root/fixtures/reader-review.fbz" "$review_root/fixtures/comic-review.cbz" "$PWD/test/fixtures/text.pdf")
+fixtures=("$review_root/fixtures/reader-review.epub" "$review_root/fixtures/reader-review-epub2.epub" "$review_root/fixtures/reader-review-package.epub" "$review_root/fixtures/reader-review.kepub.epub" "$review_root/fixtures/reader-review.fb2" "$review_root/fixtures/reader-review.fbz" "$review_root/fixtures/comic-review.cbz" "$PWD/test/fixtures/text.pdf")
 for fixture in "${fixtures[@]}"; do
   descriptor="$review_root/descriptor.json"
   "$review_dart" run tools/prepare_format_acceptance.dart "$review_root/profile-$(basename "$fixture")" "$fixture" > "$descriptor"
@@ -26,4 +26,4 @@ with open(index_path) as file: index=json.load(file)
 index['resources'].pop('OPS/chapter#2.xhtml')
 with open(index_path,'w') as file: json.dump(index,file)
 PYTHON
-"$review_root/probe" "$fixture" epub "$PWD/assets/reader" "$cache_directory" 'reject:Publication did not produce a readable first document'
+"$review_root/probe" "$fixture" epub "$PWD/assets/reader" "$cache_directory" 'reject:Publication resource is unavailable: OPS/chapter#2.xhtml'

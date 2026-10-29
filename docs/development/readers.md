@@ -3,7 +3,7 @@
 EPUB uses [Foliate.js](https://github.com/johnfactotum/foliate-js) pinned to
 `78914aef4466eb960965702401634c2cb348e9b1` (MIT). Its EPUB loader,
 reflow paginator, fixed-layout renderer, CFI resolver, text walker and
-overlayer are used directly. BusyBooks owns literal text matching and uses the
+overlayer remain unmodified. BusyBooks owns literal text matching and uses the
 publication document/range APIs to obtain navigation CFIs. The upstream project documents both renderer
 interfaces and has no stable release/API promise; a pinned vendored revision
 avoids an unreviewed runtime update. EPUB 2 and 3 use this loader. FB2 and comics
@@ -17,6 +17,14 @@ experimental PDF adapter. Worker code, CMaps, standard fonts, image/color WASM,
 fallback scripts, ICC resources and their licenses are local assets. The adapter
 uses actual PDF pages, text layers, page labels, outline, destinations and
 PDF-coordinate highlight rectangles. Canvas rendering is for PDF pages only.
+A retained hidden Split pane pauses application-scheduled PDF layout: BusyBooks
+quiesces existing navigation and appearance work while the native view still
+produces frames, then hides it. Resize requests coalesce until native visibility
+and the acknowledged pane bounds return. Hidden flush/export preserves the last
+settled PDF source rather than deriving coordinates from hidden DOM geometry.
+This uses the engine's normal display render tasks without changing PDF.js.
+Publication search yields through the application event loop and can finish
+while the native view is hidden; it does not wait for animation frames.
 
 Both engines run in the native desktop hosts described below. Controlled
 adapter tests, native engine probes and full application acceptance have
@@ -64,31 +72,53 @@ streams and verifies data/CRC. Numeric staging paths prevent archive-controlled
 extraction paths. Cancellation kills an active solid decoder and removes staging.
 
 The unmodified source archive, checksum and redistribution terms are documented
-in [UnRAR provenance](../../native/vendor/unrar/README.md). Complete licenses and
+in [UnRAR provenance](unrar-provenance.md). Complete licenses and
 acknowledgements ship under `share/licenses/unrar`. UnRAR permits RAR handling
 and redistribution but prohibits developing a RAR-compatible archiver or
 recreating the proprietary compression algorithm. BusyBooks' own code remains
 Apache-2.0. Libarchive was rejected as the backend because its
 RAR4 solid handling failed the representative fixture.
 
-## Local vendor modifications
+## Dependency provenance
 
-The pinned Foliate revision has four locally modified files. Their current
-hashes and the upstream revision are recorded in
-[`tools/vendor-manifest.json`](../../tools/vendor-manifest.json).
+Distributed third-party files are byte-identical to their official pinned
+sources. BusyBooks does not maintain vendor patches or replace engine methods
+at runtime. Application loading, metadata and presentation integration remains
+separate from those implementations.
 
-| Vendored file | Maintained local changes |
+[`tools/vendor-manifest.json`](../../tools/vendor-manifest.json) records the
+official source, immutable revision or release, upstream file path and SHA-256
+for every distributed vendor file. Git-sourced files also record their upstream
+blob identity. Its baseline was established against official Git objects and
+release archives, rather than by hashing a locally modified vendor tree.
+
+| Dependency | Verified official baseline |
 | --- | --- |
-| `epub.js` | EPUB 2 manifest fallbacks, DTBook, MIME aliases and styled XML islands; separate spine/content and embedded-resource fallback endpoints preserving original CFIs; canonical encoded paths with separate fragments and a single archive-path decode; SVG `image`/`use`/`feImage` href and xlink resource rewriting; propagation of required load failures and isolation of invalid optional NAV/NCX destinations |
-| `fixed-layout.js` | Explicit single-page preference, active-side navigation/focus and resolved text anchors; centered-page spread boundaries, direction rebuilding and safe failed navigation; auto-margin centering with reachable overflow edges in both reading directions |
-| `paginator.js` | Cleanup tolerates an uninitialized view after first-document failure, preserving the original opening error |
-| `search.js` | Node-indexed excerpts and intermediate/equal endpoint text; exact-end and overlapping matches; empty-query handling; word/grapheme boundaries across markup and normalized Unicode offsets |
+| Foliate.js | Commit `78914aef4466eb960965702401634c2cb348e9b1`, tree `72c695f2511bcfc0e3dc37385b81daa5f6fe6930`; all twelve distributed files, including licenses and README |
+| PDF.js | Official `pdfjs-5.5.207-dist.zip`, SHA-256 `b37ad762eb7c16fccbf09452c4386e910cc86c9cb736843b77440ac373c6f046`; two layer stylesheets from source commit `5279646985f4744386a9fe3cf61b28bf1ff88d6e` |
+| UnRAR | Official `unrarsrc-7.2.6.tar.gz`, SHA-256 `d1afa67ef4121ebc5986815699e05db0ce8648499e5dca854f282a4c3f72c003`; original license and acknowledgement bytes |
+| WebView2 SDK | Official Microsoft NuGet package `1.0.3537.50`, SHA-256 `5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa`; verified by CMake before extraction |
 
-The inherited `search.js` modifications remain recorded and unchanged; the
-application search no longer calls that matcher. This does not make the vendored
-dependency tree upstream-clean. All other Foliate files remain at the pinned revision. PDF.js resources and the
-UnRAR archive are unmodified. Source comments and accompanying upstream licenses
-remain intact. Fixture/probe code is separate from distributed reader assets.
+`tools/verify_vendor.py` checks exact inventory and bytes, rejecting modified,
+missing, unexpected or linked vendor files. It accepts no vendor-patch exception
+list. Git attributes disable text conversion in vendor trees so Windows
+checkouts preserve upstream bytes, including original notice line endings.
+Application-owned provenance documentation lives outside vendor trees; every
+file under those trees must have verified upstream provenance.
+
+CI and packaging run the same offline check against repository files and the
+actual Linux/Windows release bundle. The build-tree check also compares the
+complete extracted UnRAR and WebView2 SDK inputs with their verified archives,
+detecting build-time rewriting. Source archives are checked before extraction;
+packaged reader assets and notices are checked after the build. Neither normal
+reading nor normal verification requires network access.
+
+When establishing or changing a baseline, obtain the exact sources from their
+official URLs and use `--upstream SOURCE=PATH` to repeat the independent
+comparison. The verifier never downloads dependencies or replaces a baseline
+with checksums of the current tree. See [development tools](../../tools/README.md#upstream-integrity)
+for commands. Original licenses and notices remain alongside the resources;
+fixture/probe code is application-owned and separate from distributed engines.
 
 ## Host and locations
 
@@ -101,21 +131,36 @@ Flutter popups/dialogs are presented. Focus returns through explicit commands.
 Both hosts forward launch requests to the existing instance of the same profile.
 Linux uses GApplication command-line delivery; Windows uses a profile-specific
 mutex/window property and bounded WM_COPYDATA delivery.
+Linux's application-owned chrome channel retains a copy of the real GTK pointer
+event for the public `gdk_window_show_window_menu()` operation. It does not call
+or rewrite Yaru's window-menu implementation. This event-ownership boundary does
+not resolve the separately documented intermittent Linux shutdown abort.
 
 Reflowable EPUB locations use engine CFIs, never generated screen-page numbers.
 The same CFIs are used for selections, highlights, jumps and reopen. Publisher
 print-page references are labeled separately. Fixed-layout text uses CFIs when
-text exists. The adapter supplies upstream Overlayer instances and content
-indices missing from Foliate's fixed-layout `getContents()` result. Local
-renderer corrections let a requested single-page view override a publisher spread,
-retain the active side on same-spread jumps, and honor resolved text ranges for
-selection, scroll and resume at zoom. `tools/fixed_layout_probe.mjs` exercises
-these navigation paths against the actual renderer with a controlled DOM; it
-does not establish native selection or layout acceptance.
-Auto margins center fitting
-pages; overflowing pages retain a reachable physical starting edge in both
-reading directions. The complete patch inventory is under
-[Local vendor modifications](#local-vendor-modifications).
+text exists. `fixed_layout_integration.mjs` combines the renderer's public
+`getContents()` results with separately retained document indices and upstream
+Overlayer instances. It never replaces the renderer method. Single-page and
+centered-page presentation use application-supplied book rendition metadata;
+section order and CFI bases stay unchanged. Changes of spread/direction or the
+active side use the public View lifecycle where the pinned renderer cannot
+retain the new side through resize. Application-owned fixed-layout history
+survives that lifecycle, and failed loads do not commit a new active location.
+DOM Range selection and scrolling apply resolved original CFIs after navigation;
+standard host CSS keeps overflowing artwork reachable in both directions.
+`tools/fixed_layout_probe.mjs` exercises this composition with the actual
+unmodified renderer and a controlled DOM. Native selection, overflow and layout
+acceptance require the separate native probes.
+
+`epub_integration.mjs` supplies Foliate's documented loader and an application-owned
+book object. It adapts in-memory package metadata, document types and resource
+references at those boundaries while retaining original itemref IDs, section
+order and document structure. It does not copy or replace Foliate's implementation.
+Sanitized section descriptors belong to the application; dependency methods and
+prototypes are not mutated. Required-load errors are retained separately because
+the pinned View can swallow navigation errors; cleanup failure cannot replace
+the original opening error.
 
 EPUB 2 inspection accepts an OPF 2 package and reuses NCX, nested navigation,
 page lists, guide references and older metadata/cover handling. Image covers and
@@ -235,9 +280,12 @@ The worker validates publication/archive metadata, integrity and resource limits
 a disposable resource cache from the verified original. Original publication names remain in a manifest;
 physical resource filenames are SHA-256 hashes of those names, preserving case
 distinctions on Windows and avoiding encoded/reserved-path extraction. Foliate
-receives its documented loadText/loadBlob/getSize loader, with original paths
-and bytes. This is not publication conversion. Cache data is regenerable and is
-excluded from backups.
+receives its documented loadText/loadBlob/getSize loader. The cache retains
+original paths and bytes; the supplied loader maps its own temporary URI aliases
+to those exact resources and adapts package metadata and safe document text in
+memory. Aliases never become book identities, saved destinations or archive
+paths. DTBook/XML-island adaptation and fallback selection do not create stored
+converted books. Cache data is regenerable and excluded from backups.
 
 Books cannot silently fetch network data. Linux uses `busybooks://reader/` with
 a local-only CSP; Windows intercepts every WebView2 resource request and serves
@@ -282,6 +330,39 @@ through Foliate's section/anchor API and sanitized before presentation; local
 images use the existing publication loader, without adding a blob/network fetch
 permission. PDF fits use each page's intrinsic geometry/rotation.
 
+Reading, Notebook and Split share one book workspace, one reader session and one
+Notebook editing state. Split allocates the reader on the left and Notebook on
+the right using application-owned layout, with a constrained adjustable divider.
+Standalone Notebook suspends its reader; Split retains an operational reader,
+including when the approved narrow layout temporarily shows only one pane.
+Native WebKitGTK/WebView2 bounds follow the actual visible reader pane after
+sidebar allocation and display scaling. Visibility/focus intent is separate from
+geometry, and native reveal requires a current book/session bounds acknowledgement.
+Hidden reader panes cannot receive input or accessibility focus.
+
+Publication focus notifications contain only a bounded session and trusted input
+source, never a command or navigation destination. The controller confirms actual
+native focus and its focus revision before accepting them, so delayed input cannot
+take editing ownership from Notebook. Resizing updates selection geometry around
+the same original source anchor without requesting another selection popover.
+This uses supported engine APIs, application events and native-host composition;
+no renderer method, prototype or dependency implementation is replaced.
+
+PDF geometry relayout retains the active selection in application-owned logical
+memory before rebuilding its text-layer DOM. Original UTF-16 endpoints, page
+references, represented pages and direction are bound to the publication and
+renderer session plus the current selection intent. Only those represented pages
+are rendered and temporarily pinned for restoration; original text and endpoint
+topology must still agree. A changed book/session, navigation, deliberate clear or
+replacement, or failed layout abandons obsolete work. Restoration uses public DOM
+selection APIs, updates only its presentation rectangle, and neither focuses the
+reader nor reopens a selection popover. It preserves a multi-page range and its
+direction where supported, without adding text from previously unloaded gaps.
+Reading/Split transitions, divider/sidebar allocation and collapsed-pane recovery
+use the same geometry path. Stored PDF-unit annotation segments, highlights and
+navigation locations remain unchanged. Appearance changes deliberately retain
+their existing selection policy rather than impersonating geometry-only work.
+
 `test/fixtures/mixed-pages.pdf` adds eight deterministic pages with different
 sizes, orientations and intrinsic rotation (4,593 bytes). Use it alongside
 text.pdf and image-only.pdf for fit/zoom/rotation checks. Executable pure geometry
@@ -307,7 +388,7 @@ is one URI-encoded path segment. Requests have a ten-second total deadline, a
 one-MiB response limit, shape/MIME validation and bounded same-source redirects.
 Obsolete requests are closed where possible and ignored by book, reader session,
 presentation, term and request revision. Dismissal (including native outside
-click/deactivation), replacement, book switch and leaving Reading invalidate the
+click/deactivation), replacement, book switch and hiding/leaving the reader invalidate the
 lookup. Results update the existing presentation without reopening or focusing it.
 Keyboard Escape/Close uses the existing focus return. Draft capture must succeed
 before selection actions can replace or dismiss an editor.

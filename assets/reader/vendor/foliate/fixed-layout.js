@@ -52,9 +52,8 @@ export class FixedLayout extends HTMLElement {
             width: 100%;
             height: 100%;
             display: flex;
-            direction: ltr;
-            justify-content: flex-start;
-            align-items: flex-start;
+            justify-content: center;
+            align-items: center;
             overflow: auto;
         }`)
 
@@ -110,9 +109,8 @@ export class FixedLayout extends HTMLElement {
         const right = this.#center ?? this.#right ?? {}
         const target = side === 'left' ? left : right
         const { width, height } = this.getBoundingClientRect()
-        // BusyBooks integration: allow an explicit single-page preference.
-        const portrait = this.spread === 'none' || (this.spread !== 'both' && this.spread !== 'portrait'
-            && height > width)
+        const portrait = this.spread !== 'both' && this.spread !== 'portrait'
+            && height > width
         this.#portrait = portrait
         const blankWidth = left.width ?? right.width ?? 0
         const blankHeight = left.height ?? right.height ?? 0
@@ -153,8 +151,6 @@ export class FixedLayout extends HTMLElement {
                 display: 'block',
                 flexShrink: '0',
                 marginBlock: 'auto',
-                marginLeft: '0',
-                marginRight: '0',
             })
             if (portrait && frame !== target) {
                 element.style.display = 'none'
@@ -165,14 +161,6 @@ export class FixedLayout extends HTMLElement {
         } else {
             transform(left)
             transform(right)
-        }
-        // Auto margins center the visible spread only when there is free space.
-        // With overflow they become zero, keeping both edges in the scroll area.
-        const visible = (this.#center ? [this.#center] : [left, right])
-            .filter(frame => frame.element && frame.element.style.display !== 'none')
-        if (visible.length) {
-            visible[0].element.style.marginLeft = 'auto'
-            visible.at(-1).element.style.marginRight = 'auto'
         }
     }
     async #showSpread({ left, right, center, side }) {
@@ -211,8 +199,6 @@ export class FixedLayout extends HTMLElement {
         }
     }
     open(book) {
-        // BusyBooks: rebuilding comic spread order must reload the active side.
-        this.#index = -1
         this.book = book
         const { rendition } = book
         this.spread = rendition?.spread
@@ -233,7 +219,7 @@ export class FixedLayout extends HTMLElement {
                 return spread
             }
             if (pageSpread === 'center') {
-                const spread = last.center || last.left || last.right ? newSpread() : last
+                const spread = last.left || last.right ? newSpread() : last
                 spread.center = section
             }
             else if (pageSpread === 'left') {
@@ -279,13 +265,10 @@ export class FixedLayout extends HTMLElement {
     async goToSpread(index, side, reason) {
         if (index < 0 || index > this.#spreads.length - 1) return
         if (index === this.#index) {
-            // BusyBooks integration: a jump can target the other page of an
-            // already loaded spread. Keep resize, resume and narration on it.
-            this.#side = side
-            this.#render()
-            this.#reportLocation(reason)
+            this.#render(side)
             return
         }
+        this.#index = index
         const spread = this.#spreads[index]
         if (spread.center) {
             const index = this.book.sections.indexOf(spread.center)
@@ -300,12 +283,11 @@ export class FixedLayout extends HTMLElement {
             const right = { index: indexR, src: srcR }
             await this.#showSpread({ left, right, side })
         }
-        // BusyBooks: a failed page load must not advance the active spread.
-        this.#index = index
         this.#reportLocation(reason)
     }
     async select(target) {
-        await this.goTo({ ...await target, select: true })
+        await this.goTo(target)
+        // TODO
     }
     async goTo(target) {
         const { book } = this
@@ -314,37 +296,6 @@ export class FixedLayout extends HTMLElement {
         if (!section) return
         const { index, side } = this.getSpreadOf(section)
         await this.goToSpread(index, side)
-        // BusyBooks integration: honor Foliate's resolved content anchor and
-        // selection flag, including search/annotation CFIs within a fixed page.
-        if (typeof resolved.anchor !== 'function') return
-        const frame = this.#center ?? (side === 'left' ? this.#left : this.#right)
-        const { iframe } = frame ?? {}
-        const doc = iframe?.contentDocument
-        if (!doc) return
-        const contentTarget = resolved.anchor(doc)
-        if (!contentTarget || typeof contentTarget !== 'object') return
-        const range = contentTarget.startContainer ? contentTarget : doc.createRange()
-        if (!contentTarget.startContainer) range.selectNodeContents(contentTarget)
-        if (resolved.select) {
-            const selection = doc.getSelection()
-            selection.removeAllRanges()
-            selection.addRange(range)
-        }
-        const rect = range.getClientRects()[0] ?? range.getBoundingClientRect()
-        const bounds = iframe.getBoundingClientRect()
-        const viewport = this.getBoundingClientRect()
-        const scaleX = iframe.clientWidth ? bounds.width / iframe.clientWidth : 1
-        const scaleY = iframe.clientHeight ? bounds.height / iframe.clientHeight : 1
-        const nearest = (start, end, min, max) => start < min ? start - min
-            : end > max ? Math.min(end - max, start - min) : 0
-        this.scrollBy({
-            left: nearest(bounds.left + rect.left * scaleX,
-                bounds.left + rect.right * scaleX, viewport.left, viewport.right),
-            top: nearest(bounds.top + rect.top * scaleY,
-                bounds.top + rect.bottom * scaleY, viewport.top, viewport.bottom),
-        })
-        this.dispatchEvent(new CustomEvent('relocate', { detail:
-            { range, index: resolved.index, fraction: 0, size: 1 } }))
     }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
@@ -360,16 +311,9 @@ export class FixedLayout extends HTMLElement {
             // TODO: index, overlayer
         }))
     }
-    // BusyBooks integration: focus the active page, including single-page
-    // presentation of the second side of a spread.
-    focusView() {
-        const frame = this.#center ?? (this.#side === 'left' ? this.#left : this.#right)
-        frame?.iframe?.contentDocument?.defaultView?.focus()
-    }
     destroy() {
         this.#observer.unobserve(this)
     }
 }
 
 customElements.define('foliate-fxl', FixedLayout)
-

@@ -1,6 +1,6 @@
 (async()=>{
     const post=data=>window.webkit.messageHandlers.busybooks.postMessage(JSON.stringify({type:'typographyProof',...data}))
-    const view=document.querySelector('foliate-view'),doc=view?.renderer.getContents().map(x=>x.doc).find(d=>d?.querySelector('p'))
+    const view=document.querySelector('foliate-view'),doc=busybooks.contents().map(x=>x.doc).find(d=>d?.querySelector('p'))
     const sample=()=>doc?JSON.stringify(['fontFamily','fontSize','fontWeight','fontStyle'].map(k=>doc.defaultView.getComputedStyle(doc.querySelector('p'))[k])):document.querySelector('.pdf-page canvas')?.toDataURL()
     const before=sample(),text=doc?.body.textContent??document.querySelector('.textLayer')?.textContent
     let reply

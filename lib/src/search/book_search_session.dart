@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/app_router.dart';
 import '../app/command_registry.dart';
 import '../book_workspace/application/book_sidebar_controller.dart';
+import '../book_workspace/application/book_presentation.dart';
 import '../library/domain/book.dart';
 import '../library/data/library_store.dart';
 import '../notebook/application/notebook_controller.dart';
@@ -270,12 +271,7 @@ class BookSearchController extends Notifier<BookSearchState> {
 
   String get _route =>
       ref.read(appRouterProvider).routeInformationProvider.value.uri.path;
-  String? get _visibleBookId {
-    final parts = _route.split('/');
-    return parts.length == 3 && (parts[1] == 'read' || parts[1] == 'notebook')
-        ? parts[2]
-        : null;
-  }
+  String? get _visibleBookId => bookIdForRoute(_route);
 
   @override
   BookSearchState build() {
@@ -445,7 +441,7 @@ class BookSearchController extends Notifier<BookSearchState> {
     void routeChanged() {
       final route = routeSource.value.uri.path;
       final recovery = _readerRecovery;
-      if (recovery != null && route != recovery.route) {
+      if (recovery != null && !sameReaderBookRoutes(route, recovery.route)) {
         recovery.abandoned = true;
       }
       if ((!state.active && _activation == null) ||
@@ -471,9 +467,13 @@ class BookSearchController extends Notifier<BookSearchState> {
       if (_visibleBookId != null &&
           _visibleBookId == state.bookId &&
           state.originRoute != '/settings' &&
-          (route.startsWith('/read/') || route.startsWith('/notebook/'))) {
+          bookViewForRoute(route) != null) {
+        final previousRoute = state.originRoute;
         state = state.copy(originRoute: route);
-        if (state.category == BookSearchCategory.bookText) _sourceChanged();
+        if (state.category == BookSearchCategory.bookText &&
+            !sameReaderBookRoutes(previousRoute ?? '', route)) {
+          _sourceChanged();
+        }
         return;
       }
       close(restoreFocus: false);
@@ -626,9 +626,16 @@ class BookSearchController extends Notifier<BookSearchState> {
     if (actions != null) setActions(actions);
     if (!state.active) _returnFocus = FocusManager.instance.primaryFocus;
     _remember();
-    final initial = _route.startsWith('/notebook/')
+    final presentation = ref.read(bookPresentationProvider);
+    final view = bookViewForRoute(_route);
+    final notebook =
+        view == BookView.notebook ||
+        view == BookView.split &&
+            presentation.bookId == _visibleBookId &&
+            presentation.lastPane == BookPane.notebook;
+    final initial = notebook
         ? BookSearchCategory.notebook
-        : _route.startsWith('/read/')
+        : view?.hasReader == true
         ? (categories.contains(BookSearchCategory.bookText)
               ? BookSearchCategory.bookText
               : BookSearchCategory.notebook)
@@ -855,7 +862,17 @@ class BookSearchController extends Notifier<BookSearchState> {
         } else {
           final reader = ref.read(readerControllerProvider.notifier);
           if (reader.stateBookId == _visibleBookId && reader.interactive) {
-            unawaited(reader.send('focus'));
+            final generation = state.generation, bookId = _visibleBookId;
+            unawaited(
+              reader.focusPublication(
+                isCurrent: () =>
+                    ref.mounted &&
+                    !state.active &&
+                    state.generation == generation &&
+                    _route == route &&
+                    _visibleBookId == bookId,
+              ),
+            );
           }
         }
       });
@@ -1113,7 +1130,8 @@ class BookSearchController extends Notifier<BookSearchState> {
     final pending = _readerRecovery;
     if (state.category == BookSearchCategory.bookText &&
         pending?.bookId == id &&
-        pending?.route == route) {
+        pending != null &&
+        sameReaderBookRoutes(pending.route, route)) {
       return;
     }
     if (state.category != BookSearchCategory.bookText ||
@@ -1126,7 +1144,9 @@ class BookSearchController extends Notifier<BookSearchState> {
     // A renderer recovery is owned by the visible publication, independently
     // of query edits. Its readiness listener always submits the latest query.
     // A suspended Notebook reader still requires the explicit Reading action.
-    if (route != '/read/$id' || reader.suspended) {
+    if (bookIdForRoute(route) != id ||
+        bookViewForRoute(route)?.hasReader != true ||
+        reader.suspended) {
       state = state.copy(
         loading: false,
         clearError: true,
@@ -1139,7 +1159,7 @@ class BookSearchController extends Notifier<BookSearchState> {
     bool current() =>
         ref.mounted &&
         !recovery.abandoned &&
-        _route == route &&
+        sameReaderBookRoutes(_route, route) &&
         ref.read(workspaceControllerProvider).openedBook?.id == id;
     if (!current()) {
       _readerRecovery = null;

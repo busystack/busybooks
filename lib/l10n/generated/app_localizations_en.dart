@@ -1287,4 +1287,34 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get searchEarlierResults =>
       'Earlier results are outside this window. Search again to return to the beginning.';
+
+  @override
+  String get split => 'Split';
+
+  @override
+  String get resizeSplitPanes => 'Resize Reading and Notebook panes';
+
+  @override
+  String splitPaneRatio(int reading, int notebook) {
+    return 'Reading $reading%, Notebook $notebook%';
+  }
+
+  @override
+  String get resizeSplitPanesHelp =>
+      'Use Left and Right arrow keys to resize panes.';
+
+  @override
+  String splitMinimumWidth(int width) {
+    return 'Needs $width px of content width.';
+  }
+
+  @override
+  String splitCollapsed(String pane) {
+    return 'Split temporarily shows $pane while space is limited.';
+  }
+
+  @override
+  String showSplitPane(String pane) {
+    return 'Show $pane';
+  }
 }

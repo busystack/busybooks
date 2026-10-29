@@ -10,12 +10,11 @@ import '../../app/command_registry.dart';
 import '../../app/localization.dart';
 import '../../app/product_actions.dart';
 import '../../book_workspace/application/book_sidebar_controller.dart';
+import '../../book_workspace/application/book_presentation.dart';
 import '../../reading/application/reader_controller.dart';
 import '../../search/book_search_session.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/notebook_controller.dart';
-
-enum BookView { reading, notebook }
 
 Future<void> _dismissBookOverlay(
   ProviderContainer container,
@@ -31,6 +30,7 @@ Future<void> openNotebook(
   BuildContext context,
   WidgetRef ref,
   String id, {
+  BookView? view,
   String? annotationId,
   bool Function()? canActivate,
   Future<bool> Function()? validateActivation,
@@ -41,7 +41,13 @@ Future<void> openNotebook(
   final container = ProviderScope.containerOf(context, listen: false);
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
-  if (origin.path == '/notebook/$id' && annotationId == null) return;
+  final target = Uri(path: notebookTargetRoute(origin.path, id, view: view));
+  final targetView = bookViewForRoute(target.path)!;
+  if (origin == target &&
+      targetView == BookView.notebook &&
+      annotationId == null) {
+    return;
+  }
   bool sameRoute() => router.routeInformationProvider.value.uri == origin;
   bool current() => sameRoute() && (canActivate?.call() ?? true);
   Future<bool> valid() async =>
@@ -66,14 +72,26 @@ Future<void> openNotebook(
           .loadBook(id, activate: true, isCurrent: current);
     }
     if (!await valid() || !annotationAvailable()) return;
-    if (origin.path != '/read/$id' && origin.path != '/notebook/$id') {
+    if (bookIdForRoute(origin.path) != id) {
       await container
           .read(workspaceControllerProvider.notifier)
           .recordBookOpen(id);
       if (!current()) return;
     }
-    await container.read(readerControllerProvider.notifier).suspend();
+    final reader = container.read(readerControllerProvider.notifier);
+    if (!targetView.hasReader) await reader.suspend();
     if (!await valid() || !annotationAvailable()) return;
+    if (origin == target && targetView == BookView.split) {
+      final presentation = container.read(bookPresentationProvider);
+      if (!presentation.splitAvailable &&
+          presentation.lastPane == BookPane.reading) {
+        await reader.setWorkspaceVisible(false);
+        if (!await valid() || !annotationAvailable()) return;
+      }
+      container
+          .read(bookPresentationProvider.notifier)
+          .focusPane(id, BookPane.notebook);
+    }
     if (annotationId != null) {
       await _dismissBookOverlay(container, id, narrow);
       // A narrow handoff deliberately closes its search session. Validate the
@@ -88,7 +106,21 @@ Future<void> openNotebook(
           .read(notebookControllerProvider.notifier)
           .revealAnnotation(id, annotationId);
     }
-    router.go('/notebook/$id');
+    if (origin != target) {
+      await reader.setWorkspaceVisible(false);
+      if (!await valid() || !annotationAvailable()) {
+        if (sameRoute() && bookViewForRoute(origin.path)?.hasReader == true) {
+          await reader.setWorkspaceVisible(true);
+        }
+        return;
+      }
+      final presentation = container.read(bookPresentationProvider.notifier);
+      presentation.enterBook(id, targetView);
+      if (targetView == BookView.split) {
+        presentation.focusPane(id, BookPane.notebook);
+      }
+      router.go(target.toString());
+    }
   });
 }
 
@@ -96,6 +128,7 @@ Future<void> openReading(
   BuildContext context,
   WidgetRef ref,
   String id, {
+  BookView? view,
   Map<String, dynamic>? anchor,
   String? annotationId,
   bool Function()? canActivate,
@@ -108,7 +141,11 @@ Future<void> openReading(
   final container = ProviderScope.containerOf(context, listen: false);
   final router = container.read(appRouterProvider);
   final origin = router.routeInformationProvider.value.uri;
-  if (origin.path == '/read/$id' && anchor == null) return;
+  final target = Uri(path: readingTargetRoute(origin.path, id, view: view));
+  final targetView = bookViewForRoute(target.path)!;
+  if (origin == target && targetView == BookView.reading && anchor == null) {
+    return;
+  }
   bool sameRoute() => router.routeInformationProvider.value.uri == origin;
   bool current() => sameRoute() && (canActivate?.call() ?? true);
   Future<bool> valid() async =>
@@ -125,6 +162,30 @@ Future<void> openReading(
                 container.read(workspaceControllerProvider).annotations,
               ) !=
           null;
+  final targetAnchor = anchor == null ? null : jsonEncode(anchor);
+  Future<bool> sourceValid() async {
+    if (!annotationAvailable()) return false;
+    if (annotationId == null || targetAnchor == null) return true;
+    final notes = container.read(notebookControllerProvider);
+    final draft = notes.drafts[annotationId];
+    if (draft?.creating == true && draft?.creationWritten == false) {
+      final source = notes.sources[annotationId];
+      return source?.bookId == id && jsonEncode(source?.anchor) == targetAnchor;
+    }
+    try {
+      final stored =
+          await container.read(readingDataStoreProvider).call('annotation', {
+                'id': annotationId,
+                'bookId': id,
+              })
+              as Map;
+      return jsonEncode(stored['anchor']) == targetAnchor &&
+          annotationAvailable();
+    } on Object {
+      return false;
+    }
+  }
+
   await container.read(workspaceControllerProvider.notifier).navigate(() async {
     if (!current()) return;
     if (container.read(workspaceControllerProvider).openedBook?.id != id) {
@@ -134,6 +195,13 @@ Future<void> openReading(
     }
     if (!await valid() || !annotationAvailable()) return;
     final reader = container.read(readerControllerProvider.notifier);
+    if (origin == target &&
+        targetView == BookView.split &&
+        !container.read(bookPresentationProvider).splitAvailable) {
+      container
+          .read(bookPresentationProvider.notifier)
+          .focusPane(id, BookPane.reading);
+    }
     if (anchor != null) {
       if (!await valid()) return;
       await _dismissBookOverlay(container, id, narrow);
@@ -143,10 +211,7 @@ Future<void> openReading(
           !annotationAvailable()) {
         return;
       }
-      if (origin.path == '/read/$id' &&
-          reader.stateBookId == id &&
-          !reader.suspended) {
-        await reader.setWorkspaceVisible(true);
+      if (origin == target && reader.stateBookId == id && !reader.suspended) {
         if (!sameRoute() || !await valid() || !annotationAvailable()) {
           return;
         }
@@ -154,15 +219,15 @@ Future<void> openReading(
           await reader.navigateFromSidebar(
             anchor,
             bookId: id,
-            validateNavigation: validateActivation,
+            validateNavigation: () async =>
+                await valid() && await sourceValid() && await valid(),
           );
           return;
         }
       }
     }
+    ReaderJumpRequest? pending;
     if (anchor != null) {
-      final targetAnchor = jsonEncode(anchor);
-      final target = Uri(path: '/read/$id');
       final routes = router.routeInformationProvider;
       var arrived = origin == target;
       ReaderJumpRequest? request;
@@ -182,31 +247,7 @@ Future<void> openReading(
             !annotationAvailable()) {
           return false;
         }
-        if (annotationId != null) {
-          final notes = container.read(notebookControllerProvider);
-          final draft = notes.drafts[annotationId];
-          if (draft?.creating == true && draft?.creationWritten == false) {
-            final source = notes.sources[annotationId];
-            if (source?.bookId != id ||
-                jsonEncode(source?.anchor) != targetAnchor) {
-              return false;
-            }
-          } else {
-            try {
-              final stored =
-                  await container.read(readingDataStoreProvider).call(
-                        'annotation',
-                        {'id': annotationId, 'bookId': id},
-                      )
-                      as Map;
-              if (jsonEncode(stored['anchor']) != targetAnchor) {
-                return false;
-              }
-            } on Object {
-              return false;
-            }
-          }
-        }
+        if (!await sourceValid()) return false;
         return ownsRoute() &&
             (canActivate?.call() ?? true) &&
             annotationAvailable() &&
@@ -220,6 +261,9 @@ Future<void> openReading(
       request = reader.deferJump(
         bookId: id,
         anchor: anchor,
+        useCurrentOpening:
+            sameReaderBookRoutes(origin.path, target.path) &&
+            reader.stateBookId == id,
         isCurrent: () =>
             ownsRoute() &&
             container.read(workspaceControllerProvider).openedBook?.id == id &&
@@ -227,14 +271,31 @@ Future<void> openReading(
         validate: validateJump,
         onReleased: () => routes.removeListener(routeChanged),
       );
+      pending = request;
       onDeferred?.call(request);
     }
-    router.go('/read/$id');
+    if (origin != target) {
+      await reader.setWorkspaceVisible(false);
+      if (!await valid() || !annotationAvailable()) {
+        pending?.cancel();
+        if (sameRoute() && bookViewForRoute(origin.path)?.hasReader == true) {
+          await reader.setWorkspaceVisible(true);
+        }
+        return;
+      }
+      final presentation = container.read(bookPresentationProvider.notifier);
+      presentation.enterBook(id, targetView);
+      if (targetView == BookView.split &&
+          !container.read(bookPresentationProvider).splitAvailable) {
+        presentation.focusPane(id, BookPane.reading);
+      }
+      router.go(target.toString());
+    }
   });
 }
 
 // Same header selector pattern as BusyMark's document view control: labels,
-// icons, effective bindings, selected trailing check. Only two book views.
+// icons, effective bindings, and selected trailing check.
 class BookViewSelector extends ConsumerWidget {
   const BookViewSelector({super.key, required this.id, required this.view});
   final String id;
@@ -242,49 +303,78 @@ class BookViewSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final registry = BusyBooksCommandRegistryScope.maybeOf(context);
+    final presentation = ref.watch(bookPresentationProvider);
+    final fallbackRoute = ref.read(appRouterProvider).routeInformationProvider;
+    final fallbackOrigin = fallbackRoute.value.uri;
+    BusyBooksPopupMenuItem<BookView> item(BuildContext context, BookView mode) {
+      final command = registry?[_viewCommand(mode)];
+      final enabled =
+          command?.canExecute ??
+          (mode != BookView.split ||
+              presentation.bookId == id && presentation.splitAvailable);
+      final reason = enabled
+          ? null
+          : command?.disabledReason?.call(context) ??
+                context.l10n.splitMinimumWidth(
+                  presentation.splitMetrics.minimumWidth.ceil(),
+                );
+      final label = switch (mode) {
+        BookView.reading => context.l10n.reading,
+        BookView.notebook => context.l10n.notebook,
+        BookView.split => context.l10n.split,
+      };
+      return BusyBooksPopupMenuItem(
+        value: mode,
+        label: reason == null || reason.isEmpty ? label : '$label · $reason',
+        icon: _viewIcon(mode),
+        enabled: enabled,
+        shortcut: command?.shortcut?.label,
+        gtkAccelerator: command?.shortcut?.gtkAccelerator,
+        checked: mode == view,
+        trailingCheck: true,
+      );
+    }
+
     return BusyBooksHeaderPopupMenuButton<BookView>(
       onError: (error) => runAppAction(context, () async => throw error),
       tooltip: context.l10n.viewMode,
-      icon: view == BookView.reading
-          ? BusyBooksGlyphs.previewView
-          : BusyBooksGlyphs.notebookView,
-      itemBuilder: (c) => [
-        for (final mode in BookView.values)
-          BusyBooksPopupMenuItem(
-            value: mode,
-            label: mode == BookView.reading ? c.l10n.reading : c.l10n.notebook,
-            icon: mode == BookView.reading
-                ? BusyBooksGlyphs.previewView
-                : BusyBooksGlyphs.notebookView,
-            shortcut:
-                registry?[mode == BookView.reading
-                        ? BusyBooksCommandIds.viewReading
-                        : BusyBooksCommandIds.viewNotebook]
-                    ?.shortcut
-                    ?.label,
-            gtkAccelerator:
-                registry?[mode == BookView.reading
-                        ? BusyBooksCommandIds.viewReading
-                        : BusyBooksCommandIds.viewNotebook]
-                    ?.shortcut
-                    ?.gtkAccelerator,
-            checked: mode == view,
-            trailingCheck: true,
-          ),
-      ],
+      icon: _viewIcon(view),
+      itemBuilder: (c) => [for (final mode in BookView.values) item(c, mode)],
       onSelected: (mode) async {
         if (mode == view) return;
-        final command = mode == BookView.reading
-            ? BusyBooksCommandIds.viewReading
-            : BusyBooksCommandIds.viewNotebook;
+        final command = _viewCommand(mode);
         if (registry?[command]?.execute != null) {
           await registry!.execute(command);
         } else {
+          bool current() {
+            if (!context.mounted ||
+                fallbackRoute.value.uri != fallbackOrigin ||
+                bookIdForRoute(fallbackOrigin.path) != id) {
+              return false;
+            }
+            final capacity = ref.read(bookPresentationProvider);
+            return mode != BookView.split ||
+                capacity.bookId == id && capacity.splitAvailable;
+          }
+
+          if (!current()) return;
           await runAppAction(context, () async {
             if (mode == BookView.notebook) {
-              await openNotebook(context, ref, id);
+              await openNotebook(
+                context,
+                ref,
+                id,
+                view: mode,
+                canActivate: current,
+              );
             } else {
-              await openReading(context, ref, id);
+              await openReading(
+                context,
+                ref,
+                id,
+                view: mode,
+                canActivate: current,
+              );
             }
           });
         }
@@ -292,3 +382,15 @@ class BookViewSelector extends ConsumerWidget {
     );
   }
 }
+
+String _viewCommand(BookView view) => switch (view) {
+  BookView.reading => BusyBooksCommandIds.viewReading,
+  BookView.notebook => BusyBooksCommandIds.viewNotebook,
+  BookView.split => BusyBooksCommandIds.viewSplit,
+};
+
+IconData _viewIcon(BookView view) => switch (view) {
+  BookView.reading => BusyBooksGlyphs.previewView,
+  BookView.notebook => BusyBooksGlyphs.notebookView,
+  BookView.split => BusyBooksGlyphs.splitView,
+};

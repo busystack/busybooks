@@ -7,7 +7,6 @@ export async function makePreparedFB2(index,loader,sanitize) {
     const resolve=href=>href.startsWith('sections/')||href.startsWith('binary/')?href:href
     book.isExternal=href=>/^[a-z][a-z\d+.-]*:/i.test(href)
     book.loadBlob=loader.loadBlob
-    book.resources={getItemByHref:()=>({mediaType:''})}
     book.sections=index.sections.map((section,i)=>{
         const path=section.path
         const createDocument=async()=>{

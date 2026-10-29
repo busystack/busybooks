@@ -1,6 +1,7 @@
 // Real X11 pointer delivery through the same GTK surface used by ReaderHost.
 // Flutter/WebKit rendering is outside this focused input-routing regression.
 #include "reader_surface.h"
+#include "gtk_window_menu.h"
 
 #include <gdk/gdkx.h>
 #include <dlfcn.h>
@@ -9,6 +10,20 @@
 namespace {
 int flutter_clicks = 0;
 int book_clicks = 0;
+int window_menu_requests = 0;
+
+gboolean RequestWindowMenu(GdkWindow* window, GdkEvent* trigger) {
+  g_assert_true(GDK_IS_WINDOW(window));
+  g_assert_false(gdk_window_is_destroyed(window));
+  g_assert_true(GDK_IS_WINDOW(gdk_event_get_window(trigger)));
+  g_assert_true(GDK_IS_DEVICE(gdk_event_get_device(trigger)));
+  g_assert_cmpint(trigger->type, ==, GDK_BUTTON_RELEASE);
+  guint button = 0;
+  g_assert_true(gdk_event_get_button(trigger, &button));
+  g_assert_cmpuint(button, ==, 3);
+  ++window_menu_requests;
+  return TRUE;
+}
 
 gboolean Press(GtkWidget* widget, GdkEventButton* event, gpointer data) {
   // GTK also emits synthetic double/triple-press notifications according to
@@ -47,14 +62,14 @@ class Pointer {
     dlclose(library_);
   }
 
-  void Click(int x, int y) {
+  void Click(int x, int y, unsigned int button = 1) {
     int origin_x, origin_y;
     gdk_window_get_origin(gtk_widget_get_window(window_), &origin_x, &origin_y);
     auto* native = native_display_;
     g_assert_true(motion_(native, DefaultScreen(native), origin_x + x,
                           origin_y + y, 0));
-    g_assert_true(button_(native, 1, True, 0));
-    g_assert_true(button_(native, 1, False, 0));
+    g_assert_true(button_(native, button, True, 0));
+    g_assert_true(button_(native, button, False, 0));
     XSync(native, False);
     gdk_display_sync(display_);
     Settle();
@@ -172,6 +187,53 @@ int main(int argc, char** argv) {
   gtk_widget_destroy(closing_window);
   g_assert_null(closing_surface);
   Settle();
+
+  // The application channel runs after GTK releases the original pointer
+  // event. Its owned copy keeps the actual window/device valid, and does not
+  // consume the pointer event needed by Flutter's titlebar gesture.
+  auto* menu_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  int menu_clicks = 0, menu_parent_clicks = 0;
+  auto* menu_content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  auto* menu_input = InputWidget(&menu_clicks);
+  gtk_box_pack_start(GTK_BOX(menu_content), menu_input, TRUE, TRUE, 0);
+  g_signal_connect(menu_content, "button-press-event", G_CALLBACK(Press),
+                   &menu_parent_clicks);
+  gtk_container_add(GTK_CONTAINER(menu_window), menu_content);
+  gtk_window_set_default_size(GTK_WINDOW(menu_window), 300, 120);
+  {
+    BusyBooksGtkWindowMenu menu(menu_content, GTK_WINDOW(menu_window),
+                                RequestWindowMenu);
+    gtk_widget_show_all(menu_window);
+    Settle();
+    g_assert_false(menu.Show());
+    Pointer pointer(menu_window);
+    for (int index = 0; index < 4; ++index) {
+      if (index == 2) {
+        // A supported child can be created after the application host. Its
+        // consuming handler still must not hide the real event from capture.
+        gtk_widget_destroy(menu_input);
+        menu_input = InputWidget(&menu_clicks);
+        gtk_box_pack_start(GTK_BOX(menu_content), menu_input, TRUE, TRUE, 0);
+        gtk_widget_show_all(menu_content);
+        Settle();
+      }
+      pointer.Click(100, 50, 3);
+      g_assert_cmpint(menu_clicks, ==, index + 1);
+      g_assert_cmpint(menu_parent_clicks, ==, 0);
+      g_assert_true(menu.Show());
+      g_assert_false(menu.Show());
+      g_assert_cmpint(window_menu_requests, ==, index + 1);
+      g_assert_false(gdk_window_is_destroyed(gtk_widget_get_window(menu_window)));
+    }
+    pointer.Click(100, 50, 3);
+    gtk_widget_hide(menu_window);
+    g_assert_false(menu.Show());
+    g_assert_cmpint(window_menu_requests, ==, 4);
+    gtk_widget_destroy(menu_window);
+    g_assert_false(menu.Show());
+  }
+  Settle();
+  std::puts("WINDOW_MENU_RESULT real_event=1 consumed_child=1 added_child=1 propagated=1 one_shot=1 hidden=1 teardown=1");
   std::puts("INPUT_RESULT welcome=1 chrome=1 book=1 resize=1 modal=1 teardown=1");
   std::fflush(stdout);
   return 0;

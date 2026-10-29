@@ -1301,4 +1301,34 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get searchEarlierResults =>
       'Frühere Ergebnisse liegen außerhalb dieses Bereichs. Erneut suchen, um zum Anfang zurückzukehren.';
+
+  @override
+  String get split => 'Geteilte Ansicht';
+
+  @override
+  String get resizeSplitPanes => 'Bereiche für Lesen und Notizbuch anpassen';
+
+  @override
+  String splitPaneRatio(int reading, int notebook) {
+    return 'Lesen $reading %, Notizbuch $notebook %';
+  }
+
+  @override
+  String get resizeSplitPanesHelp =>
+      'Mit Pfeil nach links und rechts die Bereiche anpassen.';
+
+  @override
+  String splitMinimumWidth(int width) {
+    return 'Benötigt $width px Inhaltsbreite.';
+  }
+
+  @override
+  String splitCollapsed(String pane) {
+    return 'Die geteilte Ansicht zeigt wegen des begrenzten Platzes vorübergehend $pane.';
+  }
+
+  @override
+  String showSplitPane(String pane) {
+    return '$pane anzeigen';
+  }
 }

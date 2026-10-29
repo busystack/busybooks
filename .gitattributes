@@ -15,5 +15,5 @@ test/fixtures/formats/*.fb2 binary
 *.wasm binary
 *.icc binary
 # Preserve upstream source/license whitespace in pinned vendored distributions.
-assets/reader/vendor/** -whitespace
-native/vendor/** -whitespace
+assets/reader/vendor/** -text -whitespace
+native/vendor/** -text -whitespace

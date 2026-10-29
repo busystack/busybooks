@@ -121,6 +121,19 @@ void main() {
         if (call.method == 'open') {
           session = (call.arguments as Map)['session'] as String;
         }
+        if (call.method == 'dispatch') {
+          final command = jsonDecode(call.arguments as String) as Map;
+          if (command['action'] == 'layoutVisibility') {
+            scheduleMicrotask(
+              () => event('layoutVisibility', {
+                'session': session,
+                'request': command['request'],
+                'revision': command['revision'],
+                'visible': command['visible'],
+              }),
+            );
+          }
+        }
         if (call.method == 'dispatch' &&
             jsonDecode(call.arguments as String)['action'] == 'flush') {
           final request = jsonDecode(call.arguments as String)['request'];

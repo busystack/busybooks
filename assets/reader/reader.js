@@ -5,10 +5,11 @@ import { literalRanges, literalTextMatches, excerptParts } from './literal_searc
 import { fitScale, validPage, cssColor, tabTarget } from './reading_geometry.mjs'
 import { noTypography, reflowableTypography, createLocalFont, prepareLocalFont, installLocalFont, typographyCSS, protectSpecializedFonts, applyFontFamily, validateTypographyUpdate, TypographyWork } from './typography.mjs'
 import * as CFI from './vendor/foliate/epubcfi.js'
-import { adaptDTBook } from './dtbook.mjs'
 import { makePreparedFB2 } from './prepared_book.mjs'
 import { makeComicBook, comicAnchor, normalizedRegion, decodeComicImage } from './comic_book.mjs'
-import { EPUB } from './vendor/foliate/epub.js'
+import { makeEpubBook } from './epub_integration.mjs'
+import { FixedLayoutIntegration, readerContents } from './fixed_layout_integration.mjs'
+import { PdfSelectionMemory } from './pdf_selection.mjs'
 import { Overlayer } from './vendor/foliate/overlayer.js'
 import * as pdfjs from './vendor/pdfjs/pdf.mjs'
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.mjs', import.meta.url).href
@@ -57,6 +58,21 @@ function receiveCommand(frame){
 }
 let strings={}, chrome={}, spokenAnchor=null, currentRange=null, view, pdf, prefs = {}, location = {}, selection = null, annotations = [], pages = [], labels = []
 const fixedContents=new WeakMap()
+const observedComicRenderers=new WeakSet()
+let fixedLayout=null
+function getContents(publication=view){return readerContents(publication,fixedContents)}
+function configureFixedRenderer(renderer){
+    if(!isComic()||observedComicRenderers.has(renderer))return
+    observedComicRenderers.add(renderer)
+    const publication=view
+    renderer.addEventListener('scroll',()=>{
+        clearTimeout(window.comicScrollTimer)
+        window.comicScrollTimer=setTimeout(()=>{
+            if(view!==publication||view.renderer!==renderer||fixedLayout?.busy)return
+            captureComicLocation();reportLocation(location)
+        },200)
+    },{passive:true})
+}
 let noteView=null,noteGeneration=0,cacheFailureReported=false
 let typography=noTypography,localFont={family:'serif',faces:[]},fontSignature='',lastEpubRelocation=null,pinnedTypographyLocation=null
 const typographyWork=new TypographyWork()
@@ -79,13 +95,31 @@ function receiveAnnotations(command){
     annotationRevision=revision;annotationTransfer=null
     const operation=annotationOperation.catch(()=>{}).then(async()=>{
         if(revision!==annotationRevision)return
-        if(view)for(const a of annotations)if(a.anchor?.cfi)await view.deleteAnnotation({value:a.anchor.cfi})
+        if(view)for(const a of annotations)if(a.anchor?.cfi){
+            if(fixedLayout)for(const part of getContents(view))part.overlayer?.remove(a.anchor.cfi)
+            else await view.deleteAnnotation({value:a.anchor.cfi})
+        }
         annotations=value
         if(view){await paintEpub();if(noteView)await paintNote()}else if(pdf)paintPdf()
     })
     annotationOperation=operation;return operation
 }
 function userNavigation(){typographyWork.navigate();pinnedTypographyLocation=null;programmaticSelections=new WeakMap()}
+const focusDocuments=new WeakSet()
+function observePublicationFocus(doc,publication=null){
+    if(focusDocuments.has(doc))return
+    focusDocuments.add(doc)
+    const report=event=>{
+        if(event.isTrusted!==true)return
+        if(publication){
+            if(publication!==view||!getContents(publication).some(part=>part.doc===doc))return
+        }else if(!view&&!pdf)return
+        else if(!content.contains(event.target)&&!event.target.closest?.('dialog'))return
+        emit('contentFocus',{source:event.type==='pointerdown'?'pointer':'focus'})
+    }
+    doc.addEventListener('pointerdown',report,{capture:true,passive:true})
+    doc.addEventListener('focusin',report,{capture:true})
+}
 function reportEpubLocation(data){
     lastEpubRelocation=data
     if(typographyWork.active&&typographyWork.canRestore(typographyWork.active))return
@@ -117,6 +151,32 @@ function selected(data,range,doc=document,settle=true) {
     selection={...data,rect:selectionRect(range,doc)};emit('selection',selection)
     clearTimeout(selectionTimer)
     if(settle)selectionTimer=setTimeout(()=>{if(selection?.text&&performance.now()>suppressSelectionUntil)emit('selection',{...selection,settled:true})},450)
+}
+let selectionGeometryRevision=0
+function refreshSelectionGeometry(){
+    if(!selection?.anchor)return
+    if(pdf&&pdfSelections?.hasSelection){
+        if(pdfSelections.ownsPending)return
+        if(!pdfSelections.expectedSelection()){
+            if(pdfGeometryMayCollapse||pdfLayoutPaused)return
+            pdfSelection();return
+        }
+    }
+    const documents=selection.note||pdf?[document]:getContents(view).map(part=>part.doc)
+    const doc=documents.find(doc=>{const value=doc.getSelection?.();return value?.rangeCount&&!value.isCollapsed})
+    const value=doc?.getSelection(),range=value?.rangeCount?value.getRangeAt(0):null
+    if(!range?.startContainer.isConnected||value.toString()!==selection.text){
+        selection=null;clearTimeout(selectionTimer);emit('selection',{text:'',anchor:null});return
+    }
+    // The durable source anchor stays byte-for-byte identical. Only native
+    // presentation geometry changes, and resizing never opens its popover.
+    selected(selection,range,doc,false)
+}
+function scheduleSelectionGeometry(){
+    const revision=++selectionGeometryRevision,publication=view,sourcePdf=pdf
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        if(revision===selectionGeometryRevision&&publication===view&&sourcePdf===pdf)refreshSelectionGeometry()
+    }))
 }
 function theme(value){
     chrome=value
@@ -188,8 +248,19 @@ function reportLocation(data) {
 }
 function reportNavigation(){
     const index=location.anchor?.page??location.anchor?.index??0
-    const shown=view?.isFixedLayout&&prefs.spread?Math.max(index,...view.renderer.getContents().map(x=>x.index??index)):index
-    emit('navigation',{speechNext:isComic()?false:view?(view.isFixedLayout?index<view.book.sections.length-1:!view.renderer.atEnd):index<(pdf?.numPages??0)-1,back:isComic()?historyIndex>0:view?view.history.canGoBack:historyIndex>0,forward:isComic()?historyIndex<history.length-1:view?view.history.canGoForward:historyIndex<history.length-1,previous:view?(view.isFixedLayout?index>0:!view.renderer.atStart):index>0,next:view?(view.isFixedLayout?shown<view.book.sections.length-1:!view.renderer.atEnd):index+(prefs.spread?1:0)<(pdf?.numPages??0)-1})
+    const shown=fixedLayout?Math.max(index,...fixedLayout.visibleContents().map(x=>x.index)):index
+    emit('navigation',{speechNext:isComic()?false:view?(view.isFixedLayout?index<view.book.sections.length-1:!view.renderer.atEnd):index<(pdf?.numPages??0)-1,back:fixedLayout?historyIndex>0:view?view.history.canGoBack:historyIndex>0,forward:fixedLayout?historyIndex<history.length-1:view?view.history.canGoForward:historyIndex<history.length-1,previous:view?(view.isFixedLayout?index>0:!view.renderer.atStart):index>0,next:view?(view.isFixedLayout?shown<view.book.sections.length-1:!view.renderer.atEnd):index+(prefs.spread?1:0)<(pdf?.numPages??0)-1})
+}
+function reportFixedLocation({index,range}){
+    currentRange=range
+    if(isComic()){
+        reportLocation({anchor:comicAnchor(view.book,index),progress:(index+1)/view.book.sections.length,reference:`${strings.page} ${index+1}`,text:'',noText:true})
+        view.book.releaseExcept(new Set(getContents(view).map(part=>part.index)))
+        paintRegions();return
+    }
+    const progress=view.getProgressOf(index,range),cfi=view.getCFI(index,range)
+    const data={anchor:textAnchor(cfi,index),progress:view.getSectionFractions()[index]??0,chapter:progress.tocItem?.label??'',reference:progress.pageItem?.label?`${strings.printPage} ${progress.pageItem.label}`:progress.tocItem?.label??'',text:range?.toString()??'',tocHref:progress.tocItem?.href,tocId:progress.tocItem?.id==null?null:`outline:${progress.tocItem.id}`,printPage:progress.pageItem?.label}
+    reportEpubLocation(data)
 }
 function remember() {
     if(isComic())captureComicLocation()
@@ -220,19 +291,29 @@ function reportEpubSelection(doc,index,settle=true){
     selected({text:s.toString(),anchor:textAnchor(view.getCFI(index,range),index),reference:progress.pageItem?.label?`${strings.printPage} ${progress.pageItem.label}`:progress.tocItem?.label??location.reference??'',order:index},range,doc,settle)
 }
 function captureEpubSelections(){
-    return (view?.renderer.getContents()??[]).flatMap(({doc,index})=>{
-        const s=doc?.getSelection();return s?.rangeCount&&!s.isCollapsed?[{doc,index,range:s.getRangeAt(0).cloneRange(),anchor:s.anchorNode,anchorOffset:s.anchorOffset,focus:s.focusNode,focusOffset:s.focusOffset}]:[]
+    return (getContents(view)??[]).flatMap(({doc,index})=>{
+        const s=doc?.getSelection();if(!s?.rangeCount||s.isCollapsed)return []
+        const range=s.getRangeAt(0).cloneRange()
+        return [{doc,index,range,cfi:view.getCFI(index,range),backwards:s.anchorNode===range.endContainer&&s.anchorOffset===range.endOffset,anchor:s.anchorNode,anchorOffset:s.anchorOffset,focus:s.focusNode,focusOffset:s.focusOffset}]
     })
 }
 function restoreEpubSelections(work){
     if(!typographyWork.canRestore(work))return
     for(const saved of work.selections??[]){
-        if(!view.renderer.getContents().some(part=>part.doc===saved.doc)||!saved.range.startContainer.isConnected)continue
-        programmaticSelections.set(saved.doc,saved.range)
-        const s=saved.doc.getSelection()
+        let doc=saved.doc,range=saved.range,anchor=saved.anchor,anchorOffset=saved.anchorOffset,focus=saved.focus,focusOffset=saved.focusOffset
+        if(!getContents(view).some(part=>part.doc===doc)||!range.startContainer.isConnected){
+            if(!saved.cfi)continue
+            doc=getContents(view).find(part=>part.index===saved.index)?.doc
+            if(!doc)continue
+            range=view.resolveCFI(saved.cfi).anchor(doc)
+            anchor=saved.backwards?range.endContainer:range.startContainer;anchorOffset=saved.backwards?range.endOffset:range.startOffset
+            focus=saved.backwards?range.startContainer:range.endContainer;focusOffset=saved.backwards?range.startOffset:range.endOffset
+        }
+        programmaticSelections.set(doc,range)
+        const s=doc.getSelection()
         // Selection mutation does not request native/WebView focus.
-        s.setBaseAndExtent(saved.anchor,saved.anchorOffset,saved.focus,saved.focusOffset)
-        reportEpubSelection(saved.doc,saved.index,false)
+        s.setBaseAndExtent(anchor,anchorOffset,focus,focusOffset)
+        reportEpubSelection(doc,saved.index,false)
     }
 }
 async function boundedResourceBuffer(response,maximum,expected=null){
@@ -277,21 +358,32 @@ async function openFoliate(config) {
     const loadText=async(name,options)=>{
         const buffer=await load(name,options,true);if(buffer==null)return null
         const data=new Uint8Array(buffer)
-        try{return adaptDTBook(new TextDecoder(data[0]===255&&data[1]===254||data[0]===60&&data[1]===0?'utf-16le':data[0]===254&&data[1]===255||data[0]===0&&data[1]===60?'utf-16be':'utf-8',{fatal:true}).decode(data))}
+        try{return new TextDecoder(data[0]===255&&data[1]===254||data[0]===60&&data[1]===0?'utf-16le':data[0]===254&&data[1]===255||data[0]===0&&data[1]===60?'utf-16be':'utf-8',{fatal:true}).decode(data)}
         catch(error){cacheResourceFailure(error)}
     }
     const loader={loadText,loadBlob:async(name,type,options)=>{const buffer=await load(name,options);return buffer==null?null:new Blob([buffer],{type:type??''})},getSize:name=>sizes[name]?.size??0}
     let book
     switch(config.format){
-        case 'epub':book=await new EPUB(loader).init();break
+        case 'epub':book=await makeEpubBook(index,loader,safeDocument);break
         case 'fb2':book=await makePreparedFB2(index,loader,safeDocument);break
         case 'cbz':case 'cbr':book=makeComicBook(index,loader);break
         default:throw Error('Unsupported publication format')
     }
-    try{await mountFoliate(book,config)}catch(error){if(view?.book===book)view.close();book.destroy?.();throw error}
+    try{await mountFoliate(book,config)}catch(error){
+        // Cleanup of an uninitialized upstream paginator can fail independently.
+        // Preserve the publication's original load error and discard this view.
+        if(view?.book===book){
+            const failed=view
+            view=null;fixedLayout=null
+            try{failed.close()}catch(cleanup){emit('diagnostic',{stage:'cleanup',message:String(cleanup)})}
+            failed.remove()
+        }
+        try{book.destroy?.()}catch(cleanup){emit('diagnostic',{stage:'cleanup',message:String(cleanup)})}
+        throw error
+    }
 }
 async function verifyComicPage(){
-    const current=view,parts=current.renderer.getContents().filter(x=>x.index===location.anchor?.page)
+    const current=view,parts=getContents(current).filter(x=>x.index===location.anchor?.page)
     if(!parts.length)throw Error('Comic page did not lay out')
     for(const {doc} of parts){const img=doc.querySelector('img');await img?.decode();if(current!==view||!img?.naturalWidth||!img.getBoundingClientRect().width)throw Error('Comic page failed to decode or lay out')}
     await nextFrame()
@@ -299,7 +391,7 @@ async function verifyComicPage(){
 function captureComicLocation(){
     if(!view||location.anchor?.page==null)return
     const viewport=view.renderer.getBoundingClientRect()
-    const parts=view.renderer.getContents().flatMap(part=>{
+    const parts=getContents(view).flatMap(part=>{
         const frame=part.doc.defaultView?.frameElement,bounds=frame?.getBoundingClientRect()
         if(!bounds?.width||!bounds.height||!part.doc.querySelector('img'))return []
         const x=Math.max(0,Math.min(bounds.width,viewport.left-bounds.left)),y=Math.max(0,Math.min(bounds.height,viewport.top-bounds.top))
@@ -315,7 +407,7 @@ function captureComicLocation(){
     location={...location,anchor:comicAnchor(view.book,part.index,{position:part.position}),progress:(part.index+1)/view.book.sections.length,reference:`${strings.page} ${part.index+1}`}
 }
 function restoreComicPosition(anchor){
-    const part=view?.renderer.getContents().find(x=>x.index===(anchor?.page??location.anchor?.page)),frame=part?.doc.defaultView.frameElement
+    const part=getContents(view).find(x=>x.index===(anchor?.page??location.anchor?.page)),frame=part?.doc.defaultView.frameElement
     if(!frame)return
     const bounds=frame.getBoundingClientRect(),viewport=view.renderer.getBoundingClientRect(),region=anchor?.region,position=anchor?.position
     if(region){normalizedRegion(region);view.renderer.scrollBy({left:bounds.left+(region[0]+region[2]/2)*bounds.width-(viewport.left+viewport.width/2),top:bounds.top+(region[1]+region[3]/2)*bounds.height-(viewport.top+viewport.height/2)})}
@@ -356,7 +448,7 @@ function beginRegion(){
     const index=location.anchor?.page??0
     regionSelection={index,rect:[.25,.25,.5,.5]}
     const hint=document.createElement('div');hint.id='region-hint';hint.setAttribute('role','status');hint.textContent=strings.regionInstructions??'Select a region. Arrows move; Shift+Arrows resize; Enter confirms; Escape cancels.'
-    document.body.append(hint);paintRegions();view.renderer.focusView()
+    document.body.append(hint);paintRegions();if(fixedLayout)fixedLayout.focus();else view.renderer.focusView()
 }
 function cancelRegion(){if(!regionSelection)return;regionSelection=null;document.querySelector('#region-hint')?.remove();paintRegions()}
 function regionPopoverRect(mark,doc){
@@ -368,7 +460,7 @@ function regionPopoverRect(mark,doc){
 }
 function confirmRegion(){
     const state=regionSelection;if(!state)return
-    const region=normalizedRegion(state.rect).slice(),part=view.renderer.getContents().find(x=>x.index===state.index),mark=part?.doc.querySelector('[data-region-selection]')
+    const region=normalizedRegion(state.rect).slice(),part=getContents(view).find(x=>x.index===state.index),mark=part?.doc.querySelector('[data-region-selection]')
     const rect=regionPopoverRect(mark??part.doc.querySelector('img'),part.doc),anchor=comicAnchor(view.book,state.index,{region})
     cancelRegion();selection=null;emit('regionSelected',{anchor,text:'',reference:`${strings.page} ${state.index+1}`,rect})
 }
@@ -384,7 +476,7 @@ function regionKey(event){
 }
 function paintRegions(){
     if(!isComic()||!view)return
-    for(const {doc,index} of view.renderer.getContents()){
+    for(const {doc,index} of getContents(view)){
         if(!doc?.body)continue
         doc.querySelectorAll('[data-region-id],[data-region-selection]').forEach(x=>x.remove())
         const img=doc.querySelector('img');if(!img)continue
@@ -400,19 +492,17 @@ function paintRegions(){
     }
 }
 async function mountFoliate(book,config){
-    // Search, CFI resolution and the rendered publication use the same safe
-    // DOM structure. Removing active book elements must not shift search anchors.
-    for(const section of book.sections){
-        if(!section.createDocument)continue
-        const create=section.createDocument
-        section.createDocument=async()=>new DOMParser().parseFromString(safeDocument(new XMLSerializer().serializeToString(await create())),'application/xhtml+xml')
-    }
     book.transformTarget?.addEventListener('data', e=>{
         if (/xhtml|html|svg/.test(e.detail.type)) e.detail.data=Promise.resolve(e.detail.data).then(async value=>safeDocument(typeof value==='string'?value:await value.text()))
     })
     view=document.createElement('foliate-view');content.className='';content.replaceChildren(view)
+    const publication=view
+    fixedLayout=book.rendition?.layout==='pre-paginated'
+        ?new FixedLayoutIntegration(view,book,fixedContents,reportFixedLocation,configureFixedRenderer):null
+    fixedLayout?.prepare(config.appearance??{},config.anchor?.page??config.anchor?.index??0)
     view.history.addEventListener('index-change',reportNavigation)
     view.addEventListener('load',({detail:{doc,index}})=>{
+        observePublicationFocus(doc,publication)
         doc.addEventListener('pointerdown',userNavigation,{passive:true})
         doc.addEventListener('wheel',userNavigation,{passive:true})
         doc.addEventListener('touchstart',userNavigation,{passive:true})
@@ -423,7 +513,7 @@ async function mountFoliate(book,config){
             installLocalFont(doc,font,()=>owner===view&&font===localFont).then(async installed=>{
                 if(!installed||owner!==view||font!==localFont||prefs.publisher)return
                 await doc.fonts.ready
-                if(font===localFont&&view.renderer.getContents().some(x=>x.doc===doc)){
+                if(font===localFont&&getContents(view).some(x=>x.doc===doc)){
                     view.renderer.render?.()
                     await paintEpub()
                 }
@@ -445,7 +535,7 @@ async function mountFoliate(book,config){
         })
         doc.addEventListener('click',e=>{
             if(!doc.getSelection()?.isCollapsed)return
-            const part=view.renderer.getContents().find(x=>x.doc===doc),[cfi,range]=part?.overlayer?.hitTest({x:e.clientX,y:e.clientY})??[]
+            const part=getContents(view).find(x=>x.doc===doc),[cfi,range]=part?.overlayer?.hitTest({x:e.clientX,y:e.clientY})??[]
             if(cfi&&cfi!=='busybooks-speaking')emit('annotation',{cfi,rect:selectionRect(range,doc)})
         })
         doc.body?.setAttribute('tabindex','0');doc.addEventListener('keydown',keys)
@@ -457,14 +547,15 @@ async function mountFoliate(book,config){
         })
     })
     view.addEventListener('relocate',({detail:d})=>{
+        if(fixedLayout?.busy)return
         const index=view.resolveCFI(d.cfi)?.index??0
         currentRange=d.range
         if(isComic()){
             reportLocation({anchor:comicAnchor(book,index),progress:(index+1)/book.sections.length,reference:`${strings.page} ${index+1}`,text:'',noText:true})
-            book.releaseExcept(new Set(view.renderer.getContents().map(x=>x.index)))
+            book.releaseExcept(new Set(getContents(view).map(x=>x.index)))
             paintRegions();return
         }
-        reportEpubLocation({printPage:d.pageItem?.label,tocHref:d.tocItem?.href,tocId:d.tocItem?.id==null?null:`outline:${d.tocItem.id}`,anchor:textAnchor(d.cfi,index),progress:d.fraction??0,chapter:d.tocItem?.label??'',reference:d.pageItem?.label?`${strings.printPage} ${d.pageItem.label}`:[d.tocItem?.label,`${Math.round((d.fraction??0)*1000)/10}%`].filter(Boolean).join(' · '),text:d.range?.toString()??view.renderer.getContents().find(x=>x.index===index)?.doc?.body?.innerText??'',screenPage:d.location?.current,totalScreens:d.location?.total})
+        reportEpubLocation({printPage:d.pageItem?.label,tocHref:d.tocItem?.href,tocId:d.tocItem?.id==null?null:`outline:${d.tocItem.id}`,anchor:textAnchor(d.cfi,index),progress:d.fraction??0,chapter:d.tocItem?.label??'',reference:d.pageItem?.label?`${strings.printPage} ${d.pageItem.label}`:[d.tocItem?.label,`${Math.round((d.fraction??0)*1000)/10}%`].filter(Boolean).join(' · '),text:d.range?.toString()??getContents(view).find(x=>x.index===index)?.doc?.body?.innerText??'',screenPage:d.location?.current,totalScreens:d.location?.total})
     })
     view.addEventListener('external-link',e=>{e.preventDefault();emit('external',{url:e.detail.href_})})
     view.addEventListener('link',e=>{
@@ -472,31 +563,36 @@ async function mountFoliate(book,config){
         const a=e.detail.a,type=a.getAttributeNS('http://www.idpf.org/2007/ops','type')??a.getAttribute('epub:type')??''
         if(type.split(/\s+/).includes('noteref')||a.getAttribute('role')==='doc-noteref'){
             e.preventDefault();showFootnote(e.detail.href,location.anchor?.index??0,null,a).catch(error=>emit('navigationError',{message:String(error)}))
+        }else if(fixedLayout){
+            e.preventDefault()
+            queueNavigation(async()=>{await gotoEpub({href:e.detail.href});remember()}).catch(error=>emit('navigationError',{message:String(error)}))
         }
     })
     view.addEventListener('create-overlay',()=>paintEpub())
     view.addEventListener('draw-annotation',({detail:{draw,annotation}})=>draw(Overlayer.highlight,{color:colors[annotation.color]??colors.yellow}))
     await view.open(book)
-    if(view.isFixedLayout){
-        const getContents=view.renderer.getContents.bind(view.renderer)
-        view.renderer.getContents=()=>getContents().map(x=>({...x,...fixedContents.get(x.doc)}))
-    }
+    fixedLayout?.style()
     typography=view.isFixedLayout?noTypography:reflowableTypography
     emit('metadata',{title:book.metadata?.title,author:book.metadata?.author,fixed:view.isFixedLayout,typography,...(isComic()?{pages:book.sections.length,labels:book.sections.map((_,i)=>String(i+1))}:{})})
     await applyAppearance(config.appearance??{})
     if(isComic()&&config.anchor?.pageId&&book.sections[config.anchor.page]?.pageId!==config.anchor.pageId)throw Error('Saved comic page identity does not match')
     const saved=isComic()?{index:config.anchor?.page??0}:config.anchor?.cfi?epubNavigation(config.anchor):null
-    if(saved&&!saved.anchor){await view.renderer.goTo(saved);view.history.pushState(saved.index)}
+    if(fixedLayout){
+        const target=saved??(config.anchor?.cfi?epubNavigation(config.anchor):{index:0})
+        await fixedLayout.goTo(target)
+    }
+    else if(saved&&!saved.anchor){await view.renderer.goTo(saved);view.history.pushState(saved.index)}
     else await view.init({lastLocation:config.anchor?.cfi,showTextStart:!config.anchor?.cfi})
-    if(!view.renderer.getContents().some(({doc})=>doc?.documentElement&&!doc.querySelector('parsererror')))
-        throw Error('Publication did not produce a readable first document')
+    if(!getContents(view).some(({doc})=>doc?.documentElement&&!doc.querySelector('parsererror')))
+        throw book.takeLoadError?.()??Error('Publication did not produce a readable first document')
     await applyAppearance(config.appearance??{})
     annotations=config.annotations??annotations;await paintEpub()
-    if(isComic()){await verifyComicPage();restoreComicPosition(config.anchor);paintRegions();remember();view.renderer.addEventListener('scroll',()=>{clearTimeout(window.comicScrollTimer);window.comicScrollTimer=setTimeout(()=>{captureComicLocation();reportLocation(location)},200)},{passive:true})}
+    if(fixedLayout)remember()
+    if(isComic()){await verifyComicPage();restoreComicPosition(config.anchor);paintRegions()}
     const owner=session;requestAnimationFrame(()=>setTimeout(()=>enrichEpubOutline(book,owner).catch(error=>{if(owner===session&&view?.book===book)emit('metadata',{outlineFailed:true});emit('diagnostic',{stage:'outline',message:'Publication outline unavailable'})}),0))
 }
 async function showFootnote(href,sourceIndex,selectedCFI,sourceLink=null){
-    const epoch=++noteGeneration
+    const epoch=++noteGeneration,publication=view,ownerSession=session
     for(const old of document.querySelectorAll('dialog.footnote[open]'))old.close()
     const resolved=await view.resolveNavigation(href),section=view.book.sections[resolved.index]
     const original=await section.createDocument()
@@ -531,7 +627,7 @@ async function showFootnote(href,sourceIndex,selectedCFI,sourceLink=null){
     for(const img of article.querySelectorAll('img[src]')){
         const path=section.resolveHref(img.getAttribute('src'));img.removeAttribute('srcset')
         if(view.book.isExternal(path)){img.removeAttribute('src');continue}
-        const blob=await view.book.loadBlob(path,view.book.resources?.getItemByHref?.(path)?.mediaType)
+        const blob=await view.book.loadBlob(path,view.book.resourceTypes?.get(path))
         if(blob){const url=URL.createObjectURL(blob);urls.push(url);img.src=url}
     }
     const close=()=>{observer.disconnect();document.removeEventListener('selectionchange',changed);if(noteView===state)noteView=null;if(selection?.note){selection=null;emit('selection',{anchor:null,text:''})}for(const url of urls)URL.revokeObjectURL(url);dialog.remove()}
@@ -542,20 +638,36 @@ async function showFootnote(href,sourceIndex,selectedCFI,sourceLink=null){
         e.preventDefault();dialog.close()
         const href=section.resolveHref(a.getAttribute('href')),type=a.getAttributeNS('http://www.idpf.org/2007/ops','type')??a.getAttribute('epub:type')??''
         if(type.split(/\s+/).includes('backlink')||a.getAttribute('role')==='doc-backlink')return
-        if(view.book.isExternal(href)){emit('external',{url:href});return}
+        if(publication!==view||ownerSession!==session||epoch!==noteGeneration)return
+        if(publication.book.isExternal(href)){emit('external',{url:href});return}
         try{
-            const target=await view.resolveNavigation(href)
-            if(sourceLink&&target?.index===sourceIndex){
-                const destination=target.anchor?.(sourceLink.ownerDocument)
-                if(destination===sourceLink||destination===sourceLink.parentElement&&destination?.localName==='sup')return
-            }
-            emit('navigationJump');remember();await view.goTo(href)
+            await followFootnoteLink(href,sourceIndex,sourceLink,publication,epoch,ownerSession)
         }
         catch(error){emit('navigationError',{message:String(error)})}
     })
     if(epoch!==noteGeneration){close();return}
     document.body.append(dialog);dialog.showModal();noteView=state;await paintNote()
     if(selectedCFI){const resolved=await view.resolveNavigation(selectedCFI),range=toCopy(resolved.anchor(doc));if(range){suppressSelectionUntil=performance.now()+600;const s=document.getSelection();s.removeAllRanges();s.addRange(range)}}
+}
+async function followFootnoteLink(href,sourceIndex,sourceLink,publication,epoch,ownerSession){
+    const current=()=>publication===view&&ownerSession===session&&epoch===noteGeneration
+    if(!current())return
+    const target=await publication.resolveNavigation(href)
+    if(!current())return
+    if(sourceLink&&target?.index===sourceIndex){
+        const destination=target.anchor?.(sourceLink.ownerDocument)
+        if(destination===sourceLink||destination===sourceLink.parentElement&&destination?.localName==='sup')return
+    }
+    const navigate=async()=>{
+        if(!current())return
+        userNavigation();emit('navigationJump');remember()
+        if(fixedLayout?.view===publication){
+            await gotoEpub({href})
+            if(current())remember()
+        }else await publication.goTo(href)
+    }
+    if(fixedLayout?.view===publication)await queueNavigation(navigate)
+    else await navigate()
 }
 async function paintNote(){
     const state=noteView;if(!state)return
@@ -574,11 +686,19 @@ function epubNavigation(anchor){
     return (parsed.parent??parsed).length>1?resolved:{index:anchor.index??resolved.index}
 }
 async function gotoEpub(anchor){
-    if(isComic()){if(anchor.pageId&&view.book.sections[anchor.page]?.pageId!==anchor.pageId)throw Error('Comic page identity does not match');const result=await view.goTo(anchor.page??anchor.index??Number(anchor.href));if(!result)throw Error(strings.navigationInterrupted);await verifyComicPage();restoreComicPosition(anchor);paintRegions();return}
+    view.book?.takeLoadError?.()
+    if(isComic()){if(anchor.pageId&&view.book.sections[anchor.page]?.pageId!==anchor.pageId)throw Error('Comic page identity does not match');await fixedLayout.goTo({index:anchor.page??anchor.index??Number(anchor.href)},{preferences:prefs});await verifyComicPage();restoreComicPosition(anchor);paintRegions();return}
     const target=anchor.cfi??anchor.href??(anchor.fraction!=null?{fraction:anchor.fraction}:anchor.index)
-    if(!anchor.cfi){const resolved=await view.goTo(target);if(!resolved)throw Error(strings.navigationInterrupted);return}
+    if(!anchor.cfi){
+        if(fixedLayout){await fixedLayout.goTo(await view.resolveNavigation(target),{preferences:prefs});return}
+        const resolved=await view.goTo(target);if(!resolved)throw view.book?.takeLoadError?.()??Error(strings.navigationInterrupted);return
+    }
     const resolved=epubNavigation(anchor)
-    if(!resolved.anchor){await view.goTo(resolved.index);return}
+    if(!resolved.anchor){
+        if(fixedLayout)await fixedLayout.goTo(resolved,{preferences:prefs})
+        else if(!await view.goTo(resolved.index))throw view.book?.takeLoadError?.()??Error(strings.navigationInterrupted)
+        return
+    }
     const original=await view.book.sections[resolved.index].createDocument()
     const doc=new DOMParser().parseFromString(safeDocument(new XMLSerializer().serializeToString(original)),'application/xhtml+xml'),range=resolved.anchor(doc)
     let node=range.startContainer.nodeType===Node.ELEMENT_NODE?range.startContainer:range.startContainer.parentElement
@@ -587,22 +707,32 @@ async function gotoEpub(anchor){
             const note=doc.createRange();note.selectNodeContents(node);await showFootnote(view.getCFI(resolved.index,note),location.anchor?.index??0,target);return
         }
     }
-    suppressSelectionUntil=performance.now()+600;await view.select(target)
+    suppressSelectionUntil=performance.now()+600
+    if(fixedLayout)await fixedLayout.goTo(resolved,{select:true,preferences:prefs});else{
+        await view.select(target)
+        const failure=view.book?.takeLoadError?.();if(failure)throw failure
+    }
     // Returning from a note can leave the same range selected in its original
     // iframe, so the browser emits no new selectionchange. Synchronize native
     // actions and text assistance without opening a selection popover.
-    const selectedDocument=view.renderer.getContents().find(part=>part.index===resolved.index)?.doc
+    const selectedDocument=getContents(view).find(part=>part.index===resolved.index)?.doc
     if(selectedDocument)reportEpubSelection(selectedDocument,resolved.index,false)
 }
 async function paintEpub(){
     if(!view)return
     if(isComic()){paintRegions();return}
-    for(const a of annotations)if(a.anchor?.cfi&&a.annotationKind!=='bookmark')await view.addAnnotation({value:a.anchor.cfi,color:a.color})
+    for(const a of annotations)if(a.anchor?.cfi&&a.annotationKind!=='bookmark'){
+        if(fixedLayout){
+            const resolved=await view.resolveNavigation(a.anchor.cfi)
+            const part=getContents(view).find(part=>part.index===resolved?.index)
+            if(part?.overlayer){part.overlayer.remove(a.anchor.cfi);part.overlayer.add(a.anchor.cfi,resolved.anchor(part.doc),Overlayer.highlight,{color:colors[a.color]??colors.yellow})}
+        }else await view.addAnnotation({value:a.anchor.cfi,color:a.color})
+    }
     await paintSpeaking()
 }
 async function paintSpeaking(){
     if(view){
-        for(const part of view.renderer.getContents()){
+        for(const part of getContents(view)){
             part.overlayer?.remove('busybooks-speaking')
             if(!spokenAnchor?.cfi)continue
             const resolved=await view.resolveNavigation(spokenAnchor.cfi)
@@ -635,7 +765,6 @@ function css(p) {
     // the load handler always measures the publication's original families.
     return `:root,body{color-scheme:${dark?'dark':'light'};background:${bg}!important;color:${fg}!important;--overlayer-highlight-opacity:.3}${typographyCSS(p,localFont.family,'',{...typography,fontFamily:false})}img,svg{max-width:100%}::selection{background:${cssColor(chrome.selection??0x663584e4)}}`
 }
-function bookSpread(book){return book?.rendition?.spread}
 async function applyAppearance(p,restoring=null){
     if(isComic())captureComicLocation()
     const owner=view,previousWork=typographyWork.active,work=typographyWork.begin(location.anchor),original=location
@@ -648,22 +777,26 @@ async function applyAppearance(p,restoring=null){
     const current=()=>owner===view&&typographyWork.current(work)
     try{
         if(typography.fontFamily){
-            const docs=(view?.renderer.getContents()??[]).map(part=>part.doc)
+            const docs=(getContents(view)??[]).map(part=>part.doc)
             if(noteView)docs.push(document)
             await Promise.all(docs.map(doc=>prepareLocalFont(doc,font)))
             if(!current())return false
         }
         prefs=next;localFont=font;fontSignature=signature
         if(view){
+            if(fixedLayout){
+                const index=work.anchor?.page??work.anchor?.index??fixedLayout.activeIndex
+                const target=work.anchor?.cfi?epubNavigation(work.anchor):{index}
+                await fixedLayout.goTo(target,{preferences:prefs})
+                if(!current())return false
+            }
             const r=view.renderer
             view.style.setProperty('--page-tint',isComic()?'none':p.color==='dark'?'invert(1) hue-rotate(180deg)':p.color==='sepia'?'sepia(.3)':'none')
             r.setAttribute('gap',`${Math.min(30,((p.margin??32)*2/Math.max(1,content.clientWidth))*100)}%`);r.setAttribute('flow',p.flow??'paginated');r.setAttribute('margin',`${p.margin??32}px`)
             r.setAttribute('max-inline-size',`${p.width??720}px`);r.setAttribute('max-column-count',p.spread?'2':'1')
-            if(isComic()&&view.book.dir!==(p.direction==='auto'||!p.direction?view.book.metadata?.direction??'ltr':p.direction)){view.book.dir=p.direction==='auto'||!p.direction?view.book.metadata?.direction??'ltr':p.direction;r.open(view.book)}
-            if(view.isFixedLayout)r.spread=p.spread?(bookSpread(view.book)??'auto'):'none'
             r.setAttribute('zoom',p.zoom??'fit-page')
             if(typography.fontFamily||typography.textMetrics){
-                for(const {doc} of r.getContents()){
+                for(const {doc} of getContents(view)){
                     if(typography.fontFamily){
                         const protectedStyle=protectSpecializedFonts(doc)
                         protectedStyle.disabled=!!p.publisher
@@ -673,7 +806,7 @@ async function applyAppearance(p,restoring=null){
                     if(!current())return false
                 }
                 r.setStyles?.(css(prefs))
-                for(const {doc} of r.getContents()){
+                for(const {doc} of getContents(view)){
                     // FontFace readiness plus FontFaceSet.ready includes the
                     // document layout that consumes the new fonts. Force style
                     // evaluation before reading the current ready promise.
@@ -685,8 +818,8 @@ async function applyAppearance(p,restoring=null){
                 // renderer.goTo awaits anchor layout/scroll without history.pushState.
                 r.render?.()
             }else css(prefs)
-            if(isComic()&&work.anchor?.page!=null){await r.goTo({index:work.anchor.page});restoreComicPosition(work.anchor)}
-            if(typographyWork.canRestore(work)&&work.anchor?.cfi)await r.goTo(epubNavigation(work.anchor))
+            if(isComic()&&work.anchor?.page!=null)restoreComicPosition(work.anchor)
+            if(!fixedLayout&&typographyWork.canRestore(work)&&work.anchor?.cfi)await r.goTo(epubNavigation(work.anchor))
             if(!current())return false
             for(const dialog of document.querySelectorAll('dialog.footnote[open]'))await styleFootnote(dialog)
             if(!current())return false
@@ -713,8 +846,10 @@ async function cancelAppearance(){
 }
 
 async function openPdf(config){
+    invalidatePdfSelection()
     content.className='pdf'
     pdf=await pdfjs.getDocument({data:new Uint8Array(await (await fetch('publication')).arrayBuffer()),isEvalSupported:false,enableXfa:false,cMapUrl:new URL('./vendor/pdfjs/cmaps/',import.meta.url).href,cMapPacked:true,standardFontDataUrl:new URL('./vendor/pdfjs/standard_fonts/',import.meta.url).href,wasmUrl:new URL('./vendor/pdfjs/wasm/',import.meta.url).href,iccUrl:new URL('./vendor/pdfjs/iccs/',import.meta.url).href}).promise
+    pdfSelectionOwner={publication:pdf,session}
     labels=Array.from({length:pdf.numPages},(_,i)=>String(i+1))
     // Labels are optional and must not precede the required visible passage.
     // Get the saved passage onto the screen before optional metadata, a full
@@ -727,7 +862,7 @@ async function openPdf(config){
     while(!usable&&pdfLayout&&pdfLayout!==layout){layout=pdfLayout;usable=await layout}
     if(!usable)return false
     content.addEventListener('scroll',()=>{
-        if(layingOut)return
+        if(layingOut||pdfLayoutPaused)return
         const y=content.scrollTop, page=pages.findIndex(p=>p.element.offsetTop+p.element.offsetHeight>y+content.clientHeight*.25)
         if(page>=0){const p=pages[page];reportLocation({anchor:pdfAnchor(page,Math.max(0,(y-p.element.offsetTop)/p.element.offsetHeight)),progress:(page+1)/pdf.numPages,chapter:'',tocHref:pdfTocHref(page),tocId:pdfTocId(pdfAnchor(page,Math.max(0,(y-p.element.offsetTop)/p.element.offsetHeight))),reference:pdfReference(page),text:p.text??'',noText:p.text!=null&&!p.text.trim()})}
     },{passive:true})
@@ -844,16 +979,120 @@ async function pumpPages(){
     pumpPages()
 }
 function trimPages(){
-    const current=location.anchor?.page??0,range=document.getSelection()?.rangeCount?document.getSelection().getRangeAt(0):null
+    const current=location.anchor?.page??0,range=document.getSelection()?.rangeCount?document.getSelection().getRangeAt(0):null,pinned=pdfSelections?.pinnedPages
     for(let i=0;i<pages.length;i++){
         const p=pages[i]
-        if(i===navigatingPage||Math.abs(i-current)<=4||!p.element.childNodes.length||range?.intersectsNode(p.element))continue
+        if(i===navigatingPage||Math.abs(i-current)<=4||!p.element.childNodes.length||pinned?.has(i)||range?.intersectsNode(p.element))continue
         p.element.replaceChildren();p.rendering=null;p.text=null;geometry.get(i)?.cleanup()
     }
 }
-let pdfLayout,pdfViewport
-function relayoutPdf(anchor){return pdfLayout=layoutPdf(anchor)}
-async function layoutPdf(anchor){
+let pdfLayout,pdfViewport,pdfLayoutPaused=false,pdfLayoutVisibilityRevision=-1,pdfResizePending=false
+let pdfSelections=null,pdfSelectionOwner=null,pdfGeometryMayCollapse=false
+function invalidatePdfSelection(){
+    pdfSelections?.invalidate();pdfGeometryMayCollapse=false
+    clearTimeout(selectionTimer)
+}
+function clearPdfSelection(){
+    invalidatePdfSelection()
+    // Superseded ranges can remain connected while navigation waits. They
+    // must not become eligible for capture as a new geometry selection.
+    document.getSelection()?.removeAllRanges?.()
+    selection=null;emit('selection',{text:'',anchor:null})
+}
+function rememberPdfSelection(){
+    pdfSelections??=new PdfSelectionMemory({document,content,getOwner:()=>pdfSelectionOwner,getPages:()=>pages,
+        onRestore:(data,range)=>selected(data,range,document,false)})
+    pdfSelections.capture(selection)
+}
+function capturePendingPdfSelectionChange(){
+    if(pdfSelections?.ownsPending||pdfGeometryMayCollapse||pdfSelections?.expectedSelection())return
+    // A selection-editing gesture can leave the same DOM range in place (for
+    // example a scrollbar click). Capture its current outcome, never the old
+    // pending operation, if its browser selectionchange has not run yet.
+    const native=document.getSelection()
+    if(native?.rangeCount&&!native.isCollapsed||selection?.anchor?.segments)pdfSelection()
+}
+async function restorePdfGeometrySelection(work,epoch){
+    if(!work)return
+    await pdfSelections.restore(work,{ensurePage:index=>queuePage(index,epoch),
+        isCurrent:()=>epoch===layoutGeneration&&pdfSelectionOwner?.publication===pdf})
+}
+const pdfResumeWaiters=new Set()
+function waitForPdfResume(){
+    return new Promise(resolve=>{
+        let timer
+        const finish=visible=>{clearTimeout(timer);pdfResumeWaiters.delete(finish);resolve(visible)}
+        pdfResumeWaiters.add(finish)
+        // Passage requests already have a bounded application lifetime. A
+        // hidden pane must never revive an expired request on a later reveal.
+        timer=setTimeout(()=>finish(false),10000)
+    })
+}
+function capturePdfLocation(){
+    if(layingOut||pdfLayoutPaused||location.anchor?.page==null)return
+    const index=location.anchor.page,p=pages[index]
+    if(p?.element.offsetHeight>0)location={...location,anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight)}
+}
+function schedulePdfResize(){
+    pdfResizePending=true
+    clearTimeout(window.pdfResizeTimer)
+    if(pdfLayoutPaused)return
+    window.pdfResizeTimer=setTimeout(()=>queueNavigation(async()=>{
+        // A timer can already have entered the navigation queue when a newer
+        // visibility request pauses layout. Recheck at execution as well.
+        if(pdfLayoutPaused)return
+        pdfResizePending=false
+        if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight){
+            const epoch=layoutGeneration
+            try{
+                if(pdfSelections?.hasSelection&&!pdfSelections.expectedSelection()){
+                    await restorePdfGeometrySelection(pdfSelections.beginRelayout(),epoch)
+                }
+            }finally{
+                if(epoch===layoutGeneration){pdfGeometryMayCollapse=false;refreshSelectionGeometry()}
+            }
+            return
+        }
+        await relayoutPdf(location.anchor,true)
+        refreshSelectionGeometry()
+    }).catch(error=>emit('navigationError',{message:String(error)})),150)
+}
+function layoutVisibility(command){
+    const {revision,visible,request}=command
+    if(!Number.isSafeInteger(revision)||revision<0||typeof visible!=='boolean'||!Number.isSafeInteger(request))throw Error('Invalid layout visibility request')
+    if(revision<pdfLayoutVisibilityRevision){emit('layoutVisibility',{request,revision,visible});return}
+    pdfLayoutVisibilityRevision=revision
+    if(!pdf){emit('layoutVisibility',{request,revision,visible});return}
+    if(visible){
+        pdfLayoutPaused=false
+        for(const resume of pdfResumeWaiters)resume(true)
+        pdfResumeWaiters.clear()
+        if(pdfResizePending||pdfViewport?.[0]!==content.clientWidth||pdfViewport?.[1]!==content.clientHeight)schedulePdfResize()
+        emit('layoutVisibility',{request,revision,visible})
+        return
+    }
+    capturePdfLocation()
+    capturePendingPdfSelectionChange()
+    // Hiding can collapse a native range even before a text layer is rebuilt.
+    // Its logical source remains owned while input belongs to the other pane.
+    pdfGeometryMayCollapse=pdfSelections?.hasSelection===true
+    if(pdfGeometryMayCollapse)clearTimeout(selectionTimer)
+    pdfLayoutPaused=true
+    clearTimeout(window.pdfResizeTimer)
+    pdfResizePending=true
+    // The caller keeps the native surface visible until this acknowledgement.
+    // No later automatic resize may append another frame-dependent render.
+    return queueNavigation(async()=>{
+        await appearanceOperation;await annotationOperation
+        emit('layoutVisibility',{request,revision,visible})
+    })
+}
+function relayoutPdf(anchor,preserveSelection=false){return pdfLayout=layoutPdf(anchor,preserveSelection)}
+async function layoutPdf(anchor,preserveSelection=false){
+    if(preserveSelection)capturePendingPdfSelectionChange()
+    if(!preserveSelection)invalidatePdfSelection()
+    const saved=preserveSelection?pdfSelections?.beginRelayout():null
+    if(saved){clearTimeout(selectionTimer);pdfGeometryMayCollapse=true}
     const epoch=++layoutGeneration;layingOut=true;navigatingPage=anchor?.page??0
     try{
         stopRendering();observer?.disconnect();content.replaceChildren();pages=[]
@@ -870,12 +1109,22 @@ async function layoutPdf(anchor){
             if(prefs.flow!=='scrolled'&&i!==(anchor?.page??0)&&!(prefs.spread&&i===(anchor?.page??0)+1))el.hidden=true
             content.append(el);pages.push({element:el,scale,epoch})
         }
-        observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
+        observer=new IntersectionObserver(entries=>{if(pdfLayoutPaused)return;for(const e of entries)if(e.isIntersecting)queuePage(Number(e.target.dataset.index),epoch).catch(error=>{if(epoch===layoutGeneration)emit('navigationError',{message:String(error)})})},{root:content,rootMargin:'400px'})
         for(const p of pages)observer.observe(p.element)
         const rendered=await queuePage(anchor?.page??0,epoch)
         if(!rendered||epoch!==layoutGeneration)return false
-        const positioned=await gotoPdf(anchor??{page:0},epoch);return positioned!==false&&epoch===layoutGeneration
-    }finally{if(epoch===layoutGeneration){layingOut=false;pdfViewport=[content.clientWidth,content.clientHeight]}}
+        const positioned=await gotoPdf(anchor??{page:0},epoch)
+        if(positioned!==false&&epoch===layoutGeneration)await restorePdfGeometrySelection(saved,epoch)
+        return positioned!==false&&epoch===layoutGeneration
+    }finally{
+        pdfSelections?.abandon(saved)
+        if(epoch===layoutGeneration){
+            layingOut=false;pdfGeometryMayCollapse=false;pdfViewport=[content.clientWidth,content.clientHeight]
+            // Failed rebuilding can have suppressed the browser's collapsed
+            // event. Reconcile only this current allocation, never a newer one.
+            refreshSelectionGeometry()
+        }
+    }
 }
 async function renderPage(index,epoch){
     const data=pages[index];if(!data||data.epoch!==epoch)return
@@ -909,7 +1158,7 @@ async function renderPage(index,epoch){
             e.preventDefault()
             try{
                 if(a.url)emit('external',{url:a.url})
-                else {emit('navigationJump');await queueNavigation(async()=>{userNavigation();remember();await gotoPdf(await destinationAnchor(a.dest));remember()})}
+                else {clearPdfSelection();emit('navigationJump');await queueNavigation(async()=>{userNavigation();remember();await gotoPdf(await destinationAnchor(a.dest));remember()})}
             }catch(error){emit('navigationError',{message:String(error)})}
         })
         el.append(link)
@@ -954,7 +1203,12 @@ function selectPdfText(index,start,length){
     if(found){const selected=document.getSelection();selected.removeAllRanges();selected.addRange(range);const rect=range.getBoundingClientRect();content.scrollTop+=rect.top-content.getBoundingClientRect().top-content.clientHeight*.35}
 }
 function pdfSelection(){
-    const s=document.getSelection();if(!s?.rangeCount||s.isCollapsed){selection=null;emit('selection',{text:'',anchor:null});return}
+    const s=document.getSelection();if(!s?.rangeCount||s.isCollapsed){
+        if(pdfSelections?.hasSelection&&(pdfSelections.ownsPending||pdfGeometryMayCollapse||pdfLayoutPaused))return
+        invalidatePdfSelection();selection=null;emit('selection',{text:'',anchor:null});return
+    }
+    if(pdfSelections?.expectedSelection(s))return
+    invalidatePdfSelection()
     const r=s.getRangeAt(0),segments=[]
     for(let i=0;i<pages.length;i++){
         const p=pages[i],layer=p.element.querySelector('.textLayer');if(!layer||!r.intersectsNode(layer))continue
@@ -967,6 +1221,7 @@ function pdfSelection(){
     }
     if(!segments.length)return
     selected({text:s.toString(),anchor:{page:segments[0].page,segments},reference:pdfReference(segments[0].page),order:segments[0].page},r)
+    rememberPdfSelection()
 }
 function paintPdf(){
     for(const p of pages)p.element.querySelectorAll('.annotation-mark').forEach(x=>x.remove())
@@ -993,6 +1248,7 @@ function requestSearch(query,queryId,offset=0,limit=200){
     const operation=searchTail.catch(()=>{}).then(()=>token===generation?search(query,queryId,token,offset,limit):null)
     searchTail=operation;return operation
 }
+const searchYield=()=>new Promise(resolve=>setTimeout(resolve,0))
 async function search(query,queryId,token,offset=0,limit=200){
     const sourceView=view,sourcePdf=pdf
     offset=Number.isSafeInteger(offset)&&offset>=0?offset:0
@@ -1010,7 +1266,7 @@ async function search(query,queryId,token,offset=0,limit=200){
         if(!query){result('searchDone',{total:0,offset,limit});return}
         if(sourceView){
             // Supported publication and CFI APIs keep the application matcher
-            // independent of the inherited locally patched Foliate search.js.
+            // independent of Foliate's unchanged search implementation.
             const sections=sourceView.book.sections
             for(let index=0;index<sections.length;index++){
                 if(!current())return
@@ -1024,10 +1280,10 @@ async function search(query,queryId,token,offset=0,limit=200){
                         if(!current())return
                         match(()=>({anchor:textAnchor(sourceView.getCFI(index,item.range),index),...excerpt(item.excerptParts),reference:sourceView.getProgressOf(index,item.range).tocItem?.label??''}))
                         // A dense chapter must still yield for request cancellation.
-                        if(++count%1000===0){flush();await nextFrame();if(!current())return}
+                        if(++count%1000===0){flush();await searchYield();if(!current())return}
                     }
                 }
-                flush();result('searchProgress',{progress:(index+1)/sections.length});await nextFrame()
+                flush();result('searchProgress',{progress:(index+1)/sections.length});await searchYield()
             }
         }else if(sourcePdf)for(let i=0;i<sourcePdf.numPages;i++){
             if(!current())return
@@ -1036,9 +1292,9 @@ async function search(query,queryId,token,offset=0,limit=200){
             let count=0
             for(const range of literalRanges(data.text,query)){
                 match(()=>({anchor:{page:i,textOffset:data.positions[range.start],textLength:data.positions[range.end]-data.positions[range.start]},...excerpt(excerptParts(data.text,range)),reference:pdfReference(i)}))
-                if(++count%1000===0){flush();await nextFrame();if(!current())return}
+                if(++count%1000===0){flush();await searchYield();if(!current())return}
             }
-            flush();result('searchProgress',{progress:(i+1)/sourcePdf.numPages});await nextFrame()
+            flush();result('searchProgress',{progress:(i+1)/sourcePdf.numPages});await searchYield()
         }else throw Error('The publication reader is not ready')
         flush();result('searchDone',{total,offset,limit})
     }catch(error){flush();result('searchError',{message:String(error),total,offset,limit,incomplete:true})}
@@ -1083,19 +1339,23 @@ function keys(e){
     }
 }
 document.addEventListener('keydown',keys)
+document.addEventListener('pointerdown',event=>{
+    if(pdf&&event.isTrusted&&event.button===0&&content.contains(event.target))invalidatePdfSelection()
+},{capture:true,passive:true})
+document.addEventListener('keydown',event=>{
+    if(!pdf||!event.isTrusted||event.isComposing)return
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown','Backspace','Delete'].includes(event.key)||
+        (event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='a')invalidatePdfSelection()
+},{capture:true})
+observePublicationFocus(document)
 content.addEventListener('pointerdown',userNavigation,{passive:true})
 content.addEventListener('wheel',userNavigation,{passive:true})
 content.addEventListener('touchstart',userNavigation,{passive:true})
-new ResizeObserver(()=>{if(pdf){clearTimeout(window.pdfResizeTimer);window.pdfResizeTimer=setTimeout(()=>queueNavigation(async()=>{
-    // Layout itself changes scrollbars. Only rebuild for a new settled viewport,
-    // and let earlier navigation finish before capturing its current anchor.
-    if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight)return
-    await relayoutPdf(location.anchor)
-}).catch(error=>emit('navigationError',{message:String(error)})),150)}}).observe(content)
+new ResizeObserver(()=>{scheduleSelectionGeometry();if(pdf)schedulePdfResize()}).observe(content)
 function emitPassage(request,ignoreSelection=false){
     if(isComic()){emit('passage',{request,text:'',anchor:location.anchor,reference:location.reference,selected:false});return}
         let passage=ignoreSelection?null:selection
-        if(!passage&&view){const index=view.resolveCFI(location.anchor.cfi)?.index??0;let range=currentRange;if(!range){const doc=view.renderer.getContents().find(x=>x.index===index)?.doc;if(doc){range=doc.createRange();range.selectNodeContents(doc.body??doc.documentElement)}}if(range)passage={text:range.toString(),anchor:textAnchor(view.getCFI(index,range),index),reference:location.reference}}
+        if(!passage&&view){const index=view.resolveCFI(location.anchor.cfi)?.index??0;let range=currentRange;if(!range){const doc=getContents(view).find(x=>x.index===index)?.doc;if(doc){range=doc.createRange();range.selectNodeContents(doc.body??doc.documentElement)}}if(range)passage={text:range.toString(),anchor:textAnchor(view.getCFI(index,range),index),reference:location.reference}}
         if(!passage&&pdf){const index=location.anchor?.page??0,p=pages[index],layer=p?.element.querySelector('.textLayer');if(layer){
             const rect=p.element.getBoundingClientRect(),top=Math.max(rect.top,content.getBoundingClientRect().top),spans=[...layer.querySelectorAll('span')].filter(s=>s.getBoundingClientRect().bottom>=top),text=spans.map(s=>s.textContent).join(' '),boxes=spans.map(s=>s.getBoundingClientRect()).map(r=>[...p.viewport.convertToPdfPoint(r.left-rect.left,r.top-rect.top),...p.viewport.convertToPdfPoint(r.right-rect.left,r.bottom-rect.top)])
             passage={text,anchor:{page:index,segments:[{page:index,boxes,start:0,length:text.length}]},reference:location.reference}
@@ -1108,7 +1368,31 @@ function queueNavigation(operation){
 async function dispatch(c){
     if(c.session!=null&&c.session!==session)return
     try{c=receiveCommand(c);if(!c)return}catch(error){emit('bridgeError',{direction:'command',message:String(error)});return}
-    if((isComic()||activeFormat==='pdf')&&['goto','back','forward','next','previous','advanceSpeech','appearance','cancelAppearance','flush'].includes(c.action)){
+    // Accepted navigation supersedes selection immediately, before a previous
+    // geometry operation can finish and restore its obsolete source range.
+    if(pdf&&['open','goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){
+        clearPdfSelection()
+    }
+    // Pause is accepted before entering the navigation queue. This fences any
+    // resize callback that races the drain, and resume never waits behind work
+    // whose display frames require the newly visible native surface.
+    if(c.action==='layoutVisibility'){
+        try{return await layoutVisibility(c)}catch(error){emit('layoutVisibility',{request:c.request,revision:c.revision,visible:c.visible,message:String(error)});return}
+    }
+    if(pdf&&pdfLayoutPaused&&['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){
+        // Background speech can wait outside the render queue across a brief
+        // pane resize. Stop, expiry or a different renderer abandons its jump.
+        const resumed=c.action==='advanceSpeech'&&await waitForPdfResume()
+        if(c.session!=null&&c.session!==session)return
+        if(!resumed){
+            const message=strings.navigationInterrupted??'Publication navigation is unavailable'
+            if(c.action==='advanceSpeech')emit('passage',{request:c.request,text:'',message})
+            else if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message})
+            else emit('navigationError',{message})
+            return
+        }
+    }
+    if((isComic()||fixedLayout||activeFormat==='pdf')&&['goto','back','forward','next','previous','advanceSpeech','appearance','cancelAppearance','flush'].includes(c.action)){
         return queueNavigation(()=>dispatchCommand(c))
     }
     return dispatchCommand(c)
@@ -1136,23 +1420,23 @@ async function dispatchCommand(c){
         if(c.request!=null)emit('appearanceResult',{request:c.request,...(!applied?{cancelled:true,message:'Appearance change cancelled'}:{})})
         break
     }
-    case 'speaking':spokenAnchor=c.anchor;await paintSpeaking();break
-    case 'next':if(view)await view.next();else await gotoPdf({page:Math.min(pdf.numPages-1,(location.anchor?.page??0)+(prefs.spread?2:1))});break
-    case 'previous':if(view)await view.prev();else await gotoPdf({page:Math.max(0,(location.anchor?.page??0)-(prefs.spread?2:1))});break
-    case 'goto':{const owner=session;remember();if(view){await gotoEpub(c.anchor);if(isComic())remember();}else {const usable=await gotoPdf(c.anchor);if(usable===false)throw Error(strings.navigationInterrupted);remember()}if(c.request!=null&&owner===session)emit('navigationResult',{request:c.request});break}
-    case 'back':if(isComic()){if(historyIndex>0){historyIndex--;await gotoEpub(history[historyIndex])}}else if(view)view.history.back();else if(historyIndex>0){historyIndex--;await gotoPdf(history[historyIndex])}break
-    case 'forward':if(isComic()){if(historyIndex<history.length-1){historyIndex++;await gotoEpub(history[historyIndex])}}else if(view)view.history.forward();else if(historyIndex<history.length-1){historyIndex++;await gotoPdf(history[historyIndex])}break
+    case 'speaking':if(c.anchor==null){for(const cancel of pdfResumeWaiters)cancel(false);pdfResumeWaiters.clear()}spokenAnchor=c.anchor;await paintSpeaking();break
+    case 'next':if(fixedLayout){const shown=fixedLayout.visibleContents().map(part=>part.index);await gotoEpub(isComic()?{page:Math.min(view.book.sections.length-1,Math.max(fixedLayout.activeIndex,...shown)+1)}:{index:Math.min(view.book.sections.length-1,Math.max(fixedLayout.activeIndex,...shown)+1)})}else if(view)await view.next();else await gotoPdf({page:Math.min(pdf.numPages-1,(location.anchor?.page??0)+(prefs.spread?2:1))});break
+    case 'previous':if(fixedLayout){const shown=fixedLayout.visibleContents().map(part=>part.index),index=Math.max(0,Math.min(fixedLayout.activeIndex,...shown)-1);await gotoEpub(isComic()?{page:index}:{index})}else if(view)await view.prev();else await gotoPdf({page:Math.max(0,(location.anchor?.page??0)-(prefs.spread?2:1))});break
+    case 'goto':{const owner=session;remember();if(view){await gotoEpub(c.anchor);if(fixedLayout)remember();}else {const usable=await gotoPdf(c.anchor);if(usable===false)throw Error(strings.navigationInterrupted);remember()}if(c.request!=null&&owner===session)emit('navigationResult',{request:c.request});break}
+    case 'back':if(fixedLayout){if(historyIndex>0){const target=historyIndex-1;await gotoEpub(history[target]);historyIndex=target;reportNavigation()}}else if(view)view.history.back();else if(historyIndex>0){historyIndex--;await gotoPdf(history[historyIndex])}break
+    case 'forward':if(fixedLayout){if(historyIndex<history.length-1){const target=historyIndex+1;await gotoEpub(history[target]);historyIndex=target;reportNavigation()}}else if(view)view.history.forward();else if(historyIndex<history.length-1){historyIndex++;await gotoPdf(history[historyIndex])}break
     case 'search':await requestSearch(c.query,c.queryId,c.offset,c.limit);break
     case 'cancelSearch':if(acceptSearchCommand(c.queryId,false)){generation++;view?.clearSearch()}break
     case 'annotations':await receiveAnnotations(c);break
     case 'passage':emitPassage(c.request);break
-    case 'advanceSpeech':if(view){if(view.isFixedLayout)await view.goTo((location.anchor?.index??0)+1);else await view.next();}else await gotoPdf({page:(location.anchor?.page??0)+1});emitPassage(c.request,true);break
-    case 'focus':if(view)view.renderer.focusView();else content.focus();break
+    case 'advanceSpeech':if(fixedLayout)await gotoEpub({index:(location.anchor?.index??0)+1});else if(view)await view.next();else await gotoPdf({page:(location.anchor?.page??0)+1});emitPassage(c.request,true);break
+    case 'focus':if(fixedLayout)fixedLayout.focus();else if(view)view.renderer.focusView();else content.focus();break
     case 'outline':if(view)await enrichEpubOutline(view.book,session);else if(pdf)await enrichPdfOutline().catch(()=>emit('metadata',{outlineFailed:true}));break
     case 'thumbnailWindow':setThumbnailWindow(c.pages,c.request);break
     case 'thumbnail':if((pdf||isComic())&&validPage(c.page,pdf?.numPages??view.book.sections.length))queueThumbnail(c.page,c.request);break
-    case 'flush':await appearanceOperation;await annotationOperation;if(isComic())captureComicLocation();else if(pdf&&location.anchor?.page!=null){const index=location.anchor.page,p=pages[index];if(p)location={...location,anchor:pdfAnchor(index,Math.max(0,content.scrollTop-p.element.offsetTop)/p.element.offsetHeight)}}emit('location',location);emit('flushed',{request:c.request});break
-    }}catch(e){if(isComic()&&view?.book?.releaseExcept)view.book.releaseExcept(new Set(view.renderer.getContents().map(x=>x.index)));if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});if(e.cacheFailureReported||c.action==='open'&&cacheFailureReported)return;emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e),cacheFailure:c.action==='open'&&c.format!=='pdf'})}
+    case 'flush':await appearanceOperation;await annotationOperation;if(isComic())captureComicLocation();else if(pdf)capturePdfLocation();emit('location',location);emit('flushed',{request:c.request});break
+    }}catch(e){if(isComic()&&view?.book?.releaseExcept)view.book.releaseExcept(new Set(getContents(view).map(x=>x.index)));if(c.action==='appearance'){if(c.request!=null)emit('appearanceResult',{request:c.request,message:String(e)});else emit('navigationError',{message:String(e)});return}if(c.action==='goto'&&c.request!=null)emit('navigationResult',{request:c.request,message:String(e)});if(e.cacheFailureReported||c.action==='open'&&cacheFailureReported)return;emit(['goto','back','forward','next','previous','advanceSpeech'].includes(c.action)?'navigationError':'error',{message:String(e),cacheFailure:c.action==='open'&&c.format!=='pdf'})}
 }
 const thumbnails=[],thumbnailPending=new Map(),thumbnailTasks=new Map();let thumbnailRunning=0,thumbnailEpoch=0,thumbnailRequest=0
 function setThumbnailWindow(indices,request){
@@ -1194,8 +1478,8 @@ async function pumpThumbnails(){
     finally{clearTimeout(timer);if(canvas){canvas.width=0;canvas.height=0}thumbnailTasks.delete(job);if(thumbnailPending.get(index)===job)thumbnailPending.delete(index);thumbnailRunning--;pumpThumbnails()}
     pumpThumbnails()
 }
-window.busybooks={dispatch};emit('ready')
+window.busybooks={dispatch,contents:()=>getContents(view)};emit('ready')
 
 // Application appearance is resolved in Flutter, including system changes.
 
-window.addEventListener?.('pagehide',()=>{generation++;thumbnailEpoch++;for(const task of thumbnailTasks.values())task.cancel();cancelRegion();view?.close();view?.book?.destroy?.();pdf?.destroy()},{once:true})
+window.addEventListener?.('pagehide',()=>{generation++;selectionGeometryRevision++;invalidatePdfSelection();pdfSelectionOwner=null;thumbnailEpoch++;for(const task of thumbnailTasks.values())task.cancel();cancelRegion();view?.close();view?.book?.destroy?.();pdf?.destroy()},{once:true})

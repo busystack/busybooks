@@ -124,6 +124,23 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
         ? fl_value_lookup_string(args, "restoreFocus") : nullptr;
     if (!restore || fl_value_get_type(restore) != FL_VALUE_TYPE_BOOL || fl_value_get_bool(restore))
       gtk_widget_grab_focus(GTK_WIDGET(h->web));
+  } else if (strcmp(name, "hasFocus") == 0) {
+    auto* session = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
+        ? fl_value_lookup_string(args, "session") : nullptr;
+    if (!session || fl_value_get_type(session) != FL_VALUE_TYPE_STRING) {
+      fl_method_call_respond_error(method, "reader-focus", "Missing focus owner", nullptr, nullptr); return;
+    }
+    auto* widget = GTK_WIDGET(h->web);
+    auto* window = gtk_widget_get_toplevel(widget);
+    auto* focus = GTK_IS_WINDOW(window)
+        ? gtk_window_get_focus(GTK_WINDOW(window)) : nullptr;
+    const bool focused = h->session == fl_value_get_string(session) &&
+        !h->popover->IsRequested() && gtk_widget_get_mapped(widget) &&
+        GTK_IS_WINDOW(window) && gtk_window_is_active(GTK_WINDOW(window)) &&
+        focus != nullptr && (focus == widget || gtk_widget_is_ancestor(focus, widget));
+    g_autoptr(FlValue) value = fl_value_new_bool(focused);
+    fl_method_call_respond_success(method, value, nullptr);
+    return;
   } else if (strcmp(name, "focusChrome") == 0) {
     auto* session = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
         ? fl_value_lookup_string(args, "session") : nullptr;
@@ -135,9 +152,15 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
         gtk_widget_get_mapped(h->chrome) && GTK_IS_WINDOW(window) &&
         gtk_window_is_active(GTK_WINDOW(window))) gtk_widget_grab_focus(h->chrome);
   } else if (strcmp(name, "focus") == 0) {
+    auto* session = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
+        ? fl_value_lookup_string(args, "session") : nullptr;
+    if (!session || fl_value_get_type(session) != FL_VALUE_TYPE_STRING) {
+      fl_method_call_respond_error(method, "reader-focus", "Missing focus owner", nullptr, nullptr); return;
+    }
     auto* widget=GTK_WIDGET(h->web);
     auto* window=gtk_widget_get_toplevel(widget);
-    if(gtk_widget_get_mapped(widget)&&GTK_IS_WINDOW(window)&&gtk_window_is_active(GTK_WINDOW(window)))gtk_widget_grab_focus(widget);
+    if(h->session == fl_value_get_string(session) && !h->popover->IsRequested() &&
+        gtk_widget_get_mapped(widget)&&GTK_IS_WINDOW(window)&&gtk_window_is_active(GTK_WINDOW(window)))gtk_widget_grab_focus(widget);
   } else if (strcmp(name, "open") == 0) {
     h->popover->Hide();
     auto* path_value = args && fl_value_get_type(args)==FL_VALUE_TYPE_MAP ? fl_value_lookup_string(args,"publicationPath") : nullptr;

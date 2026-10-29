@@ -45,6 +45,14 @@ Popovers and native menus keep the publication visible; main-route dialogs hide
 it. Channel readiness, first-frame readiness and a Flutter paint acknowledgement
 precede presentation/focus. See [workspace architecture](reading-workspace.md).
 
+Reading, Notebook and Split use the same workspace and reader. In Split, the
+WebView2 child is bounded to the reader pane. Native visibility waits for an
+acknowledged current-session pane rectangle, including divider/sidebar changes
+and display scaling. Trusted content-focus events also require current native
+focus; visible Notebook editing does not give the publication keyboard ownership.
+Standalone Notebook suspends the reader, while the approved collapsed Split
+retains it behind the other pane.
+
 The application bootstrap distinguishes the trusted browser ResizeObserver
 notification from script/import/rejection failures. Resize notifications remain
 session-scoped diagnostics; actual exceptions and authored lookalikes remain
@@ -114,8 +122,9 @@ It writes command logs, statuses, log hashes, release-file hashes and
 The native menu probe compiles production `native_menu_host.cpp` with the
 Flutter message codec and exercises actual `TrackPopupMenuEx`, keyboard/pointer
 input, disabled/radio entries, selection validation, session cancellation,
-dismissal, unavailable-host errors and focus return. The font probe uses stock
-Arial and Times New Roman. These can also be run individually after the app build:
+dismissal, unavailable-host errors and focus return. The shared popup geometry
+test checks pane confinement, scaled coordinates and measured-size changes. The font
+probe uses stock Arial and Times New Roman. Run them after the app build:
 
 ```powershell
 cmake -S tools/native_font_probe -B build/native-font-probe
@@ -125,12 +134,18 @@ cmake -S tools/native_menu_probe -B build/native-menu-probe
 cmake --build build/native-menu-probe --config Release
 ./build/native-menu-probe/Release/busybooks_native_menu_probe.exe
 ./build/native-menu-probe/Release/busybooks_menu_selection_test.exe
+./build/native-menu-probe/Release/busybooks_popover_geometry_test.exe
 ```
 
 Automated probes do not establish all GUI behavior. Actual Windows acceptance
 also checks WebView2 rendering/selection/footnotes, native popover placement and
 focus, minimize/restore, 100%/150%/200% display scaling, page/region notes after
 cache deletion/restart, native failed-save/Retry and backup/restore dialogs.
+Exercise all three book views, divider dragging/keyboard resizing, the approved
+collapsed-pane/widening behavior, note-to-passage alignment, focused-pane Ctrl+F
+and renderer recovery in Split. Use the shared
+[Split acceptance procedure](../../tools/README.md#split-workspace-acceptance),
+including bounds, modal/popup exclusion and hidden-pane focus checks.
 Linux, Chromium and controlled Flutter results do not establish Win32/WebView2
 behavior. Physical GPU/driver performance, complex IME composition, audible voice
 quality and a full screen-reader audit need their own checks.

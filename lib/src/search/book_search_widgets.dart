@@ -13,6 +13,7 @@ import '../app/command_registry.dart';
 import '../app/localization.dart';
 import '../app/product_actions.dart';
 import '../book_workspace/application/book_sidebar_controller.dart';
+import '../book_workspace/application/book_presentation.dart';
 import '../library/application/collection_view_controller.dart';
 import '../notebook/presentation/book_view_selector.dart';
 import '../reading/application/reader_controller.dart';
@@ -125,28 +126,38 @@ Future<void> _activate(
       BusyBooksSizes.workspaceSidebarBreakpoint;
   final search = container.read(bookSearchSessionProvider.notifier);
   final state = container.read(bookSearchSessionProvider);
+  final origin = container
+      .read(appRouterProvider)
+      .routeInformationProvider
+      .value
+      .uri
+      .path;
+  var wantsPassage = false;
   String? targetRoute, targetBookId;
   switch (result) {
     case AnnotationSearchResult():
       targetBookId = result.annotation.bookId;
-      targetRoute =
+      wantsPassage =
           (passage ?? state.category == BookSearchCategory.bookmarks) &&
-              (result.book?.available == true ||
-                  result.book?.status == 'unverified')
-          ? '/read/$targetBookId'
-          : '/notebook/$targetBookId';
+          (result.book?.available == true ||
+              result.book?.status == 'unverified');
+      targetRoute = wantsPassage
+          ? readingTargetRoute(origin, targetBookId)
+          : notebookTargetRoute(origin, targetBookId);
     case BookMetadataSearchResult():
       targetBookId = result.book.id;
-      targetRoute = '/read/$targetBookId';
+      targetRoute = readingTargetRoute(origin, targetBookId);
     case RecentBookSearchResult():
       targetBookId = result.resource.bookId;
-      targetRoute = targetBookId == null ? '/workspace' : '/read/$targetBookId';
+      targetRoute = targetBookId == null
+          ? '/workspace'
+          : readingTargetRoute(origin, targetBookId);
     case BookTextSearchResult():
       targetBookId = result.bookId;
-      targetRoute = '/read/$targetBookId';
+      targetRoute = readingTargetRoute(origin, targetBookId);
     case ChapterSearchResult():
       targetBookId = result.bookId;
-      targetRoute = '/read/$targetBookId';
+      targetRoute = readingTargetRoute(origin, targetBookId);
     case BookActionSearchResult():
       break;
   }
@@ -205,7 +216,7 @@ Future<void> _activate(
             );
           }
         case AnnotationSearchResult():
-          if (targetRoute == '/read/$targetBookId') {
+          if (wantsPassage) {
             await openReading(
               operationContext,
               ref,

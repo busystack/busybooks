@@ -3,7 +3,7 @@
     const assert=(value,message)=>{if(!value)throw Error(message)}
     const events=[],checks=[],view=document.querySelector('foliate-view')
     window.busybooksProbe=event=>events.push(event)
-    const doc=()=>view.renderer.getContents()[0].doc
+    const doc=()=>busybooks.contents()[0].doc
     const style=node=>node.ownerDocument.defaultView.getComputedStyle(node)
     const font=(index,extra={})=>({publisher:false,font:nativeFontData[index].choice,resolvedFont:nativeFontData[index].resolved,size:20,weight:400,line:1.5,flow:'paginated',margin:32,width:720,...extra})
     const apply=(index,extra={},request=1)=>busybooks.dispatch({action:'appearance',request,value:font(index,extra)})
@@ -50,16 +50,11 @@
         const note=await openedNote
         assert(nativeCommittedAppearance?.font?.family===nativeFontData[0].choice.family,'Regression must use the book preference read back from SQLite')
         const saved={...nativeCommittedAppearance,resolvedFont:nativeFontData[0].resolved},before=raster(family()),history=[view.history.canGoBack,view.history.canGoForward]
-        const original=FontFace.prototype.load
-        let release,started
-        const entered=new Promise(resolve=>started=resolve),gate=new Promise(resolve=>release=resolve)
-        FontFace.prototype.load=function(){started();return gate.then(()=>original.call(this))}
+        // Use the real asynchronous FontFace operations. Exact delayed-load and
+        // rollback ordering are tested with owned objects in typography_probe.mjs.
         const changing=apply(1,{},81)
-        await entered
-        // Hide invalidates the controller's pending write. The same committed
-        // snapshot is used on return to the retained renderer.
         const cancelling=busybooks.dispatch({action:'cancelAppearance'})
-        release();await changing;await cancelling;FontFace.prototype.load=original
+        await changing;await cancelling
         assert(raster(family())===before,'Cancellation must restore the displayed committed font')
         assert(raster(style(note.querySelector('p')).fontFamily,400,false,document)===before,'The open footnote must retain the committed rendered family too')
         assert(events.some(e=>e.type==='appearanceResult'&&e.request===81&&e.cancelled),'A cancelled font change must not report success')
@@ -70,47 +65,58 @@
         const resolved=view.resolveNavigation(passage),rect=resolved.anchor(doc()).getBoundingClientRect(),frame=doc().defaultView.frameElement.getBoundingClientRect()
         assert(rect.right>=0&&rect.left<=frame.width,'Hide/return must keep the logical passage displayed')
         assert(JSON.stringify(history)===JSON.stringify([view.history.canGoBack,view.history.canGoForward]),'Cancellation must not add reading history')
-        checks.push('cancelled-font-retained-return-committed-raster-and-passage')
-        // Cancellation after publication of styles, while layout readiness is
-        // still pending, must roll back immediately and reject late restoration.
-        const fontSet=doc().fonts,ready=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(fontSet),'ready').get
+        checks.push('real-font-load-cancellation-committed-raster-footnote-passage-history')
+        const observeFamily=(test,action,message)=>new Promise((resolve,reject)=>{
+            const observer=new MutationObserver(()=>{
+                if(!test())return
+                observer.disconnect();clearTimeout(timer)
+                try{resolve({operation:action()})}catch(error){reject(error)}
+            })
+            observer.observe(doc().body,{attributes:true,attributeFilter:['style'],subtree:true})
+            const timer=setTimeout(()=>{observer.disconnect();reject(Error(message))},10000)
+        })
+        // Observe an actual published inline-family change, then invalidate it
+        // while the adapter is still completing native font/layout work.
         const committedAlias=family()
-        let readyEntered,readyRelease,hold=true
-        const readyStarted=new Promise(resolve=>readyEntered=resolve),readyGate=new Promise(resolve=>readyRelease=resolve)
-        Object.defineProperty(fontSet,'ready',{configurable:true,get(){if(hold&&family()!==committedAlias){readyEntered();return readyGate}return ready.call(this)}})
-        const late=apply(1,{},84);await readyStarted
-        await busybooks.dispatch({action:'cancelAppearance'})
+        const styled=observeFamily(()=>family()!==committedAlias,()=>busybooks.dispatch({action:'cancelAppearance'}),'Native candidate family was not published')
+        const late=apply(1,{},84),postStyle=await styled
+        await Promise.all([late,postStyle.operation])
         assert(raster(family())===before,'Cancellation after style mutation must restore committed glyphs')
-        hold=false;readyRelease();await late;delete fontSet.ready
         assert(events.some(e=>e.type==='appearanceResult'&&e.request===84&&e.cancelled),'Layout-stage cancellation must not be acknowledged as success')
-        // Navigation during a delayed font load owns the passage on rollback.
-        let enterNavigation,releaseNavigation
-        const navigationStarted=new Promise(resolve=>enterNavigation=resolve),navigationGate=new Promise(resolve=>releaseNavigation=resolve)
-        FontFace.prototype.load=function(){enterNavigation();return navigationGate.then(()=>original.call(this))}
-        const navigating=apply(1,{},85);await navigationStarted
-        await busybooks.dispatch({action:'goto',anchor:{index:1}})
+        // Native navigation and a real pending replacement overlap. The exact
+        // delayed-load ordering has separate controlled adapter coverage.
+        const navigating=apply(1,{},85)
+        const navigation=busybooks.dispatch({action:'goto',anchor:{index:1}})
         const navigationCancel=busybooks.dispatch({action:'cancelAppearance'})
-        FontFace.prototype.load=original;releaseNavigation();await navigating;await navigationCancel
-        assert(view.renderer.getContents()[0].index===1,'Cancellation cannot undo subsequent user navigation')
+        await Promise.all([navigating,navigation,navigationCancel])
+        assert(busybooks.contents()[0].index===1,'Cancellation cannot undo subsequent user navigation')
         assert(raster(family())===before,'The newly navigated chapter must use the committed family')
-        checks.push('post-style-cancellation-and-navigation-ownership')
-        // Hold rollback layout itself, accept a newer selection, then finish
-        // both obsolete tasks in reverse order. Neither may repaint that choice.
-        const retained=doc().fonts,getReady=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(retained),'ready').get,retainedAlias=family()
-        let enteredOld,releaseOld,enteredRollback,releaseRollback,holding=true
-        const oldStarted=new Promise(resolve=>enteredOld=resolve),oldGate=new Promise(resolve=>releaseOld=resolve)
-        const rollbackStarted=new Promise(resolve=>enteredRollback=resolve),rollbackGate=new Promise(resolve=>releaseRollback=resolve)
-        FontFace.prototype.load=function(){enteredOld();return oldGate.then(()=>original.call(this))}
-        const oldChange=apply(1,{},86);await oldStarted
-        Object.defineProperty(retained,'ready',{configurable:true,get(){if(holding&&family()===retainedAlias){enteredRollback();return rollbackGate}return getReady.call(this)}})
-        const oldCancel=busybooks.dispatch({action:'cancelAppearance'});await rollbackStarted
-        FontFace.prototype.load=original
-        await apply(1,{},87)
+        checks.push('native-post-style-cancellation-and-overlapping-navigation-ownership')
+        // Observe rollback publication itself and immediately submit a newer
+        // choice. No engine constructor, method or property is replaced.
+        const retainedAlias=family()
+        let stage=0,oldCancel,newChange
+        const superseded=new Promise((resolve,reject)=>{
+            const observer=new MutationObserver(()=>{
+                if(stage===0&&family()!==retainedAlias){
+                    stage=1;oldCancel=busybooks.dispatch({action:'cancelAppearance'})
+                }else if(stage===1&&family()===retainedAlias){
+                    stage=2;observer.disconnect();clearTimeout(timer)
+                    newChange=apply(1,{},87);resolve()
+                }
+            })
+            observer.observe(doc().body,{attributes:true,attributeFilter:['style'],subtree:true})
+            const timer=setTimeout(()=>{observer.disconnect();reject(Error('Native candidate and rollback families were not both published'))},10000)
+        })
+        const oldChange=apply(1,{},86)
+        await superseded;await Promise.all([oldChange,oldCancel,newChange])
         const newest=raster(family())
         assert(newest!==before,'Newer accepted family must actually render different glyphs')
-        holding=false;releaseRollback();releaseOld();await oldChange;await oldCancel;delete retained.ready
+        assert(events.some(e=>e.type==='appearanceResult'&&e.request===86&&e.cancelled),'Superseded native candidate must not report success')
+        assert(events.some(e=>e.type==='appearanceResult'&&e.request===87&&!e.message),'Newer native choice must succeed')
+        await doc().fonts.ready
         assert(raster(family())===newest,'A late load or rollback cannot overwrite a newer selection')
-        checks.push('newer-choice-supersedes-delayed-rollback')
+        checks.push('native-observed-rollback-superseded-by-newer-choice')
     }
     window.webkit.messageHandlers.busybooks.postMessage(JSON.stringify({type:'typographyProof',passed:true,checks}))
 })().catch(error=>window.webkit.messageHandlers.busybooks.postMessage(JSON.stringify({type:'typographyProof',passed:false,message:String(error),stack:error.stack})))

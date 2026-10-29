@@ -372,4 +372,3 @@ Vendored libraries:
 - [zip.js](https://github.com/gildas-lormeau/zip.js) is licensed under the BSD-3-Clause license.
 - [fflate](https://github.com/101arrowz/fflate) is MIT licensed.
 - [PDF.js](https://mozilla.github.io/pdf.js/) is licensed under Apache.
-

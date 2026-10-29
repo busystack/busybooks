@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../book_workspace/application/book_presentation.dart';
 import 'app_router.dart';
 import 'busybooks_design.dart';
 import 'busybooks_dialogs.dart';
@@ -37,18 +38,27 @@ class BusyBooksMainMenuButton extends ConsumerWidget {
     bool current() =>
         ref.read(appRouterProvider).routeInformationProvider.value.uri.path ==
         path;
-    PopupMenuEntry<String> item(String id, IconData icon, {bool? selected}) =>
-        BusyBooksPopupMenuItem(
-          value: id,
-          label: registry[id]!.label(context),
-          icon: icon,
-          shortcut: registry[id]!.shortcut?.label,
-          gtkAccelerator: registry[id]!.shortcut?.gtkAccelerator,
-          enabled: registry[id]!.canExecute,
-          checked: selected ?? false,
-          trailingCheck: selected != null,
-          mutuallyExclusive: id != BusyBooksCommandIds.fullScreen,
-        );
+    PopupMenuEntry<String> item(String id, IconData icon, {bool? selected}) {
+      final command = registry[id]!;
+      final reason = id == BusyBooksCommandIds.viewSplit && !command.canExecute
+          ? command.disabledReason?.call(context)
+          : null;
+      return BusyBooksPopupMenuItem(
+        value: id,
+        label: [
+          command.label(context),
+          if (reason != null && reason.isNotEmpty) reason,
+        ].join(' · '),
+        icon: icon,
+        shortcut: registry[id]!.shortcut?.label,
+        gtkAccelerator: registry[id]!.shortcut?.gtkAccelerator,
+        enabled: registry[id]!.canExecute,
+        checked: selected ?? false,
+        trailingCheck: selected != null,
+        mutuallyExclusive: id != BusyBooksCommandIds.fullScreen,
+      );
+    }
+
     return BusyBooksHeaderPopupMenuButton<String>(
       tooltip: l.mainMenu,
       icon: BusyBooksGlyphs.menuVertical,
@@ -63,20 +73,24 @@ class BusyBooksMainMenuButton extends ConsumerWidget {
         item(BusyBooksCommandIds.openCollection, BusyBooksGlyphs.folderOpen),
         item(BusyBooksCommandIds.createCollection, BusyBooksGlyphs.add),
         const PopupMenuDivider(),
-        if (!bookViewSelectorVisible &&
-            (path.startsWith('/read/') || path.startsWith('/notebook/')))
+        if (!bookViewSelectorVisible && bookViewForRoute(path) != null)
           BusyBooksSubmenuItem(
             label: l.viewMode,
             items: [
               item(
                 BusyBooksCommandIds.viewReading,
                 BusyBooksGlyphs.previewView,
-                selected: path.startsWith('/read/'),
+                selected: bookViewForRoute(path) == BookView.reading,
               ),
               item(
                 BusyBooksCommandIds.viewNotebook,
                 BusyBooksGlyphs.notebookView,
-                selected: path.startsWith('/notebook/'),
+                selected: bookViewForRoute(path) == BookView.notebook,
+              ),
+              item(
+                BusyBooksCommandIds.viewSplit,
+                BusyBooksGlyphs.splitView,
+                selected: bookViewForRoute(path) == BookView.split,
               ),
             ],
           ),

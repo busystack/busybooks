@@ -46,7 +46,7 @@ add_dependencies(${BINARY_NAME} flutter_assemble)
 
 # Official WebView2 SDK, pinned independently from the installed Evergreen runtime.
 include(FetchContent)
-FetchContent_Declare(webview2_sdk URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.3537.50 DOWNLOAD_NAME webview2.zip DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_Declare(webview2_sdk URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.3537.50 URL_HASH SHA256=5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa DOWNLOAD_NAME webview2.zip DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 FetchContent_MakeAvailable(webview2_sdk)
 target_include_directories(${BINARY_NAME} PRIVATE "${webview2_sdk_SOURCE_DIR}/build/native/include")
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -59,5 +59,5 @@ target_compile_features(${BINARY_NAME} PRIVATE cxx_std_17)
 
 file(GLOB WEBVIEW_LICENSES "${webview2_sdk_SOURCE_DIR}/*LICENSE*" "${webview2_sdk_SOURCE_DIR}/*License*" "${webview2_sdk_SOURCE_DIR}/*Notice*")
 if(WEBVIEW_LICENSES)
-  install(FILES ${WEBVIEW_LICENSES} DESTINATION "${CMAKE_INSTALL_PREFIX}/licenses/webview2-sdk" COMPONENT Runtime)
+  install(FILES ${WEBVIEW_LICENSES} DESTINATION "$<TARGET_FILE_DIR:${BINARY_NAME}>/licenses/webview2-sdk" COMPONENT Runtime)
 endif()

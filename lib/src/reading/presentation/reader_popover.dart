@@ -439,31 +439,39 @@ class _ReaderPopoverAppState extends State<ReaderPopoverApp> {
                   },
                 ),
               },
-              child: Material(
-                color: BusyBooksSurfaceColors.of(context).popover,
-                child: d == null || _failedPresentations.contains(owner)
-                    ? const SizedBox.shrink()
-                    : Align(
-                        alignment: Alignment.topLeft,
-                        child: _PopoverContents(
-                          onPainted: (size) => _painted(owner, size),
-                          key: ValueKey(owner),
-                          data: d,
-                          action: send,
-                          isSaving: () =>
-                              _saving.containsValue(owner) ||
-                              _transferring.contains(owner),
-                          unconfirmed: _saving.entries.any(
-                            (e) =>
-                                e.value == owner &&
-                                _unconfirmed.contains(e.key),
+              // The Navigator's route scope is above these Shortcuts. A
+              // noneditable popup needs its own default keyboard target below
+              // them; editor/button autofocus still chooses a child normally.
+              child: FocusScope(
+                key: ValueKey(owner),
+                autofocus: d != null && !_failedPresentations.contains(owner),
+                skipTraversal: true,
+                child: Material(
+                  color: BusyBooksSurfaceColors.of(context).popover,
+                  child: d == null || _failedPresentations.contains(owner)
+                      ? const SizedBox.shrink()
+                      : Align(
+                          alignment: Alignment.topLeft,
+                          child: _PopoverContents(
+                            onPainted: (size) => _painted(owner, size),
+                            key: ValueKey(owner),
+                            data: d,
+                            action: send,
+                            isSaving: () =>
+                                _saving.containsValue(owner) ||
+                                _transferring.contains(owner),
+                            unconfirmed: _saving.entries.any(
+                              (e) =>
+                                  e.value == owner &&
+                                  _unconfirmed.contains(e.key),
+                            ),
+                            saveError: _saveFailure?.owner == owner
+                                ? _saveFailure?.error
+                                : null,
+                            deliveryRejected: _rejected.contains(owner),
                           ),
-                          saveError: _saveFailure?.owner == owner
-                              ? _saveFailure?.error
-                              : null,
-                          deliveryRejected: _rejected.contains(owner),
                         ),
-                      ),
+                ),
               ),
             ),
           ),
@@ -598,26 +606,21 @@ class _PopoverContentsState extends State<_PopoverContents> {
     if (kind == 'lookup') return _lookup(context);
     if (kind == 'appearance') {
       if (d['appearanceVisible'] == false) return const SizedBox.expand();
-      // This surface has no autofocus editor or default button. Keep keyboard
-      // dismissal inside the popover's Shortcuts even before a row is focused.
-      return Focus(
-        autofocus: true,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(BusyBooksSpacing.lg),
-          child: CompactReadingAppearance(
-            key: _naturalContents,
-            preferences: preferences,
-            capabilities: TypographyCapabilities.fromJson(d['typography']),
-            pdf: d['pdf'] == true,
-            comic: d['comic'] == true,
-            onChanged: (value) async {
-              await widget.action('appearance', {'value': value});
-              if (mounted) {
-                setState(() => preferences = {...preferences, ...value});
-              }
-            },
-            onMore: () => act('readingSettings'),
-          ),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(BusyBooksSpacing.lg),
+        child: CompactReadingAppearance(
+          key: _naturalContents,
+          preferences: preferences,
+          capabilities: TypographyCapabilities.fromJson(d['typography']),
+          pdf: d['pdf'] == true,
+          comic: d['comic'] == true,
+          onChanged: (value) async {
+            await widget.action('appearance', {'value': value});
+            if (mounted) {
+              setState(() => preferences = {...preferences, ...value});
+            }
+          },
+          onMore: () => act('readingSettings'),
         ),
       );
     }

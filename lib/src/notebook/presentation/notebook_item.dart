@@ -26,11 +26,14 @@ class NotebookItem extends ConsumerStatefulWidget {
     required this.onSelect,
     required this.active,
     required this.focusRequest,
+    this.focusOnActivate = true,
+    this.onFocus,
   });
   final ReadingAnnotation annotation;
-  final bool selected, active;
+  final bool selected, active, focusOnActivate;
   final int focusRequest;
   final VoidCallback onSelect;
+  final VoidCallback? onFocus;
   @override
   ConsumerState<NotebookItem> createState() => _NotebookItemState();
 }
@@ -47,19 +50,22 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
           .read(notebookControllerProvider)
           .effectiveNote(widget.annotation),
     );
-    _requestFocus();
+    _requestFocus(activation: true);
   }
 
-  void _requestFocus({bool restoring = false}) {
+  void _requestFocus({bool restoring = false, bool activation = false}) {
+    if (activation && !widget.focusOnActivate) return;
     if (widget.selected && widget.active && widget.focusRequest > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
             widget.selected &&
             widget.active &&
+            (!activation || widget.focusOnActivate) &&
             widget.focusRequest > 0 &&
             !(restoring &&
                 FocusManager.instance.primaryFocus
                     is BusyBooksSearchFocusNode)) {
+          widget.onFocus?.call();
           _focus.requestFocus();
         }
       });
@@ -83,6 +89,10 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
         !old.active && widget.active) {
       _requestFocus(
         restoring: old.selected && widget.focusRequest == old.focusRequest,
+        activation:
+            !old.active &&
+            widget.active &&
+            widget.focusRequest == old.focusRequest,
       );
     }
   }
@@ -129,22 +139,30 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
                 ),
                 const SizedBox(width: BusyBooksSpacing.sm),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${annotationTypeLabel(context, a.kind)} · ${annotationReference(context, a, book: ref.read(workspaceControllerProvider).bookById(a.bookId))}',
-                        style: Theme.of(context).textTheme.titleSmall,
+                  child: Semantics(
+                    button: true,
+                    selected: widget.selected,
+                    child: InkWell(
+                      key: ValueKey('notebook-select-${a.id}'),
+                      onTap: widget.onSelect,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${annotationTypeLabel(context, a.kind)} · ${annotationReference(context, a, book: ref.read(workspaceControllerProvider).bookById(a.bookId))}',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          Text(
+                            annotationCreationTime(a) == null
+                                ? l.dateUnavailable
+                                : DateFormat.yMMMd(
+                                    locale,
+                                  ).add_jm().format(annotationCreationTime(a)!),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                      Text(
-                        annotationCreationTime(a) == null
-                            ? l.dateUnavailable
-                            : DateFormat.yMMMd(
-                                locale,
-                              ).add_jm().format(annotationCreationTime(a)!),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 BusyBooksHeaderPopupMenuButton<String>(

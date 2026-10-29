@@ -11,6 +11,10 @@ Features:
 - **Recent** contains books and collections by stable identity.
 - **Notebook** reviews and edits a book's saved passages, bookmarks and private
   notes, including comic page/region notes and while the original is unavailable.
+- **Split** places Reading beside the same Notebook, with an adjustable divider.
+  View changes retain the book's position, notes, filters and drafts. At narrow
+  widths an active Split shows the last focused pane and offers the other;
+  widening restores both panes. Choose Reading or Notebook for a full-width view.
 - **Search** uses one header query and temporary results sidebar for Book Text,
   Notebook, Bookmarks, Chapters, Books, Recent and Actions. Saved-book scopes use
   the database, including unopened books, protected note drafts and missing originals.
@@ -22,6 +26,13 @@ Features:
 A book can belong to multiple collections or none. Positions, annotations and
 appearance follow its SHA-256 identity. Collection removal leaves original files
 and reading data intact. There are no filesystem collection workspaces or imports.
+
+The header View selector offers Reading, Notebook and Split. Split requires room
+for both panes when selected and explains its minimum width when unavailable.
+In Split, selecting a saved annotation reveals its source beside the note; when
+only Notebook fits, use Show in Reading to reveal the source. Ctrl+F searches the
+focused pane, or the last focused pane when invoked from shared controls. Split's
+view command can be assigned in Settings → Keyboard Shortcuts.
 
 ## Build and run
 

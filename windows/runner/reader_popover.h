@@ -32,6 +32,7 @@ class ReaderPopover {
   flutter::EncodableValue data_;
   bool ready_ = false, requested_ = false, restart_ = false;
   int maximum_height_ = 480;
+  RECT placement_bounds_{};
   uint64_t engine_generation_ = 0;
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
   std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> pending_;

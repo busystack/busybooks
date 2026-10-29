@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../app/app_settings.dart';
 import '../../book_workspace/application/book_sidebar_controller.dart';
+import '../../book_workspace/application/book_presentation.dart';
 import '../../core/reading_preferences.dart';
 import '../../core/typography.dart';
 import '../../library/data/file_identity.dart';
@@ -224,11 +225,13 @@ class ReaderController extends Notifier<ReaderState> {
     _searchWaiters.clear();
   }
 
-  Rect viewport = Rect.zero;
+  Rect _viewport = Rect.zero;
+  Rect get viewport => _viewport;
   Map<String, dynamic> _chrome = {};
   Map<String, dynamic>? _popoverSelection;
   String? _annotationId;
   bool _popoverActive = false;
+  bool _popoverNativeOwner = false;
   String? _popoverKind;
   DictionaryRequest? _lookupRequest;
   DictionaryResult? _lookupResult;
@@ -394,6 +397,7 @@ class ReaderController extends Notifier<ReaderState> {
   bool get interactive =>
       state.ready &&
       state.surfaceVisible &&
+      _hasViewport &&
       state.error == null &&
       _routeVisible &&
       _workspaceVisible &&
@@ -403,6 +407,7 @@ class ReaderController extends Notifier<ReaderState> {
   ReaderJumpRequest deferJump({
     required String bookId,
     required Map<String, dynamic> anchor,
+    bool useCurrentOpening = false,
     bool Function()? isCurrent,
     Future<bool> Function()? validate,
     VoidCallback? onReleased,
@@ -414,13 +419,17 @@ class ReaderController extends Notifier<ReaderState> {
       onReleased?.call();
     });
     _pendingJump = request;
-    // Routing to an already-loading /read/id does not create another widget
-    // opening. Attach to that existing request instead of waiting for a new one.
+    // A retained ready reader can be waiting for its measured pane to become
+    // visible. Bind it, and already-loading readers, to this exact opening.
     if (state.bookId == bookId &&
         !_suspended &&
-        !state.ready &&
         state.error == null &&
-        const ['verifying', 'initializing', 'opening'].contains(state.phase)) {
+        (state.ready && useCurrentOpening ||
+            const [
+              'verifying',
+              'initializing',
+              'opening',
+            ].contains(state.phase))) {
       request._openingRevision = _openRevision;
       if (state.phase != 'verifying') request._session = _session;
     }
@@ -495,11 +504,96 @@ class ReaderController extends Notifier<ReaderState> {
   bool get canSearch =>
       state.ready && state.error == null && _routeVisible && !_suspended;
   Future<void> setWorkspaceVisible(bool value) {
+    if (!value) {
+      _focusRevision++;
+      _workspaceVisible = false;
+      return invalidateViewport();
+    }
     _workspaceVisible = value;
     return _applyVisibility();
   }
 
+  /// A geometry transaction hides native pixels without changing the content
+  /// focus intent. Pane/chrome handoffs invalidate that intent separately.
+  Future<void> invalidateViewport() {
+    _viewportRevision++;
+    _viewportSession = null;
+    return _applyVisibility();
+  }
+
+  bool get hasCurrentViewport => _hasViewport;
+
+  void requestViewportLayout() {
+    events.add({'type': 'viewportNeeded', 'session': _session});
+  }
+
+  Completer<void>? _viewportSettled;
+  int _viewportRevision = 0;
+  String? _viewportSession;
+  Rect? _acknowledgedViewport;
+  bool get _hasViewport =>
+      _viewportSession == _session &&
+      _acknowledgedViewport == viewport &&
+      viewport.width > 0 &&
+      viewport.height > 0;
+
+  /// Native bounds must acknowledge the current measured pane before reveal.
+  /// The caller owns its widget/layout lifetime; the controller owns renderer
+  /// replacement and rejects a late acknowledgement from either owner.
+  Future<bool> updateViewport(
+    Rect rect, {
+    required String bookId,
+    bool Function()? isCurrent,
+  }) async {
+    if (!rect.isFinite || rect.isEmpty || state.bookId != bookId) return false;
+    final revision = ++_viewportRevision, session = _session;
+    bool current() =>
+        ref.mounted &&
+        revision == _viewportRevision &&
+        session == _session &&
+        state.bookId == bookId &&
+        (isCurrent?.call() ?? true);
+    if (!current()) return false;
+    final settled = Completer<void>();
+    _viewportSettled = settled;
+    try {
+      if (_popoverActive && _popoverNativeOwner) {
+        await dismissPopover(restoreFocus: false);
+        if (!current()) return false;
+      }
+      // Hide before submitting a changed allocation. The source focus intent
+      // and desired visibility survive; only this acknowledgement may reveal.
+      _viewportSession = null;
+      await _applyVisibility();
+      if (!current()) return false;
+      _viewport = rect;
+      await readerChannel.invokeMethod<void>('bounds', {
+        'x': rect.left,
+        'y': rect.top,
+        'width': rect.width,
+        'height': rect.height,
+      });
+      if (!current()) return false;
+      _acknowledgedViewport = rect;
+      _viewportSession = session;
+      await _applyVisibility();
+      return current();
+    } catch (error) {
+      if (current()) {
+        if (error is! _NoteDeliveryFailure) {
+          state = state.copy(warning: error.toString());
+        }
+        events.add({'type': 'feedback', 'message': error.toString()});
+      }
+      return false;
+    } finally {
+      settled.complete();
+      if (identical(_viewportSettled, settled)) _viewportSettled = null;
+    }
+  }
+
   Future<void> suspend() async {
+    _focusRevision++;
     _pendingJump?.cancel();
     if (state.bookId == null) {
       _suspended = true;
@@ -536,6 +630,7 @@ class ReaderController extends Notifier<ReaderState> {
     }
     _startupTimer?.cancel();
     if (!state.ready) {
+      _invalidateLayoutVisibility();
       _session = 'suspended:${++_generation}';
       _failedPopover = null;
       await readerChannel.invokeMethod<void>('close');
@@ -637,7 +732,10 @@ class ReaderController extends Notifier<ReaderState> {
       if (next.error != null && _pendingJump?.bookId == next.bookId) {
         _pendingJump?.cancel();
       }
-      if (previous?.error != next.error) unawaited(_applyVisibility());
+      if (previous?.error != next.error) {
+        _invalidateLayoutVisibility();
+        unawaited(_applyVisibility());
+      }
     });
     readerChannel.setMethodCallHandler((call) async {
       if (call.method == 'event' && call.arguments is String) {
@@ -671,6 +769,24 @@ class ReaderController extends Notifier<ReaderState> {
               'message': error.toString(),
             };
           }
+        }
+        // A geometry handoff may be waiting inside an inbound selection event.
+        // Its renderer drain acknowledgement must not queue behind that event.
+        if (msg['type'] == 'layoutVisibility') {
+          final pending = _layoutVisibilityResults[msg['request']];
+          if (pending != null &&
+              msg['revision'] == pending.revision &&
+              msg['visible'] == pending.visible &&
+              !pending.result.isCompleted) {
+            if (msg['message'] is String) {
+              pending.result.completeError(
+                StateError(msg['message'] as String),
+              );
+            } else {
+              pending.result.complete();
+            }
+          }
+          return;
         }
         if (msg['type'] == 'appearanceResult') {
           final pending = _appearanceResults.remove(msg['request']);
@@ -724,6 +840,7 @@ class ReaderController extends Notifier<ReaderState> {
         if (!pending.isCompleted) pending.complete();
       }
       _appearanceResults.clear();
+      _invalidateLayoutVisibility();
       _session = 'disposed:${++_generation}';
       _presentation++;
       _openRevision++;
@@ -842,6 +959,7 @@ class ReaderController extends Notifier<ReaderState> {
       _invalidateAppearanceWork();
       if (state.ready) await send('cancelAppearance');
       if (!ownedOpening()) return;
+      _invalidateLayoutVisibility();
       _session = 'preparing:${++_generation}';
       _failedPopover = null;
       state = ReaderState(bookId: id, phase: 'verifying');
@@ -868,12 +986,16 @@ class ReaderController extends Notifier<ReaderState> {
         if (_pendingJump?._openingRevision == revision) {
           _pendingJump?._session = _session;
         }
-        await send('appearance', {'value': value});
+        if (_canRenderAppearance) {
+          await send('appearance', {'value': value});
+        } else {
+          _appearanceNeedsReconcile = true;
+        }
         await syncAnnotations();
         await _applyVisibility();
         await _consumePendingJump(id, revision);
         if (ownedOpening() && _routeVisible && state.ready) {
-          events.add({'type': 'focusBook'});
+          events.add(_publicationFocusEvent());
         }
         return;
       }
@@ -901,6 +1023,7 @@ class ReaderController extends Notifier<ReaderState> {
       _presentation++;
       state = ReaderState(bookId: id, phase: 'initializing');
       _sourcePath = path;
+      _invalidateLayoutVisibility();
       _session = '$_sessionPrefix${++_generation}';
       final session = _session;
       if (_pendingJump?._openingRevision == revision) {
@@ -941,6 +1064,7 @@ class ReaderController extends Notifier<ReaderState> {
       await _fileWatch?.cancel();
       if (!ownedOpening()) return;
       _sourcePath = null;
+      _invalidateLayoutVisibility();
       _session = 'closed:${++_generation}';
       _failedPopover = null;
       await readerChannel.invokeMethod<void>('close');
@@ -1063,6 +1187,7 @@ class ReaderController extends Notifier<ReaderState> {
       }
       if (revision != _openRevision) return;
       _invalidateAppearanceWork();
+      _invalidateLayoutVisibility();
       _session = 'closed:${++_generation}';
       _failedPopover = null;
       _filePoll?.cancel();
@@ -1100,6 +1225,17 @@ class ReaderController extends Notifier<ReaderState> {
       return;
     }
     switch (event['type']) {
+      case 'contentFocus':
+        if (!validReaderContentFocusEvent(event) ||
+            !await _acceptNativeContentFocus()) {
+          return;
+        }
+        event = {...event, 'focusRevision': _focusRevision};
+      case 'key':
+        if (!await _acceptNativeContentFocus()) return;
+      case 'focusChrome':
+        if (!await _acceptNativeContentFocus()) return;
+        event = {...event, 'focusRevision': _focusRevision};
       case 'popoverHidden':
         if (event['presentation'] == _presentation &&
             _popoverKind == 'lookup') {
@@ -1113,6 +1249,13 @@ class ReaderController extends Notifier<ReaderState> {
           if (event['keyboard'] == true && _routeVisible && !_suspended) {
             _restoreLookupFocus(_session, _presentation);
           }
+        } else if (event['presentation'] == _presentation &&
+            _popoverActive &&
+            _popoverNativeOwner) {
+          // GTK can close its frame before the child handles Escape. Its
+          // retained editor still owns input: seal/capture through the normal
+          // handoff before releasing the logical popup and accepting keys.
+          await dismissPopover(restoreFocus: event['keyboard'] == true);
         }
       case 'ready':
         if (_suspended ||
@@ -1165,6 +1308,11 @@ class ReaderController extends Notifier<ReaderState> {
               ? TypographyCapabilities.fromJson(event['typography'])
               : state.typography,
         );
+        event = {
+          ...event,
+          'focusRevision': _focusRevision,
+          'presentation': _presentation,
+        };
         final openedBook = state.bookId!,
             openedRevision = _openRevision,
             openedSession = _session;
@@ -1536,6 +1684,22 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> send(String action, [Map<String, dynamic> args = const {}]) =>
       _send(action, args);
 
+  Future<void> focusPublication({required bool Function() isCurrent}) {
+    final revision = _focusRevision, presentation = _presentation;
+    final id = state.bookId;
+    return _send(
+      'focus',
+      const {},
+      isCurrent: () =>
+          revision == _focusRevision &&
+          presentation == _presentation &&
+          state.bookId == id &&
+          !_popoverActive &&
+          ref.read(bookPresentationProvider).lastPane == BookPane.reading &&
+          isCurrent(),
+    );
+  }
+
   Future<void> _send(
     String action,
     Map<String, dynamic> args, {
@@ -1564,7 +1728,7 @@ class ReaderController extends Notifier<ReaderState> {
     if (!current()) return;
     if (action == 'focus') {
       if (!_routeVisible || !state.ready) return;
-      await readerChannel.invokeMethod<void>('focus');
+      await readerChannel.invokeMethod<void>('focus', {'session': session});
       if (!current()) return;
     }
     final navigation = [
@@ -1630,43 +1794,26 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> show(bool value) async {
     _routeVisible = value;
     if (!value) {
+      _focusRevision++;
       _invalidateLookup();
       _appearanceNeedsReconcile |=
           _appearanceIntent != null || _appearanceResults.isNotEmpty;
       _invalidateAppearanceWork();
       if (state.ready) await send('cancelAppearance');
-    } else if (_appearanceNeedsReconcile &&
-        state.ready &&
-        state.error == null &&
-        !_suspended) {
+    }
+    if (value && book?.format != 'pdf') {
       final session = _session, id = state.bookId;
-      await _appearanceTail;
-      if (session != _session ||
-          id != state.bookId ||
-          !_routeVisible ||
-          !state.ready ||
-          _suspended) {
-        return;
-      }
-      final revision = _appearanceRevision;
-      // A renderer acknowledgement precedes book persistence. Reconcile from
-      // the committed record before revealing a retained surface, including
-      // cancellation during that acknowledgement/write interval.
-      try {
-        await _renderAppearance(appearance, revision, session);
-      } catch (error) {
-        if (session == _session &&
-            id == state.bookId &&
-            revision == _appearanceRevision) {
-          state = state.copy(warning: _labels.fontApplyFailed);
-          events.add({'type': 'feedback', 'message': _labels.fontApplyFailed});
-        }
-        return;
-      }
-      if (session != _session || id != state.bookId) return;
-      if (revision == _appearanceRevision) _appearanceNeedsReconcile = false;
+      bool current() =>
+          ref.mounted &&
+          session == _session &&
+          id == state.bookId &&
+          _routeVisible &&
+          !_suspended &&
+          state.ready;
+      if (!await _reconcileVisibleAppearance(current)) return;
     }
     if (!value) requestThumbnailWindow(const []);
+    if (value) requestViewportLayout();
     return _applyVisibility();
   }
 
@@ -1674,25 +1821,118 @@ class ReaderController extends Notifier<ReaderState> {
   bool get _surfaceVisible =>
       _routeVisible &&
       _workspaceVisible &&
+      _hasViewport &&
       !_suspended &&
       state.bookId != null &&
       state.error == null;
+  final _layoutVisibilityResults =
+      <int, ({int revision, bool visible, Completer<void> result})>{};
+  int _layoutVisibilityRequest = 0;
+  String? _pausedPdfSession;
+
+  void _invalidateLayoutVisibility() {
+    _visibilityRevision++;
+    _pausedPdfSession = null;
+    for (final pending in _layoutVisibilityResults.values) {
+      if (!pending.result.isCompleted) pending.result.complete();
+    }
+    _layoutVisibilityResults.clear();
+  }
+
+  Future<void> _setPdfLayoutVisible(
+    bool visible,
+    int revision,
+    bool Function() current,
+  ) async {
+    if (book?.format != 'pdf' || !state.ready || state.error != null) return;
+    final session = _session;
+    final request = ++_layoutVisibilityRequest, result = Completer<void>();
+    _layoutVisibilityResults[request] = (
+      revision: revision,
+      visible: visible,
+      result: result,
+    );
+    try {
+      Future<void> deliver() async {
+        await _send('layoutVisibility', {
+          'visible': visible,
+          'revision': revision,
+          'request': request,
+        }, isCurrent: current);
+        if (!current() && !result.isCompleted) result.complete();
+      }
+
+      await Future.wait<void>([
+        result.future.timeout(const Duration(seconds: 5)),
+        deliver(),
+      ], eagerError: true);
+      if (current()) _pausedPdfSession = visible ? null : session;
+    } catch (_) {
+      if (current()) rethrow;
+    } finally {
+      _layoutVisibilityResults.remove(request);
+    }
+  }
+
+  bool get _canRenderAppearance =>
+      state.ready &&
+      !_suspended &&
+      _routeVisible &&
+      (book?.format != 'pdf' ||
+          (_surfaceVisible &&
+              state.surfaceVisible &&
+              _pausedPdfSession != _session));
+
+  Future<bool> _reconcileVisibleAppearance(bool Function() current) async {
+    if (!_appearanceNeedsReconcile || !state.ready || _suspended) return true;
+    final session = _session, id = state.bookId;
+    await _appearanceTail;
+    if (!current() || !state.ready || _suspended) return false;
+    final revision = _appearanceRevision;
+    try {
+      await _renderAppearance(appearance, revision, session);
+    } catch (error) {
+      if (current() && revision == _appearanceRevision) {
+        state = state.copy(warning: _labels.fontApplyFailed);
+        events.add({'type': 'feedback', 'message': _labels.fontApplyFailed});
+      }
+      return false;
+    }
+    if (current() && id == state.bookId && revision == _appearanceRevision) {
+      _appearanceNeedsReconcile = false;
+    }
+    return current();
+  }
+
   Future<void> _applyVisibility() async {
     final revision = ++_visibilityRevision, session = _session;
     final visible = _surfaceVisible;
-    if (state.bookId == null) return;
-    await readerChannel.invokeMethod<void>('visible', visible);
-    if (ref.mounted &&
+    bool current() =>
+        ref.mounted &&
         revision == _visibilityRevision &&
         session == _session &&
-        visible == _surfaceVisible &&
-        state.surfaceVisible != visible) {
+        visible == _surfaceVisible;
+    if (state.bookId == null) return;
+    if (!visible) {
+      // PDF display tasks use the engine's normal animation-frame scheduler.
+      // Drain while native frames are available, then prevent automatic layout
+      // from restarting in a hidden retained Split pane.
+      await _setPdfLayoutVisible(false, revision, current);
+      if (!current()) return;
+    }
+    await readerChannel.invokeMethod<void>('visible', visible);
+    if (!current()) return;
+    if (state.surfaceVisible != visible) {
       state = state.copy(surfaceVisible: visible);
     }
-    if (ref.mounted &&
-        session == _session &&
-        interactive &&
-        state.bookId != null) {
+    if (visible) {
+      // The physical surface must produce frames before deferred PDF layout or
+      // renderer-dependent appearance reconciliation can resume.
+      await _setPdfLayoutVisible(true, revision, current);
+      if (!current()) return;
+      if (book?.format == 'pdf') await _reconcileVisibleAppearance(current);
+    }
+    if (current() && interactive && state.bookId != null) {
       await _consumePendingJump(state.bookId!, _openRevision);
     }
   }
@@ -1709,6 +1949,7 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> focusChrome() async {
+    _focusRevision++;
     if (state.bookId == null || _popoverActive) return;
     await readerChannel.invokeMethod<void>('focusChrome', {
       'session': _session,
@@ -1716,6 +1957,7 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<bool> _dismissForSidebar() async {
+    _focusRevision++;
     final session = _session;
     try {
       await dismissPopover(restoreFocus: false);
@@ -1732,6 +1974,48 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<bool> prepareChromeChange() => _dismissForSidebar();
+
+  int _focusRevision = 0;
+  int get focusRevision => _focusRevision;
+
+  bool ownsContentFocus(Map<String, dynamic> event) =>
+      ref.mounted &&
+      event['session'] == _session &&
+      event['focusRevision'] == _focusRevision &&
+      interactive &&
+      !_popoverActive;
+
+  /// Null means ownership could not be established; it is never permission to
+  /// reclaim focus. Both native hosts validate the captured renderer session.
+  Future<bool?> nativeContentHasFocus() async {
+    final session = _session;
+    try {
+      final focused = await readerChannel.invokeMethod<bool>('hasFocus', {
+        'session': session,
+      });
+      return ref.mounted && session == _session ? focused : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  Future<bool> _acceptNativeContentFocus() async {
+    if (!interactive || _popoverActive || state.bookId == null) return false;
+    final session = _session, revision = _focusRevision, id = state.bookId!;
+    bool current() =>
+        ref.mounted &&
+        session == _session &&
+        id == state.bookId &&
+        revision == _focusRevision &&
+        interactive &&
+        !_popoverActive;
+    final focused = await nativeContentHasFocus();
+    if (focused != true || !current()) return false;
+    ref.read(bookPresentationProvider.notifier).focusPane(id, BookPane.reading);
+    return true;
+  }
 
   Future<void> navigateFromSidebar(
     Map<String, dynamic> anchor, {
@@ -1761,7 +2045,16 @@ class ReaderController extends Notifier<ReaderState> {
       });
       return;
     }
-    await send('goto', {'anchor': anchor});
+    await _send(
+      'goto',
+      {'anchor': anchor},
+      isCurrent: () =>
+          ref.mounted &&
+          session == _session &&
+          state.bookId == bookId &&
+          interactive,
+      validateNavigation: validateNavigation,
+    );
   }
 
   void search(String query, {int offset = 0, int limit = 200}) {
@@ -1950,40 +2243,63 @@ class ReaderController extends Notifier<ReaderState> {
       await send('chrome', {'value': value});
       await _appearanceTail;
       if (session != _session || !state.ready) return;
+      if (!_canRenderAppearance) {
+        _appearanceNeedsReconcile = true;
+        return;
+      }
       final effective = await _resolveAppearance(
         appearance,
         capabilities: typographyCapabilities,
       );
       if (session != _session || !state.ready) return;
+      if (!_canRenderAppearance) {
+        _appearanceNeedsReconcile = true;
+        return;
+      }
       await send('appearance', {'value': effective});
     }
   }
 
   Future<void> dismissPopover({bool restoreFocus = true}) async {
     final session = _session, presentation = _presentation;
+    final focusRevision = _focusRevision;
     final lookupFocus = _popoverKind == 'lookup';
     await _capturePopoverDraft(seal: true);
     if (session != _session || presentation != _presentation) return;
     final dismissedPresentation = ++_presentation;
     _invalidateLookup();
     _popoverActive = false;
+    _popoverNativeOwner = false;
     _popoverKind = null;
     _popoverSelection = null;
     _annotationId = null;
+    final restore =
+        restoreFocus && focusRevision == _focusRevision && interactive;
     await readerChannel.invokeMethod<void>('dismissPopover', {
-      'restoreFocus': restoreFocus,
+      'restoreFocus': restore,
     });
-    if (_routeVisible && restoreFocus) {
+    if (restore &&
+        session == _session &&
+        dismissedPresentation == _presentation &&
+        focusRevision == _focusRevision &&
+        interactive) {
       if (lookupFocus) {
         _restoreLookupFocus(session, dismissedPresentation);
       } else {
-        events.add({'type': 'focusBook'});
+        events.add(_publicationFocusEvent());
       }
     }
   }
 
-  void _restoreLookupFocus(String session, int presentation) => events.add({
+  Map<String, dynamic> _publicationFocusEvent() => {
     'type': 'focusBook',
+    'session': _session,
+    'presentation': _presentation,
+    'focusRevision': _focusRevision,
+  };
+
+  void _restoreLookupFocus(String session, int presentation) => events.add({
+    ..._publicationFocusEvent(),
     'restorePublicationFocus': true,
     'session': session,
     'presentation': presentation,
@@ -1996,6 +2312,7 @@ class ReaderController extends Notifier<ReaderState> {
       state.ready &&
       !_popoverActive &&
       event['session'] == _session &&
+      event['focusRevision'] == _focusRevision &&
       event['presentation'] == _presentation;
 
   Rect? Function()? goToAnchor;
@@ -2054,6 +2371,7 @@ class ReaderController extends Notifier<ReaderState> {
       }
     }
     _presentation++;
+    _popoverNativeOwner = false;
     _invalidateLookup();
     _popoverKind = kind;
     if (kind == 'selection') {
@@ -2097,11 +2415,29 @@ class ReaderController extends Notifier<ReaderState> {
           }
         }
       }
+      if (!hasCurrentViewport &&
+          session == _session &&
+          presentation == _presentation &&
+          _routeVisible) {
+        // A modal can return before the visible surface has begun measuring.
+        // Request that owned frame first; its geometry transaction then owns
+        // the acknowledgement below. Pending, unsent popovers have no native
+        // input to capture and must not cancel their own measurement.
+        requestViewportLayout();
+        await WidgetsBinding.instance.endOfFrame.timeout(
+          const Duration(seconds: 15),
+        );
+      }
+      while (_viewportSettled != null) {
+        final geometry = _viewportSettled!;
+        await geometry.future;
+      }
       if (session != _session ||
           presentation != _presentation ||
           !_routeVisible) {
         return;
       }
+      if (!hasCurrentViewport) throw StateError(_labels.readerControlsFailed);
       final rect =
           anchor ??
           (kind == 'goto'
@@ -2112,6 +2448,7 @@ class ReaderController extends Notifier<ReaderState> {
           (kind == 'goto'
               ? Rect.fromLTWH(viewport.left + 24, viewport.top - 1, 1, 1)
               : Rect.fromLTWH(viewport.right - 48, viewport.top, 1, 1));
+      _popoverNativeOwner = true;
       await readerChannel
           .invokeMethod<void>('popover', {
             ..._chrome,
@@ -2122,6 +2459,10 @@ class ReaderController extends Notifier<ReaderState> {
             'y': rect.top,
             'anchorWidth': rect.width,
             'anchorHeight': rect.height,
+            'viewportX': viewport.left,
+            'viewportY': viewport.top,
+            'viewportWidth': viewport.width,
+            'viewportHeight': viewport.height,
             'width': kind == 'goto' ? 360.0 : 460.0,
             'height': (kind == 'goto' || kind == 'appearance')
                 ? (viewport.height > 0 ? viewport.height : 420.0)
@@ -2142,8 +2483,19 @@ class ReaderController extends Notifier<ReaderState> {
             ...extra,
           })
           .timeout(const Duration(seconds: 18));
-      if (session == _session && presentation == _presentation) {
+      if (session == _session &&
+          presentation == _presentation &&
+          _routeVisible &&
+          _popoverActive &&
+          state.ready &&
+          state.error == null) {
         _failedPopover = null;
+        final id = state.bookId;
+        if (id != null) {
+          ref
+              .read(bookPresentationProvider.notifier)
+              .focusPane(id, BookPane.reading);
+        }
       }
     } catch (error) {
       if (session != _session || presentation != _presentation) return;
@@ -2527,6 +2879,7 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> close() async {
+    _focusRevision++;
     _pendingJump?.cancel();
     final revision = ++_openRevision;
     final session = _session, presentation = _presentation;
@@ -2586,6 +2939,7 @@ class ReaderController extends Notifier<ReaderState> {
     _popoverActive = false;
     _popoverSelection = null;
     _annotationId = null;
+    _invalidateLayoutVisibility();
     _session = 'closed:${++_generation}';
     _failedPopover = null;
     await readerChannel.invokeMethod<void>('close');
@@ -2717,7 +3071,8 @@ class ReaderController extends Notifier<ReaderState> {
         return;
       }
       final previous = appearance;
-      final render = state.ready && !_suspended && _routeVisible;
+      final render = _canRenderAppearance;
+      if (!render) _appearanceNeedsReconcile = true;
       if (render) {
         try {
           await _renderAppearance(next, revision, session);
@@ -2726,7 +3081,7 @@ class ReaderController extends Notifier<ReaderState> {
               revision == _appearanceRevision &&
               state.ready &&
               !_suspended &&
-              _routeVisible) {
+              _canRenderAppearance) {
             try {
               await _renderAppearance(previous, revision, session);
             } catch (restoreError) {
@@ -2749,7 +3104,7 @@ class ReaderController extends Notifier<ReaderState> {
             revision == _appearanceRevision &&
             state.ready &&
             !_suspended &&
-            _routeVisible) {
+            _canRenderAppearance) {
           try {
             await _renderAppearance(previous, revision, session);
           } catch (restoreError) {
@@ -2791,7 +3146,8 @@ class ReaderController extends Notifier<ReaderState> {
         session != _session ||
         revision != _appearanceRevision ||
         _suspended ||
-        !_routeVisible) {
+        !_canRenderAppearance) {
+      _appearanceNeedsReconcile = true;
       return;
     }
     final request = ++_appearanceRequest, result = Completer<void>();

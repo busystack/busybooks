@@ -54,6 +54,18 @@ def main():
     }
     archive(root / 'reader-review.epub', files)
     archive(root / 'reader-review.kepub.epub', files)
+    collision = dict(files)
+    package = collision.pop('OPS/book.opf')
+    collision['META-INF/container.xml'] = files['META-INF/container.xml'].replace('OPS/book.opf', 'OPS/package#50%.opf')
+    collision['OPS/package#50%.opf'] = package.replace('</manifest>', '<item id="literal-percent" href="chapter%25232.xhtml" media-type="application/xhtml+xml"/><item id="sprite" href="sprite%232.svg" media-type="image/svg+xml"/><item id="sprite-percent" href="sprite%25232.svg" media-type="image/svg+xml"/><item id="sprite-css" href="sprite.css" media-type="text/css"/></manifest>').replace('</spine>', '<itemref idref="literal-percent"/></spine>').replace('</package>', '<guide><reference type="other" title="External reference" href="https://example.invalid/reference#guide"/></guide></package>')
+    collision['OPS/package%2350%25.opf'] = package.replace('Reader review regressions', 'Wrong alternate package')
+    collision['OPS/chapter%232.xhtml'] = html('<p id="decoy">The literal percent filename is a distinct publication resource.</p>')
+    collision['OPS/chapter#2.xhtml'] = chapter.replace('</body>', '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="10" height="8"><use id="external-sprite" href="sprite%232.svg#icon"/><use id="legacy-sprite" xlink:href="sprite%232.svg#icon"/><filter id="sprite-filter"><feImage id="filter-sprite" href="sprite%232.svg#icon"/></filter><image id="fragment-image" href="art%232.png#preserved" width="10" height="8"/></svg></body>')
+    collision['OPS/sprite#2.svg'] = '<?xml version="1.0"?><?xml-stylesheet type="text/css" href="sprite.css"?><svg xmlns="http://www.w3.org/2000/svg" width="10" height="8"><g id="icon"><rect id="color" width="10" height="8"/></g></svg>'
+    collision['OPS/sprite%232.svg'] = '<svg xmlns="http://www.w3.org/2000/svg" width="99" height="88"><g id="icon"><rect width="99" height="88" fill="red"/></g></svg>'
+    collision['OPS/sprite.css'] = 'rect {fill:rgb(53,132,228)}'
+    collision['OPS/nav.xhtml'] = files['OPS/nav.xhtml'].replace('</ol>', '<li><a href="chapter%25232.xhtml#decoy">Literal percent filename</a></li><li><a href="https://example.invalid/reference#chapter">External reference</a></li></ol>')
+    archive(root / 'reader-review-package.epub', collision)
     # Preserve the qualified EPUB 2 package/NCX structure while changing only
     # resource names and their URL references.
     epub2 = {}

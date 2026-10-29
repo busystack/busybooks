@@ -111,4 +111,3 @@ export class SectionProgress {
         return [index, fractionInSection]
     }
 }
-

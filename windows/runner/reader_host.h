@@ -37,6 +37,7 @@ class ReaderHost {
   RECT bounds_{};
   uint32_t background_=0xfffafafa;
   bool visible_=false, input_ready_=false, speech_paused_=false, initializing_=false;
+  bool focused_=false;
   ULONG speech_stream_=0;
   UINT64 navigation_id_=0;
   uint64_t initialization_generation_=0;

@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import vm from 'node:vm'
+import { readerContents } from '../assets/reader/fixed_layout_integration.mjs'
 import * as literal from '../assets/reader/literal_search.mjs'
 import * as typography from '../assets/reader/typography.mjs'
 import { validPage } from '../assets/reader/reading_geometry.mjs'
@@ -27,7 +28,7 @@ const source=(await fs.readFile(new URL('../assets/reader/reader.js',import.meta
     .replace(/^import .*\r?\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
 function adapter() {
     const events=[], content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
-    const context=vm.createContext({...literal,...typography,AbortController,URL,console,Uint8Array,setTimeout,clearTimeout,validPage,
+    const context=vm.createContext({readerContents,...literal,...typography,AbortController,URL,console,Uint8Array,setTimeout,clearTimeout,validPage,
         requestAnimationFrame:f=>f(),pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{observe(){}},
         document:{querySelectorAll:()=>[],querySelector:()=>content,addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}},
         textWalker:function*(doc,fn){yield* fn(doc.strings,(...bounds)=>bounds)},

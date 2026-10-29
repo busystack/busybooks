@@ -1,6 +1,7 @@
 #include "reader_popover.h"
 #include "../../native/reader_action_limits.h"
 #include "../../native/reader_popover_events.h"
+#include "../../native/reader_popover_geometry.h"
 #include <gdk/gdkkeysyms.h>
 #include <cstring>
 #include <algorithm>
@@ -77,6 +78,17 @@ void ReaderPopover::Show(FlMethodCall* call) {
     fl_method_call_respond_error(call, "popover-cancelled", "Reader window is inactive", nullptr, nullptr);
     return;
   }
+  auto number = [data](const char* key, double fallback) {
+    auto* v = fl_value_lookup_string(data, key);
+    double n = v && fl_value_get_type(v) == FL_VALUE_TYPE_FLOAT ? fl_value_get_float(v) : fallback;
+    return std::isfinite(n) ? n : fallback;
+  };
+  const ReaderPopoverRect pane{number("viewportX", 0), number("viewportY", 0),
+      number("viewportWidth", 0), number("viewportHeight", 0)};
+  if (!ValidReaderPopoverRect(pane)) {
+    fl_method_call_respond_error(call, "popover-payload", "Invalid reader pane", nullptr, nullptr);
+    return;
+  }
   Hide();
   EnsureView();
   if (data_) fl_value_unref(data_);
@@ -84,19 +96,21 @@ void ReaderPopover::Show(FlMethodCall* call) {
   pending_ = FL_METHOD_CALL(g_object_ref(call));
   requested_ = true;
   painted_ = false;
-  auto number = [data](const char* key, int fallback) {
-    auto* v = fl_value_lookup_string(data, key);
-    double n = v && fl_value_get_type(v) == FL_VALUE_TYPE_FLOAT ? fl_value_get_float(v) : fallback;
-    return std::isfinite(n) ? static_cast<int>(n) : fallback;
-  };
-  GdkRectangle rect{number("x", 0), number("y", 0), std::max(1, number("anchorWidth", 1)), std::max(1, number("anchorHeight", 1))};
-  gtk_popover_set_pointing_to(GTK_POPOVER(popover_), &rect);
   GdkRectangle work{};
   auto* monitor = gdk_display_get_monitor_at_window(gtk_widget_get_display(anchor_), gtk_widget_get_window(parent));
   if (!monitor) { Complete("popover-unavailable"); requested_ = false; return; }
   gdk_monitor_get_workarea(monitor, &work);
-  maximum_height_ = std::clamp(number("height", 360), 1, std::max(1, work.height - rect.height));
-  gtk_widget_set_size_request(GTK_WIDGET(view_), std::clamp(number("width", 460), 1, std::max(1, work.width)), maximum_height_);
+  const auto placement = PlaceReaderPopover(pane,
+      {number("x", 0), number("y", 0), std::max(1.0, number("anchorWidth", 1)),
+       std::max(1.0, number("anchorHeight", 1))},
+      std::min(number("width", 460), static_cast<double>(work.width)),
+      std::min(number("height", 360), static_cast<double>(work.height)), 12, true);
+  const GdkRectangle rect{static_cast<int>(std::round(placement.pointing_x)),
+      static_cast<int>(std::round(placement.pointing_y)), 1, 1};
+  gtk_popover_set_position(GTK_POPOVER(popover_), placement.above ? GTK_POS_TOP : GTK_POS_BOTTOM);
+  gtk_popover_set_pointing_to(GTK_POPOVER(popover_), &rect);
+  maximum_height_ = static_cast<int>(std::ceil(placement.body.height));
+  gtk_widget_set_size_request(GTK_WIDGET(view_), static_cast<int>(std::ceil(placement.body.width)), maximum_height_);
   // Mapping is necessary for a GL surface/frame clock. Keep it transparent and
   // nonmodal until the current payload has actually painted, never on ready alone.
   gtk_widget_set_opacity(popover_, 0);

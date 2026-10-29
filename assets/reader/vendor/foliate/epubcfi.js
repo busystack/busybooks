@@ -347,4 +347,3 @@ export const fromCalibreHighlight = ({ spine_index, start_cfi, end_cfi }) => {
     const pre = fake.fromIndex(spine_index) + '!'
     return buildRange(pre + start_cfi.slice(2), pre + end_cfi.slice(2))
 }
-

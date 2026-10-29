@@ -90,6 +90,77 @@ void main() {
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(readerPopoverChannel, null),
   );
+  testWidgets('selection accepts Escape before any control gains focus', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ReaderPopoverApp());
+    await _update(tester, {'kind': 'selection', 'color': 'yellow'});
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    final dismissed = actions.singleWhere((a) => a['action'] == 'dismiss');
+    expect(dismissed['session'], '1');
+    expect(dismissed['presentation'], 1);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('selection keyboard traversal starts at its first control', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ReaderPopoverApp());
+    await _update(tester, {'kind': 'selection', 'color': 'yellow'});
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(
+      Focus.of(tester.element(find.text('Highlight'))).hasPrimaryFocus,
+      isTrue,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(
+      Focus.of(tester.element(find.text('Add Note'))).hasPrimaryFocus,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'popup keyboard fallback preserves editor composition and follows its presentation',
+    (tester) async {
+      await tester.pumpWidget(const ReaderPopoverApp());
+      await _update(tester, {
+        'kind': 'selection',
+        'color': 'yellow',
+        'editing': true,
+      });
+      final field = tester.widget<EditableText>(find.byType(EditableText));
+      expect(field.focusNode.hasPrimaryFocus, isTrue);
+      const value = TextEditingValue(
+        text: '仮',
+        selection: TextSelection.collapsed(offset: 1),
+        composing: TextRange(start: 0, end: 1),
+      );
+      tester.testTextInput.updateEditingValue(value);
+      await tester.pump();
+      await _update(tester, {
+        'kind': 'selection',
+        'color': 'yellow',
+        'editing': true,
+        'notePending': true,
+      });
+      expect(field.focusNode.hasPrimaryFocus, isTrue);
+      expect(field.controller.value, value);
+      await _update(tester, {
+        'kind': 'selection',
+        'color': 'yellow',
+        'presentation': 2,
+      });
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(
+        actions.where((a) => a['action'] == 'dismiss').single['presentation'],
+        2,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('appearance accepts Escape before any control gains focus', (
     tester,
   ) async {

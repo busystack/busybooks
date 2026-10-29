@@ -39,6 +39,7 @@ assert.equal(tabTarget(links,'last'),null);assert.equal(tabTarget(links,'first',
 assert.equal(tabTarget(links,'middle',true),'first');assert.equal(tabTarget([],'body'),null)
 console.log(JSON.stringify({status:'passed',checks:6,scope:'content tab sequence and application boundary; no native focus acceptance'}))
 
+await import('./epub_integration_probe.mjs')
 await import('./fixed_layout_probe.mjs')
 await import('./reader_startup_probe.mjs')
 
@@ -48,6 +49,8 @@ await import('./reader_review_regressions.mjs')
 await import('./reader_sidebar_probe.mjs')
 
 await import('./typography_probe.mjs')
+await import('./reader_focus_probe.mjs')
+await import('./pdf_selection_probe.mjs')
 await import('./comic_interaction_probe.mjs')
 
 await import('./literal_search_probe.mjs')

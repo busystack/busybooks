@@ -473,6 +473,7 @@ abstract final class BusyBooksCommandIds {
   static const export = 'book.exportAnnotations';
   static const viewReading = 'book.viewReading';
   static const viewNotebook = 'book.viewNotebook';
+  static const viewSplit = 'book.viewSplit';
   static const bookProperties = 'book.properties';
   static const moveBook = 'book.move';
   static const locateBook = 'book.locate';
@@ -485,6 +486,7 @@ abstract final class BusyBooksCommandCatalog {
     Map<String, BusyBooksCommandLabel> labels = const {},
     Map<String, BusyBooksCommandPredicate> enabled = const {},
     Map<String, BusyBooksCommandPredicate> visible = const {},
+    Map<String, BusyBooksCommandDescription> disabledReasons = const {},
   }) {
     BusyBooksCommand command(
       String id,
@@ -512,6 +514,7 @@ abstract final class BusyBooksCommandCatalog {
           BusyBooksCommandIds.searchBooks,
           BusyBooksCommandIds.searchRecent,
         }.contains(id),
+        disabledReason: disabledReasons[id],
         shortcut: BusyBooksShortcutDefinition(
           label: binding.label,
           activator: binding.activator,
@@ -536,6 +539,16 @@ abstract final class BusyBooksCommandCatalog {
         LogicalKeyboardKey.digit2,
         control: true,
         alt: true,
+      ),
+      BusyBooksCommand(
+        id: BusyBooksCommandIds.viewSplit,
+        label: labels[BusyBooksCommandIds.viewSplit] ?? (c) => c.l10n.split,
+        category: (c) => c.l10n.book,
+        scope: BusyBooksCommandScope.documentView,
+        disabledReason: disabledReasons[BusyBooksCommandIds.viewSplit],
+        execute: executions[BusyBooksCommandIds.viewSplit],
+        enabled: enabled[BusyBooksCommandIds.viewSplit] ?? () => true,
+        visible: visible[BusyBooksCommandIds.viewSplit] ?? () => true,
       ),
       BusyBooksCommand(
         id: BusyBooksCommandIds.bookProperties,
