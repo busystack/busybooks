@@ -159,8 +159,8 @@ for(const cancel of ['stop','expiry']){
 }
 // Only owned DOM/page interfaces are supplied. The actual renderPage link
 // callback, layoutPdf finally block and selection bridge remain under test.
-function pdfGeometryFixture(){
-  const fixture=adapter(),{context,content}=fixture,created=[]
+function pdfGeometryFixture(options={}){
+  const fixture=adapter(options),{context,content}=fixture,created=[]
   const node=tag=>({tagName:tag.toUpperCase(),childNodes:[],style:{setProperty(){}},dataset:{},handlers:new Map(),
     offsetTop:0,offsetLeft:0,offsetHeight:600,hidden:false,
     append(child){this.childNodes.push(child)},setAttribute(){},querySelectorAll:()=>[],
@@ -248,5 +248,40 @@ function pdfGeometryFixture(){
   assert.equal(vm.runInContext('selection===newSelection',context),true,'obsolete failure cannot clear or refresh a newer selection')
   assert.equal(events.some(event=>event.type==='selection'),false)
   rejectNew(newFailure);await newRejected
+}
+for(const obsolete of [false,true]){
+  let resize,rejectRender
+  const {context,events,native,memory}=pdfGeometryFixture({setTimeout:(callback,delay)=>{
+    if(delay===150){resize=callback;return {}}
+    return setTimeout(callback,delay)
+  }})
+  context.sameSizeRender=new Promise((_,reject)=>{rejectRender=reject})
+  memory.expectedSelection=()=>false
+  memory.restore=async(work,{ensurePage})=>{try{await ensurePage(0);return true}finally{memory.abandon(work)}}
+  native.removeAllRanges()
+  vm.runInContext(`pdfViewport=[content.clientWidth,content.clientHeight];pdfGeometryMayCollapse=true;
+    queuePage=()=>sameSizeRender;schedulePdfResize()`,context)
+  const resizing=resize()
+  await new Promise(setImmediate)
+  assert.equal(memory.ownsPending,true,'same-size resume attempts its owned logical restoration')
+  if(obsolete){
+    vm.runInContext('layoutGeneration++;selection={text:"newer same-size source",anchor:{page:1,segments:[{page:1}]}}',context)
+    memory.beginRelayout()
+  }
+  const current=vm.runInContext('selection',context),pending=memory.pending
+  rejectRender(Error('original same-size rendering failure'));await resizing
+  assert(events.some(event=>event.type==='navigationError'&&event.message==='Error: original same-size rendering failure'),'same-size failure retains its original renderer diagnostic')
+  if(obsolete){
+    assert.equal(memory.pending,pending,'obsolete same-size cleanup retains newer work')
+    assert.equal(vm.runInContext('selection',context),current)
+    assert.equal(vm.runInContext('pdfGeometryMayCollapse',context),true)
+    assert.equal(events.some(event=>event.type==='selection'),false)
+    memory.invalidate()
+  }else{
+    assert.equal(memory.ownsPending,false);assert.equal(memory.pinnedPages.size,0)
+    assert.equal(vm.runInContext('pdfGeometryMayCollapse',context),false,'failed same-size resume clears its geometry suppression')
+    assert.equal(vm.runInContext('selection',context),null,'failed same-size resume clears stale app selection')
+    assert(events.some(event=>event.type==='selection'&&event.anchor===null))
+  }
 }
 console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated Go To outcomes and text assistance, hidden-PDF quiescence/source retention/resume, search without display frames, keyboard-link selection invalidation and current/stale geometry failure cleanup; controlled adapter APIs'}))

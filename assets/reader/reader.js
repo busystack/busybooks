@@ -1043,11 +1043,14 @@ function schedulePdfResize(){
         if(pdfLayoutPaused)return
         pdfResizePending=false
         if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight){
-            if(pdfSelections?.hasSelection&&!pdfSelections.expectedSelection()){
-                await restorePdfGeometrySelection(pdfSelections.beginRelayout(),layoutGeneration)
+            const epoch=layoutGeneration
+            try{
+                if(pdfSelections?.hasSelection&&!pdfSelections.expectedSelection()){
+                    await restorePdfGeometrySelection(pdfSelections.beginRelayout(),epoch)
+                }
+            }finally{
+                if(epoch===layoutGeneration){pdfGeometryMayCollapse=false;refreshSelectionGeometry()}
             }
-            pdfGeometryMayCollapse=false
-            refreshSelectionGeometry()
             return
         }
         await relayoutPdf(location.anchor,true)
