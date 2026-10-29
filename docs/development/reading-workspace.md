@@ -35,7 +35,9 @@ in the selector, Main Menu and command search. An already active Split keeps
 `/split/:id` and shows its last focused pane, defaulting to Reading. A nonblocking
 status names the visible pane and offers the other pane. This hides the other
 content tree without suspending or replacing the reader or discarding drafts,
-selection, scrolling, filters or divider ratio. Widening restores the two panes
+Notebook selection, scrolling, filters or divider ratio. Active PDF source
+selections use the reader's guarded logical selection memory across geometry
+changes, including collapse/restoration. Widening restores the two panes
 automatically. Explicit Reading or Notebook selects that full-width route and
 cancels this retained Split preference; no application-wide minimum window size
 is imposed.

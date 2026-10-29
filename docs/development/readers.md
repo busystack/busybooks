@@ -348,10 +348,20 @@ the same original source anchor without requesting another selection popover.
 This uses supported engine APIs, application events and native-host composition;
 no renderer method, prototype or dependency implementation is replaced.
 
-PDF viewport relayout rebuilds its text-layer DOM. A temporary native text
-selection can clear during that rebuild; the adapter reports an empty selection
-instead of retaining a detached range or stale popup rectangle. Stored PDF-unit
-annotation segments, highlights and navigation locations remain unchanged.
+PDF geometry relayout retains the active selection in application-owned logical
+memory before rebuilding its text-layer DOM. Original UTF-16 endpoints, page
+references, represented pages and direction are bound to the publication and
+renderer session plus the current selection intent. Only those represented pages
+are rendered and temporarily pinned for restoration; original text and endpoint
+topology must still agree. A changed book/session, navigation, deliberate clear or
+replacement, or failed layout abandons obsolete work. Restoration uses public DOM
+selection APIs, updates only its presentation rectangle, and neither focuses the
+reader nor reopens a selection popover. It preserves a multi-page range and its
+direction where supported, without adding text from previously unloaded gaps.
+Reading/Split transitions, divider/sidebar allocation and collapsed-pane recovery
+use the same geometry path. Stored PDF-unit annotation segments, highlights and
+navigation locations remain unchanged. Appearance changes deliberately retain
+their existing selection policy rather than impersonating geometry-only work.
 
 `test/fixtures/mixed-pages.pdf` adds eight deterministic pages with different
 sizes, orientations and intrinsic rotation (4,593 bytes). Use it alongside

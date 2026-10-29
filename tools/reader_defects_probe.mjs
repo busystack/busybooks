@@ -6,13 +6,13 @@ import vm from 'node:vm'
 import { readerContents } from '../assets/reader/fixed_layout_integration.mjs'
 import * as typographyUtilities from '../assets/reader/typography.mjs'
 import * as searchUtilities from '../assets/reader/literal_search.mjs'
-import { validPage } from '../assets/reader/reading_geometry.mjs'
+import { fitScale, validPage } from '../assets/reader/reading_geometry.mjs'
 const source=(await fs.readFile(process.env.BUSYBOOKS_READER_SOURCE??new URL('../assets/reader/reader.js',import.meta.url),'utf8'))
   .replace(/^import .*\r?\n/gm,'').replaceAll('import.meta.url',"'https://busybooks.local/reader.js'")
 function adapter(options={}){
   const events=[],resizeObservers=[]
   const content={addEventListener(){},setAttribute(){},removeAttribute(){},style:{}}
-  const context=vm.createContext({readerContents,...typographyUtilities,...searchUtilities,AbortController,URL,console,Uint8Array,setTimeout:options.setTimeout??setTimeout,clearTimeout,validPage,requestAnimationFrame:options.requestAnimationFrame??(f=>f()),
+  const context=vm.createContext({readerContents,...typographyUtilities,...searchUtilities,AbortController,URL,console,Uint8Array,structuredClone,setTimeout:options.setTimeout??setTimeout,clearTimeout,validPage,fitScale,requestAnimationFrame:options.requestAnimationFrame??(f=>f()),
     pdfjs:{GlobalWorkerOptions:{}},ResizeObserver:class{constructor(callback){resizeObservers.push(callback)}observe(){}},
     document:{querySelectorAll:()=>[],querySelector:()=>content,addEventListener(){},getSelection:()=>null,body:{style:{setProperty(){}}}},
     window:{location:{href:'https://busybooks.local/?session=test'},chrome:{webview:{postMessage:x=>events.push(JSON.parse(x))}}}})
@@ -157,4 +157,96 @@ for(const cancel of ['stop','expiry']){
   await vm.runInContext("dispatch({action:'layoutVisibility',session:'test',visible:true,revision:2,request:42})",context)
   assert.equal(navigated,0,`${cancel} cannot revive a background passage jump on reveal`)
 }
-console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated Go To outcomes and text assistance, hidden-PDF quiescence/source retention/resume and search without display frames; controlled adapter APIs'}))
+// Only owned DOM/page interfaces are supplied. The actual renderPage link
+// callback, layoutPdf finally block and selection bridge remain under test.
+function pdfGeometryFixture(){
+  const fixture=adapter(),{context,content}=fixture,created=[]
+  const node=tag=>({tagName:tag.toUpperCase(),childNodes:[],style:{setProperty(){}},dataset:{},handlers:new Map(),
+    offsetTop:0,offsetLeft:0,offsetHeight:600,hidden:false,
+    append(child){this.childNodes.push(child)},setAttribute(){},querySelectorAll:()=>[],
+    querySelector(name){return this.childNodes.find(child=>name==='.textLayer'?child.className==='textLayer':child.tagName===name.toUpperCase())},
+    addEventListener(name,callback){this.handlers.set(name,callback)}})
+  const native={rangeCount:1,isCollapsed:false,removeAllRanges(){this.rangeCount=0;this.isCollapsed=true}}
+  context.document.getSelection=()=>native
+  context.document.createElement=tag=>{const value=node(tag);if(tag==='canvas')value.getContext=()=>({});created.push(value);return value}
+  context.IntersectionObserver=class{observe(){}disconnect(){}}
+  context.performance={now:()=>0}
+  Object.assign(content,{clientWidth:800,clientHeight:600,scrollLeft:0,scrollTop:0,
+    append(){},replaceChildren(){native.removeAllRanges();vm.runInContext('pdfSelection()',context)}})
+  const memory={hasSelection:true,ownsPending:false,pinnedPages:new Set(),pending:null,invalidations:0,
+    expectedSelection:()=>true,
+    invalidate(){this.invalidations++;this.hasSelection=false;this.ownsPending=false;this.pending=null;this.pinnedPages.clear()},
+    beginRelayout(){const work={};this.pending=work;this.ownsPending=true;this.pinnedPages=new Set([0]);return work},
+    abandon(work){if(!work||this.pending!==work)return false;this.hasSelection=false;this.ownsPending=false;this.pending=null;this.pinnedPages.clear();return true}}
+  const viewport={width:600,height:800,convertToPdfPoint:(x,y)=>[x,y],convertToViewportRectangle:value=>value}
+  const page={pageNumber:1,rotate:0,ref:{num:10,gen:0},getViewport:()=>viewport,
+    render:()=>({promise:Promise.resolve(),cancel(){}}),getTextContent:async()=>({items:[{str:'original passage'}]}),
+    getAnnotations:async()=>[{subtype:'Link',rect:[1,2,3,4],dest:'chapter-two'}]}
+  context.fixtureMemory=memory;context.fixturePage=page;context.fixtureElement=node('section')
+  context.fixtureSelection={text:'original passage',anchor:{page:0,segments:[{page:0,start:0,length:16,boxes:[[1,2,3,4]]}]}}
+  context.pdfjs.TextLayer=class{async render(){}cancel(){}}
+  vm.runInContext(`activeFormat='pdf';pdf={numPages:2,getPage:async()=>fixturePage};pdfSelectionOwner={publication:pdf,session};
+    pdfSelections=fixtureMemory;selection=fixtureSelection;location={anchor:{page:0,y:0}};
+    layoutGeneration=1;pages=[{epoch:1,element:fixtureElement}];pdfViewport=[900,600]`,context)
+  return {...fixture,created,native,memory,page}
+}
+{
+  const {context,events,created,native,memory}=pdfGeometryFixture()
+  await vm.runInContext('renderPage(0,1)',context)
+  const link=created.find(node=>node.className==='pdf-link')
+  assert(link,'the actual PDF page builds its internal destination link')
+  let release,navigated=0
+  context.navigationGate=new Promise(resolve=>{release=resolve})
+  context.didNavigate=()=>{navigated++}
+  vm.runInContext(`navigationTail=navigationGate;destinationAnchor=async()=>({page:1});
+    gotoPdf=async anchor=>{didNavigate();location={anchor}}`,context)
+  events.length=0
+  // Keyboard/assistive activation emits click without any pointerdown event.
+  const following=link.handlers.get('click')({detail:0,preventDefault(){}})
+  assert.equal(memory.invalidations,1,'link acceptance invalidates logical selection before waiting for navigation')
+  assert.equal(native.rangeCount,0,'link acceptance removes the old connected native range')
+  assert.equal(vm.runInContext('selection',context),null)
+  assert(events.some(event=>event.type==='selection'&&event.anchor===null),'the primary receives the immediate selection clear')
+  assert.equal(navigated,0,'destination navigation remains queued')
+  release();await following
+  assert.equal(navigated,1);assert.equal(vm.runInContext('location.anchor.page',context),1)
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(history)',context)),[{page:0,y:0},{page:1}],'link navigation retains the exact source and destination history')
+  assert.equal(events.some(event=>event.type==='navigationError'),false)
+}
+{
+  const {context,events,memory}=pdfGeometryFixture(),failure=Error('original geometry render failure')
+  context.geometryFailure=failure
+  vm.runInContext('queuePage=async()=>{throw geometryFailure}',context)
+  const resizing=vm.runInContext('layoutPdf(location.anchor,true)',context)
+  assert.equal(vm.runInContext('selection===fixtureSelection',context),true,'rebuild collapse is initially protected')
+  await assert.rejects(resizing,error=>error===failure,'geometry reports the original rendering failure')
+  assert.equal(memory.ownsPending,false);assert.equal(memory.pinnedPages.size,0)
+  assert.equal(vm.runInContext('selection',context),null,'failed current geometry clears the stale app selection')
+  assert(events.some(event=>event.type==='selection'&&event.anchor===null),'failed geometry clears the primary selection bridge')
+}
+{
+  const {context,events,memory}=pdfGeometryFixture()
+  let rejectOld,rejectNew
+  context.oldPage=new Promise((_,reject)=>{rejectOld=reject})
+  context.newRender=new Promise((_,reject)=>{rejectNew=reject})
+  vm.runInContext(`let pageRequests=0;pdf.getPage=()=>++pageRequests===1?oldPage:Promise.resolve(fixturePage);
+    queuePage=()=>newRender`,context)
+  const old=vm.runInContext('layoutPdf(location.anchor,true)',context)
+  const oldFailure=Error('obsolete geometry failure'),newFailure=Error('new current geometry failure')
+  const oldRejected=assert.rejects(old,error=>error===oldFailure)
+  const newer=vm.runInContext('layoutPdf(location.anchor,true)',context)
+  const newRejected=assert.rejects(newer,error=>error===newFailure)
+  await new Promise(setImmediate)
+  context.newSelection={text:'newer selected source',anchor:{page:1,segments:[{page:1}]}}
+  vm.runInContext('selection=newSelection',context)
+  const pending=memory.pending
+  events.length=0
+  rejectOld(oldFailure);await oldRejected
+  assert.equal(memory.pending,pending,'obsolete finally cannot abandon the newer geometry work')
+  assert.equal(memory.ownsPending,true);assert.equal(memory.pinnedPages.has(0),true)
+  assert.equal(vm.runInContext('layingOut&&pdfGeometryMayCollapse',context),true,'obsolete finally cannot reset the newer geometry guards')
+  assert.equal(vm.runInContext('selection===newSelection',context),true,'obsolete failure cannot clear or refresh a newer selection')
+  assert.equal(events.some(event=>event.type==='selection'),false)
+  rejectNew(newFailure);await newRejected
+}
+console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated Go To outcomes and text assistance, hidden-PDF quiescence/source retention/resume, search without display frames, keyboard-link selection invalidation and current/stale geometry failure cleanup; controlled adapter APIs'}))

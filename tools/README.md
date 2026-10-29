@@ -19,6 +19,7 @@ procedures, rather than individual executions.
 | `format_resources_probe.dart` | Resource ownership and active-decoder cancellation |
 | `reader_logic_probe.mjs` | CFI, network policy, geometry and controlled adapter regressions |
 | `reader_focus_probe.mjs` | Application focus protocol and resize/selection ownership with fresh controlled interfaces; also imported by `reader_logic_probe.mjs` |
+| `pdf_selection_probe.mjs` | Logical PDF endpoint/direction, ownership and cancellation regressions using application-owned DOM fixtures; included in `reader_logic_probe.mjs` |
 | `qualify_rar.py DECODER` | Exact decoded RAR4/5 fixture bytes and corrupt/encrypted/multipart/path rejection |
 | `check_epub2_fixtures.py EPUBCHECK_JAR` | Independent EPUB 2 schemas and narrowly scoped checker exceptions |
 
@@ -27,7 +28,7 @@ The JavaScript entry imports `fixed_layout_probe.mjs`, `reader_startup_probe.mjs
 `reader_defects_probe.mjs`, `reader_review_regressions.mjs`,
 `reader_sidebar_probe.mjs`, `typography_probe.mjs`,
 `comic_interaction_probe.mjs`, `literal_search_probe.mjs`,
-`epub_integration_probe.mjs` and `reader_focus_probe.mjs`. These execute actual
+`epub_integration_probe.mjs`, `reader_focus_probe.mjs` and `pdf_selection_probe.mjs`. These execute actual
 adapter/renderer logic with controlled APIs; they do not establish native layout,
 selection or focus.
 The focus probe rejects synthetic input and detached/replaced publication
@@ -38,6 +39,16 @@ application-owned fixtures; no browser or dependency implementation is replaced.
 The defects probe also exercises PDF pause/drain/resume ordering, coalesced hidden
 resize, retained source coordinates during hidden flush, expired/stopped passage
 requests, and content search when display animation frames are unavailable.
+
+`pdf_selection_native_proof.js` uses actual PDF.js text layers and public DOM APIs
+through the existing controlled-resource Chromium runner. Run it with the pinned
+Dart on PATH and
+`BUSYBOOKS_REVIEW_PROOF="$PWD/tools/pdf_selection_native_proof.js" node tools/probe_chromium_format_review.mjs "$PWD/test/fixtures/text.pdf"`.
+It checks exact multi-page endpoints/direction, original source anchors, clear and
+replacement behavior, hidden resume, keyboard-link navigation/history, and absence
+of focus or popup activation. The controlled defects probe also checks a queued
+internal link and failed/stale layout cleanup against actual adapter functions.
+Native pane focus/clipboard acceptance still requires the actual desktop apps.
 
 Focused Flutter coverage lives in `book_presentation_test.dart`,
 `book_pane_layout_test.dart`, `reader_focus_geometry_test.dart`,

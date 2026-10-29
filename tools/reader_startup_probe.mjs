@@ -79,7 +79,7 @@ const sandbox = {
   ResizeObserver: class { observe() {} },
   fetch: async () => ({arrayBuffer: async () => new ArrayBuffer(8)}),
   requestAnimationFrame: callback => frames.push(callback),
-  setTimeout: callback => timers.push(callback),
+  setTimeout: callback => timers.push(callback), clearTimeout,
   testFirstPage: anchor => firstPages.push(anchor),
 }
 const context = vm.createContext(sandbox)

@@ -9,6 +9,7 @@ import { makePreparedFB2 } from './prepared_book.mjs'
 import { makeComicBook, comicAnchor, normalizedRegion, decodeComicImage } from './comic_book.mjs'
 import { makeEpubBook } from './epub_integration.mjs'
 import { FixedLayoutIntegration, readerContents } from './fixed_layout_integration.mjs'
+import { PdfSelectionMemory } from './pdf_selection.mjs'
 import { Overlayer } from './vendor/foliate/overlayer.js'
 import * as pdfjs from './vendor/pdfjs/pdf.mjs'
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.mjs', import.meta.url).href
@@ -154,6 +155,13 @@ function selected(data,range,doc=document,settle=true) {
 let selectionGeometryRevision=0
 function refreshSelectionGeometry(){
     if(!selection?.anchor)return
+    if(pdf&&pdfSelections?.hasSelection){
+        if(pdfSelections.ownsPending)return
+        if(!pdfSelections.expectedSelection()){
+            if(pdfGeometryMayCollapse||pdfLayoutPaused)return
+            pdfSelection();return
+        }
+    }
     const documents=selection.note||pdf?[document]:getContents(view).map(part=>part.doc)
     const doc=documents.find(doc=>{const value=doc.getSelection?.();return value?.rangeCount&&!value.isCollapsed})
     const value=doc?.getSelection(),range=value?.rangeCount?value.getRangeAt(0):null
@@ -838,8 +846,10 @@ async function cancelAppearance(){
 }
 
 async function openPdf(config){
+    invalidatePdfSelection()
     content.className='pdf'
     pdf=await pdfjs.getDocument({data:new Uint8Array(await (await fetch('publication')).arrayBuffer()),isEvalSupported:false,enableXfa:false,cMapUrl:new URL('./vendor/pdfjs/cmaps/',import.meta.url).href,cMapPacked:true,standardFontDataUrl:new URL('./vendor/pdfjs/standard_fonts/',import.meta.url).href,wasmUrl:new URL('./vendor/pdfjs/wasm/',import.meta.url).href,iccUrl:new URL('./vendor/pdfjs/iccs/',import.meta.url).href}).promise
+    pdfSelectionOwner={publication:pdf,session}
     labels=Array.from({length:pdf.numPages},(_,i)=>String(i+1))
     // Labels are optional and must not precede the required visible passage.
     // Get the saved passage onto the screen before optional metadata, a full
@@ -969,14 +979,44 @@ async function pumpPages(){
     pumpPages()
 }
 function trimPages(){
-    const current=location.anchor?.page??0,range=document.getSelection()?.rangeCount?document.getSelection().getRangeAt(0):null
+    const current=location.anchor?.page??0,range=document.getSelection()?.rangeCount?document.getSelection().getRangeAt(0):null,pinned=pdfSelections?.pinnedPages
     for(let i=0;i<pages.length;i++){
         const p=pages[i]
-        if(i===navigatingPage||Math.abs(i-current)<=4||!p.element.childNodes.length||range?.intersectsNode(p.element))continue
+        if(i===navigatingPage||Math.abs(i-current)<=4||!p.element.childNodes.length||pinned?.has(i)||range?.intersectsNode(p.element))continue
         p.element.replaceChildren();p.rendering=null;p.text=null;geometry.get(i)?.cleanup()
     }
 }
 let pdfLayout,pdfViewport,pdfLayoutPaused=false,pdfLayoutVisibilityRevision=-1,pdfResizePending=false
+let pdfSelections=null,pdfSelectionOwner=null,pdfGeometryMayCollapse=false
+function invalidatePdfSelection(){
+    pdfSelections?.invalidate();pdfGeometryMayCollapse=false
+    clearTimeout(selectionTimer)
+}
+function clearPdfSelection(){
+    invalidatePdfSelection()
+    // Superseded ranges can remain connected while navigation waits. They
+    // must not become eligible for capture as a new geometry selection.
+    document.getSelection()?.removeAllRanges?.()
+    selection=null;emit('selection',{text:'',anchor:null})
+}
+function rememberPdfSelection(){
+    pdfSelections??=new PdfSelectionMemory({document,content,getOwner:()=>pdfSelectionOwner,getPages:()=>pages,
+        onRestore:(data,range)=>selected(data,range,document,false)})
+    pdfSelections.capture(selection)
+}
+function capturePendingPdfSelectionChange(){
+    if(pdfSelections?.ownsPending||pdfGeometryMayCollapse||pdfSelections?.expectedSelection())return
+    // A selection-editing gesture can leave the same DOM range in place (for
+    // example a scrollbar click). Capture its current outcome, never the old
+    // pending operation, if its browser selectionchange has not run yet.
+    const native=document.getSelection()
+    if(native?.rangeCount&&!native.isCollapsed||selection?.anchor?.segments)pdfSelection()
+}
+async function restorePdfGeometrySelection(work,epoch){
+    if(!work)return
+    await pdfSelections.restore(work,{ensurePage:index=>queuePage(index,epoch),
+        isCurrent:()=>epoch===layoutGeneration&&pdfSelectionOwner?.publication===pdf})
+}
 const pdfResumeWaiters=new Set()
 function waitForPdfResume(){
     return new Promise(resolve=>{
@@ -1002,9 +1042,15 @@ function schedulePdfResize(){
         // visibility request pauses layout. Recheck at execution as well.
         if(pdfLayoutPaused)return
         pdfResizePending=false
-        if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight)return
-        await relayoutPdf(location.anchor)
-        // A rebuilt text layer may clear its temporary DOM selection.
+        if(pdfViewport?.[0]===content.clientWidth&&pdfViewport?.[1]===content.clientHeight){
+            if(pdfSelections?.hasSelection&&!pdfSelections.expectedSelection()){
+                await restorePdfGeometrySelection(pdfSelections.beginRelayout(),layoutGeneration)
+            }
+            pdfGeometryMayCollapse=false
+            refreshSelectionGeometry()
+            return
+        }
+        await relayoutPdf(location.anchor,true)
         refreshSelectionGeometry()
     }).catch(error=>emit('navigationError',{message:String(error)})),150)
 }
@@ -1023,6 +1069,11 @@ function layoutVisibility(command){
         return
     }
     capturePdfLocation()
+    capturePendingPdfSelectionChange()
+    // Hiding can collapse a native range even before a text layer is rebuilt.
+    // Its logical source remains owned while input belongs to the other pane.
+    pdfGeometryMayCollapse=pdfSelections?.hasSelection===true
+    if(pdfGeometryMayCollapse)clearTimeout(selectionTimer)
     pdfLayoutPaused=true
     clearTimeout(window.pdfResizeTimer)
     pdfResizePending=true
@@ -1033,8 +1084,12 @@ function layoutVisibility(command){
         emit('layoutVisibility',{request,revision,visible})
     })
 }
-function relayoutPdf(anchor){return pdfLayout=layoutPdf(anchor)}
-async function layoutPdf(anchor){
+function relayoutPdf(anchor,preserveSelection=false){return pdfLayout=layoutPdf(anchor,preserveSelection)}
+async function layoutPdf(anchor,preserveSelection=false){
+    if(preserveSelection)capturePendingPdfSelectionChange()
+    if(!preserveSelection)invalidatePdfSelection()
+    const saved=preserveSelection?pdfSelections?.beginRelayout():null
+    if(saved){clearTimeout(selectionTimer);pdfGeometryMayCollapse=true}
     const epoch=++layoutGeneration;layingOut=true;navigatingPage=anchor?.page??0
     try{
         stopRendering();observer?.disconnect();content.replaceChildren();pages=[]
@@ -1055,8 +1110,18 @@ async function layoutPdf(anchor){
         for(const p of pages)observer.observe(p.element)
         const rendered=await queuePage(anchor?.page??0,epoch)
         if(!rendered||epoch!==layoutGeneration)return false
-        const positioned=await gotoPdf(anchor??{page:0},epoch);return positioned!==false&&epoch===layoutGeneration
-    }finally{if(epoch===layoutGeneration){layingOut=false;pdfViewport=[content.clientWidth,content.clientHeight]}}
+        const positioned=await gotoPdf(anchor??{page:0},epoch)
+        if(positioned!==false&&epoch===layoutGeneration)await restorePdfGeometrySelection(saved,epoch)
+        return positioned!==false&&epoch===layoutGeneration
+    }finally{
+        pdfSelections?.abandon(saved)
+        if(epoch===layoutGeneration){
+            layingOut=false;pdfGeometryMayCollapse=false;pdfViewport=[content.clientWidth,content.clientHeight]
+            // Failed rebuilding can have suppressed the browser's collapsed
+            // event. Reconcile only this current allocation, never a newer one.
+            refreshSelectionGeometry()
+        }
+    }
 }
 async function renderPage(index,epoch){
     const data=pages[index];if(!data||data.epoch!==epoch)return
@@ -1090,7 +1155,7 @@ async function renderPage(index,epoch){
             e.preventDefault()
             try{
                 if(a.url)emit('external',{url:a.url})
-                else {emit('navigationJump');await queueNavigation(async()=>{userNavigation();remember();await gotoPdf(await destinationAnchor(a.dest));remember()})}
+                else {clearPdfSelection();emit('navigationJump');await queueNavigation(async()=>{userNavigation();remember();await gotoPdf(await destinationAnchor(a.dest));remember()})}
             }catch(error){emit('navigationError',{message:String(error)})}
         })
         el.append(link)
@@ -1135,7 +1200,12 @@ function selectPdfText(index,start,length){
     if(found){const selected=document.getSelection();selected.removeAllRanges();selected.addRange(range);const rect=range.getBoundingClientRect();content.scrollTop+=rect.top-content.getBoundingClientRect().top-content.clientHeight*.35}
 }
 function pdfSelection(){
-    const s=document.getSelection();if(!s?.rangeCount||s.isCollapsed){selection=null;emit('selection',{text:'',anchor:null});return}
+    const s=document.getSelection();if(!s?.rangeCount||s.isCollapsed){
+        if(pdfSelections?.hasSelection&&(pdfSelections.ownsPending||pdfGeometryMayCollapse||pdfLayoutPaused))return
+        invalidatePdfSelection();selection=null;emit('selection',{text:'',anchor:null});return
+    }
+    if(pdfSelections?.expectedSelection(s))return
+    invalidatePdfSelection()
     const r=s.getRangeAt(0),segments=[]
     for(let i=0;i<pages.length;i++){
         const p=pages[i],layer=p.element.querySelector('.textLayer');if(!layer||!r.intersectsNode(layer))continue
@@ -1148,6 +1218,7 @@ function pdfSelection(){
     }
     if(!segments.length)return
     selected({text:s.toString(),anchor:{page:segments[0].page,segments},reference:pdfReference(segments[0].page),order:segments[0].page},r)
+    rememberPdfSelection()
 }
 function paintPdf(){
     for(const p of pages)p.element.querySelectorAll('.annotation-mark').forEach(x=>x.remove())
@@ -1265,6 +1336,14 @@ function keys(e){
     }
 }
 document.addEventListener('keydown',keys)
+document.addEventListener('pointerdown',event=>{
+    if(pdf&&event.isTrusted&&event.button===0&&content.contains(event.target))invalidatePdfSelection()
+},{capture:true,passive:true})
+document.addEventListener('keydown',event=>{
+    if(!pdf||!event.isTrusted||event.isComposing)return
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown','Backspace','Delete'].includes(event.key)||
+        (event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='a')invalidatePdfSelection()
+},{capture:true})
 observePublicationFocus(document)
 content.addEventListener('pointerdown',userNavigation,{passive:true})
 content.addEventListener('wheel',userNavigation,{passive:true})
@@ -1286,6 +1365,11 @@ function queueNavigation(operation){
 async function dispatch(c){
     if(c.session!=null&&c.session!==session)return
     try{c=receiveCommand(c);if(!c)return}catch(error){emit('bridgeError',{direction:'command',message:String(error)});return}
+    // Accepted navigation supersedes selection immediately, before a previous
+    // geometry operation can finish and restore its obsolete source range.
+    if(pdf&&['open','goto','back','forward','next','previous','advanceSpeech'].includes(c.action)){
+        clearPdfSelection()
+    }
     // Pause is accepted before entering the navigation queue. This fences any
     // resize callback that races the drain, and resume never waits behind work
     // whose display frames require the newly visible native surface.
@@ -1395,4 +1479,4 @@ window.busybooks={dispatch,contents:()=>getContents(view)};emit('ready')
 
 // Application appearance is resolved in Flutter, including system changes.
 
-window.addEventListener?.('pagehide',()=>{generation++;selectionGeometryRevision++;thumbnailEpoch++;for(const task of thumbnailTasks.values())task.cancel();cancelRegion();view?.close();view?.book?.destroy?.();pdf?.destroy()},{once:true})
+window.addEventListener?.('pagehide',()=>{generation++;selectionGeometryRevision++;invalidatePdfSelection();pdfSelectionOwner=null;thumbnailEpoch++;for(const task of thumbnailTasks.values())task.cancel();cancelRegion();view?.close();view?.book?.destroy?.();pdf?.destroy()},{once:true})
