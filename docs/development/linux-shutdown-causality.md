@@ -7,6 +7,14 @@ original compositor mutex `SIGABRT` still lacks the exact matching-object and
 tested-state evidence needed to establish its full cause. This report keeps
 that limit separate from the confirmed `SIGSEGV` mechanism.
 
+That paragraph records the 29 October evidence limit. The
+[30 October mutex follow-up](linux-shutdown-mutex-followup.md) subsequently
+captured the exact initialized mutex, GLib's tested value and matching raster
+presentation pointers at the failure branch. A competing raster `SIGSEGV`
+terminated that run, so the original terminal `SIGABRT` remains unverified.
+The follow-up also records bounded installed-release closes on a healthy physical
+X11/NVIDIA session. The historical results below are preserved.
+
 Raw logs and execution records are retained in ignored
 `evidence/shutdown-causality-20261029/`; links below resolve in the investigation
 workspace. Earlier runs and rejected diagnostic attempts remain preserved.

@@ -23,11 +23,15 @@ normal process exits. The SDK, bundled engine and vendored dependencies are
 unchanged; no forced exit, forced engine disposal or timing delay implements
 this correction.
 
-The original `SIGABRT` remains unresolved: its exact matching compositor/mutex
-identity and the mutex value tested by GLib have not been captured together.
-Later passive runs did not capture the abort branch. The measured `SIGSEGV`
-sequence and absence of later aborts do not establish that both share one cause
-or attribute the abort solely to Flutter.
+The original terminal `SIGABRT` remains unverified. The 30 October follow-up did
+capture GLib's already-taken failure branch: it tested `1` for the exact
+initialized compositor mutex still held by raster presentation. The same-stop
+GTK/raster stacks, saved compositor and mutex pointers now establish disposal
+during active presentation. A competing framebuffer `SIGSEGV` terminated that
+process before `SIGABRT`; it is distinct from the earlier queued-redraw crash.
+The existing descendant-retirement correction protects the measured interval;
+no further lifecycle change was made. See the
+[mutex follow-up and precise signal limits](linux-shutdown-mutex-followup.md).
 
 Focused tests, the native input gate and the production release build pass.
 The final executable completed 50 ordinary closes each from Welcome, the exact
@@ -37,8 +41,12 @@ compositors and engines finalized on GTK's thread. A disposable blocked-note-wri
 case retained the window until unlock, saved the exact 64-character note and
 exited normally. Its original and copied profiles reopened with that note,
 unchanged settings and SQLite integrity `ok`. Earlier failed diagnostics remain failed.
-Physical GPU acceptance is unavailable after repeated NVIDIA kernel failures;
-device-isolated Mesa/Xvfb checks establish only their software-rendered scope.
+Earlier physical GPU acceptance was unavailable after repeated NVIDIA kernel
+failures. On a healthy 30 October boot, the corrected installed release completed
+five Welcome closes and five exact-PDF/Go To closes on physical GNOME X11/NVIDIA,
+all with natural status zero and no new kernel GPU fault. These bounded physical
+checks are separate from the private Mesa/Xvfb OpenGL comparison and do not prove
+permanent abort elimination or physical Wayland acceptance.
 See [shutdown causality and verification limits](linux-shutdown-causality.md)
 and [the guarded-close driver](../../tools/README.md#linux-workspace-and-shutdown-diagnostics).
 
