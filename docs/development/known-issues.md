@@ -2,38 +2,45 @@
 
 ## Intermittent Linux shutdown abort
 
-BusyBooks can exit abnormally during window close with `SIGABRT` / `g_mutex_clear`
-in Flutter 3.47.5's `FlCompositorOpenGL` teardown. The same stack was observed in
-the BusyBooks baseline before workspace remediation and after it. The application
-releases native reader/popover ownership before GTK destroys the main view; the
-compositor abort remains unresolved.
+Linux release-window close has produced both `SIGABRT` / `g_mutex_clear` in
+Flutter 3.47.5's compositor teardown and a separate queued-redraw `SIGSEGV`.
+The `SIGSEGV` cause is measured: GTK destroys a child renderer while raster
+presentation still owns its parent view; the renderer's later reference fails
+and the queued redraw receives null. On the actual GNOME X11 desktop, both the
+normal application and a diagnostic build excluding reader-host construction
+had 29 normal closes and one `SIGSEGV` in 30 trials each. Reader-host
+initialization is therefore unnecessary for that failure.
 
-The October 2026 followup reproduced the abort on ordinary release-window close
-from Welcome without an open book or secondary engine. Deeper GDB stacks showed
-GTK child destruction reaching `FlViewRenderer` finalization and
-`FlCompositorOpenGL` disposal while the compositor mutex was still in use. A
-separate baseline run also stopped at a Flutter idle callback with `SIGSEGV`
-after GLib reported a reference to an already-finalized object. Debug-only clean
-closes do not qualify the intermittent release failure.
+The adopted application correction retains GTK descendants during view
+retirement, drains existing parent references, and releases ownership on the GTK
+thread with an actual-finalization barrier and balanced application holds. It
+also removes the embedded view's unintended main-window quit callback and
+initializes the official GTK settings notification consumer in primary Linux
+bootstrap. The previously surviving engine owner was an unanswered
+`gtk/settings` notification task. Subsequent native traces verified its release,
+actual primary and secondary engine finalization, zero retirement counters and
+normal process exits. The SDK, bundled engine and vendored dependencies are
+unchanged; no forced exit, forced engine disposal or timing delay implements
+this correction.
 
-Application-owned retention/close sequencing candidates were tested and rejected:
-retaining children through view retirement could avoid a sampled abort, but an
-independent engine-shutdown hold exposed an engine reference that did not drain.
-Allowing a zero exit while retained objects remain is not cleanup verification;
-no such candidate or forced engine disposal is shipped. The remaining reference
-owner and safe teardown ordering still need diagnosis.
+The original `SIGABRT` remains unresolved: its exact matching compositor/mutex
+identity and the mutex value tested by GLib have not been captured together.
+Later passive runs did not capture the abort branch. The measured `SIGSEGV`
+sequence and absence of later aborts do not establish that both share one cause
+or attribute the abort solely to Flutter.
 
-The stack points into Flutter's teardown, but definitive attribution to Flutter
-alone, rather than its interaction with BusyBooks, has not been established.
-Untouched Flutter counter and independent two-view controls did not reproduce
-the intermittent abort, and no exact matching released fix has been verified.
-
-Tested reading-data hashes remained unchanged and SQLite integrity checks passed
-after affected closes, including a saved large note. Those observations did not
-demonstrate data corruption; they do not establish durability for every crash or
-successful clean shutdown. Release decisions must account for the abnormal exit.
-The pinned SDK and normal shutdown behavior remain unchanged. Reproduction uses
-[the guarded-close driver](../../tools/README.md#linux-workspace-and-shutdown-diagnostics).
+Focused tests, the native input gate and the production release build pass.
+The final executable completed 50 ordinary closes each from Welcome, the exact
+user PDF and PDF with Go To opened/dismissed: 150 normal exits with no surviving
+owned processes. Separate production tracing verified both views, renderers,
+compositors and engines finalized on GTK's thread. A disposable blocked-note-write
+case retained the window until unlock, saved the exact 64-character note and
+exited normally. Its original and copied profiles reopened with that note,
+unchanged settings and SQLite integrity `ok`. Earlier failed diagnostics remain failed.
+Physical GPU acceptance is unavailable after repeated NVIDIA kernel failures;
+device-isolated Mesa/Xvfb checks establish only their software-rendered scope.
+See [shutdown causality and verification limits](linux-shutdown-causality.md)
+and [the guarded-close driver](../../tools/README.md#linux-workspace-and-shutdown-diagnostics).
 
 ## Intermittent focus-test transition timeout
 

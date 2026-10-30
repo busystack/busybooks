@@ -19,6 +19,7 @@ import 'src/platform/gtk_animation_settings_service.dart';
 import 'src/platform/gtk_header_icon_service.dart';
 import 'src/platform/gtk_window_preferences_service.dart';
 import 'src/platform/linux_gtk_accent_service.dart';
+import 'src/platform/linux_gtk_settings_notifications.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,7 @@ Future<void> main(List<String> args) async {
 }
 
 Future<void> _bootstrap(List<String> args) async {
+  if (Platform.isLinux) initializeLinuxGtkSettingsNotifications();
   await windowManager.ensureInitialized();
   await windowManager.setMinimumSize(const Size(640, 560));
   if (Platform.isLinux) await YaruWindow.ensureInitialized();

@@ -1,5 +1,6 @@
 #include "reader_popover.h"
 #include "native_menu_host.h"
+#include "gtk_view_retirement.h"
 #include "../../native/reader_action_limits.h"
 #include "../../native/reader_popover_events.h"
 #include "../../native/reader_popover_geometry.h"
@@ -77,6 +78,10 @@ void ReaderPopover::EnsureView() {
   // context from the owning view must not remain current on this GTK thread.
   gdk_gl_context_clear_current();
   view_ = fl_view_new(project);
+  BusyBooksBindEmbeddedGtkViewCloseOwnership(GTK_WIDGET(view_));
+  BusyBooksBindGtkViewRetirement(
+      G_APPLICATION(gtk_window_get_application(
+          GTK_WINDOW(gtk_widget_get_toplevel(anchor_)))), GTK_WIDGET(view_));
   g_object_ref_sink(view_);
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   channel_ = fl_method_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view_)),

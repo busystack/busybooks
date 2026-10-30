@@ -16,6 +16,7 @@ add_executable(${BINARY_NAME}
   "gtk_header_icons.cc"
   "gtk_window_preferences.cc"
   "gtk_window_menu.cc"
+  "gtk_view_retirement.cc"
   "reader_host.cc"
   "reading_fonts.cc"
   "reading_font_channel.cc"
@@ -27,6 +28,13 @@ add_executable(${BINARY_NAME}
 # Apply the standard set of build settings. This can be removed for applications
 # that need different build settings.
 apply_standard_settings(${BINARY_NAME})
+
+option(BUSYBOOKS_VIEW_RETIREMENT_DIAGNOSTICS
+  "Enable GTK view retirement validation counters and traces" OFF)
+if(BUSYBOOKS_VIEW_RETIREMENT_DIAGNOSTICS)
+  target_compile_definitions(${BINARY_NAME} PRIVATE
+    BUSYBOOKS_VIEW_RETIREMENT_DIAGNOSTICS=1)
+endif()
 
 # Add preprocessor definitions for the application ID.
 add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")

@@ -12,6 +12,7 @@
 
 #include "flutter/generated_plugin_registrant.h"
 #include "gtk_accent_host.h"
+#include "gtk_view_retirement.h"
 #include "linux_chrome_host.h"
 #include "reader_host.h"
 #include "native_menu_host.h"
@@ -341,6 +342,7 @@ static void my_application_activate(GApplication* application) {
       project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
+  BusyBooksBindGtkViewRetirement(application, GTK_WIDGET(view));
   self->flutter_view = GTK_WIDGET(view);
   GdkRGBA background_color;
   gdk_rgba_parse(&background_color, "#00000000");

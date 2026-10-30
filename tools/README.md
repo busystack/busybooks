@@ -198,8 +198,18 @@ Each close produces a GDB log; `outcomes.json` records normal/aborted/segmentati
 fault exits and driver errors. It stops on failure without suppressing a crash.
 A bounded failed-diagnostic cleanup cannot count as successful application close.
 Keep the private D-Bus session, runtime/config directories and settings backend
-isolated from the real desktop. See the unresolved
-[Linux shutdown issue](../docs/development/known-issues.md#intermittent-linux-shutdown-abort).
+isolated from the real desktop. Native lifetime checks can additionally enable
+the CMake option `BUSYBOOKS_VIEW_RETIREMENT_DIAGNOSTICS` and set the environment
+variable of the same name to `1` to record retirement stages and ownership
+counters. Production builds leave the option `OFF`. A zero exit alone does not
+verify cleanup: pair the widget counters with native lifecycle tracing to
+observe engine finalization too. Require actual parent/descendant and engine
+finalization, balanced holds and no remaining ownership or contract violations.
+Keep `SIGABRT`, `SIGSEGV`, harness failures and GPU health failures separate.
+Mesa/Xvfb runs with GPU devices hidden do not qualify the physical desktop
+backend. See the unresolved
+[Linux shutdown issue](../docs/development/known-issues.md#intermittent-linux-shutdown-abort)
+and [causality report](../docs/development/linux-shutdown-causality.md).
 
 ## Memory and performance diagnostics
 
