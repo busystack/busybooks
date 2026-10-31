@@ -84,6 +84,19 @@ permitted runtime correction and renewed acceptance. This is separate from the
 accepted renderer/compositor shutdown correction. Raw logs and matching-node
 observations are retained under ignored `evidence/release-final-20261030/`.
 
+## Selection controls and reported freeze
+
+Automatic text and region selection now use the primary window's existing
+native menu service. Selection actions retain their captured source and reject
+retired ownership independently of secondary popovers. Add Note and Edit Note
+use the existing protected Notebook editor, including in Split.
+
+Physical Ubuntu diagnostics reproduced the former Material selection popup and
+its dismissal on resize, but did not reproduce the reported freeze. Removing
+that automatic secondary-engine presentation does not establish the freeze's
+original cause or resolve the separate GTK accessibility/input blocker above.
+See the [selection ownership contract](reading-workspace.md#selected-text-actions).
+
 ## Distribution and desktop coverage
 
 Installed strict-Snap behavior remains unqualified. Build and install the actual

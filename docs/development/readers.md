@@ -340,7 +340,7 @@ Engine metadata is collected as part of normal direct reading.
 ## Reading workspace integration
 
 See [reading-workspace.md](reading-workspace.md) for the shared header/sidebar,
-owned Flutter popovers, selection action/result protocol and navigation model.
+native selection menus, owned Flutter controls and navigation model.
 Content CSPs and resource handlers remain restricted. Footnotes are resolved
 through Foliate's section/anchor API and sanitized before presentation; local
 images use the existing publication loader, without adding a blob/network fetch
@@ -389,7 +389,7 @@ in [development tools](../../tools/README.md).
 
 Search in This Book captures the complete selection, preserving literal
 whitespace, and its book/session
-before the protected popover handoff. It explicitly reveals the existing header
+before the protected menu handoff. It explicitly reveals the existing header
 search and temporary Book Text sidebar session, synchronizes the editable field,
 and starts an immediate search revision. It does not submit or navigate an existing result.
 Selection in reflowable EPUB, text PDF and an EPUB footnote uses the same captured

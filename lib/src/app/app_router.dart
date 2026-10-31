@@ -30,16 +30,16 @@ class _ReaderRouteObserver extends NavigatorObserver {
   final ReaderController reader;
   int _revision = 0;
 
-  Future<void> _showTop(
-    bool visible,
-    int revision,
-    ReaderAppearanceMenuOwner? menuOwner,
-  ) async {
+  Future<void> _showTop(bool visible, int revision, Object? menuOwner) async {
     if (!visible) {
-      if (menuOwner == null) {
+      if (menuOwner is ReaderSelectionMenuOwner) {
+        await reader.showSelectionMenuFallback(menuOwner);
+      } else if (menuOwner == null) {
         await reader.show(false);
       } else {
-        await reader.showAppearanceMenuFallback(menuOwner);
+        await reader.showAppearanceMenuFallback(
+          menuOwner as ReaderAppearanceMenuOwner,
+        );
       }
       return;
     }
@@ -64,8 +64,9 @@ class _ReaderRouteObserver extends NavigatorObserver {
     _showTop(
       topRoute.settings.name == 'reader' || topRoute.settings.name == 'split',
       ++_revision,
-      topRoute.settings.arguments is ReaderAppearanceMenuOwner
-          ? topRoute.settings.arguments as ReaderAppearanceMenuOwner
+      topRoute.settings.arguments is ReaderAppearanceMenuOwner ||
+              topRoute.settings.arguments is ReaderSelectionMenuOwner
+          ? topRoute.settings.arguments
           : null,
     ),
   );

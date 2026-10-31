@@ -410,11 +410,12 @@ private notes remain available.
 On a comic, the existing Add Note command enters a temporary rectangle mode
 inside one image. Drag a rectangle, or use arrows to move, Shift+arrows to resize,
 and Ctrl for smaller steps; Enter confirms and Escape cancels. Ordinary drag
-panning resumes outside selection mode. Confirming opens the existing native
-note editor with the captured session, book, page and rectangle. Save, failed-save
+panning resumes outside selection mode. Confirming opens the primary window's
+selection menu with the captured session, book, page and rectangle. Add Note
+opens the existing Notebook editor. Save, failed-save
 draft retention, Retry and deletion use the existing protected workflow. The
 region is normalized against the oriented intrinsic image and painted/hit-tested
-with one shared transform. Saved region buttons open the same editor and are
+with one shared transform. Saved region buttons open the same menu and are
 keyboard reachable. Notebook/Marks offer a Region filter and return to
 the correct page and region. A page bookmark's optional note remains page-wide;
 independent regions never participate in page-bookmark deduplication. Ordinary
@@ -431,7 +432,22 @@ artwork. This adds no persistence domain or backup field.
 
 ## Selected-text actions
 
-The selection popover includes Search in This Book and Look Up. Search captures
+Selected text opens the primary window's existing native menu service, anchored
+to the passage. Highlight, highlight colors, Add Note/Edit Note, Copy, Search in
+This Book, Look Up and Read Aloud use a captured passage independent of WebKit's
+visual selection and the secondary-popover lifecycle. Book, renderer session,
+presentation and selection revisions reject replaced or retired actions. Closing
+or resizing the owning reader dismisses the menu. Cancellation restores reading
+focus only while the original focus handoff still owns it. This automatic path
+does not create a secondary Flutter engine or modal GTK popover.
+
+Add Note creates the protected Notebook draft before navigation or SQL; Edit Note
+reveals the existing annotation in that same editor. Reading opens Notebook;
+Split retains Split and focuses its Notebook pane. Existing autosave, retry and
+draft protections apply. Highlight color updates preserve private note text.
+Accepted annotation actions join the reader's existing event drain before close.
+
+Search captures
 the entire passage, preserving literal whitespace, Unicode and footnote
 selections. It opens the shared header field and temporary Book Text search session, and starts an
 owned immediate engine search. Repeating it starts a new query revision without

@@ -612,12 +612,44 @@ class _ReaderFixture {
   NotebookState get drafts => container.read(notebookControllerProvider);
   Map get popup =>
       calls.lastWhere((c) => c.method == 'popover').arguments as Map;
-  Future<void> select() => event('selection', {
-    'anchor': {'page': 0, 'textOffset': 1, 'textLength': 3},
-    'text': 'ABC',
-    'reference': 'Page 1',
-    'settled': true,
-  });
+  Future<ReaderSelectionMenuOwner> selectionMenuOwner(
+    Map<String, dynamic> passage, {
+    String type = 'selection',
+  }) async {
+    final request = reader.events.stream.firstWhere(
+      (e) => e['type'] == 'selectionMenu',
+    );
+    await event(type, {'settled': true, ...passage});
+    final target = (await request)['target'] as ReaderSelectionTarget;
+    return (await reader.prepareSelectionMenu(target, dismiss: () async {}))!;
+  }
+
+  // These fixtures exercise the retained secondary channel's draft protocol.
+  // Automatic publication selection is tested through the primary native menu.
+  Future<void> openAnnotationPopover(
+    ReadingAnnotation annotation, {
+    Object? rect,
+  }) async {
+    if (annotation.bookId != state.bookId) return;
+    final current = drafts.findAnnotation(
+      annotation.bookId,
+      annotation.id,
+      reader.annotations,
+    );
+    if (current == null) return;
+    await reader.showPopover('selection', extra: {'annotationId': current.id});
+  }
+
+  Future<void> openSelectionPopover() async {
+    await event('selection', {
+      'anchor': {'page': 0, 'textOffset': 1, 'textLength': 3},
+      'text': 'ABC',
+      'reference': 'Page 1',
+      'settled': false,
+    });
+    await reader.showPopover('selection');
+  }
+
   Future<void> action(String action, [Map<String, dynamic> args = const {}]) =>
       event('popoverAction', {
         'presentation': popup['presentation'],
@@ -1020,6 +1052,7 @@ Future<void> _startLookup(_ReaderFixture f, String term) async {
 
 void main() {
   _professionalWorkspaceTests();
+  _nativeSelectionTests();
   for (final invalidation in ['capacity', 'book']) {
     testWidgets(
       'selector without a registry rejects a delayed $invalidation change',
@@ -2314,6 +2347,22 @@ void main() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
       });
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        const MethodChannel(nativeMenuChannelName),
+        (call) async {
+          if (call.method == 'show') {
+            final entries = _nativeLeaves(
+              (call.arguments as Map)['entries'] as List,
+            );
+            return entries.indexWhere(
+              (e) => e['label'] == 'Search in This Book',
+            );
+          }
+          return null;
+        },
+      );
       try {
         await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
         await _readerAction(
@@ -2334,8 +2383,8 @@ void main() {
             });
             // Native focus and a footnote closing can collapse the live range.
             await f.event('selection', {'anchor': null, 'text': ''});
-            await f.action('searchSelection');
           });
+          await _pumpUntil(tester, () => f.state.query == '  $term  ');
           final field = find.descendant(
             of: find.byKey(const ValueKey('book-header-search')),
             matching: find.byType(TextField),
@@ -2371,6 +2420,10 @@ void main() {
         expect(tester.widget<TextField>(field).controller!.value, value);
         expect(f.state.query, value.text);
       } finally {
+        messenger.setMockMethodCallHandler(
+          const MethodChannel(nativeMenuChannelName),
+          null,
+        );
         await _disposeHeaderApplication(tester, f);
       }
     },
@@ -2382,7 +2435,7 @@ void main() {
       () async {
         final f = await _ReaderFixture.create(fixture);
         try {
-          await f.select();
+          await f.openSelectionPopover();
           await f.action('searchSelection');
           await _until(() => f.dispatches.any((d) => d['action'] == 'search'));
           final old = f.dispatches.lastWhere(
@@ -2394,7 +2447,7 @@ void main() {
             'excerpt': 'ABC',
           });
           await f.event('searchDone', {'queryId': old});
-          await f.select();
+          await f.openSelectionPopover();
           await f.action('searchSelection');
           await _until(
             () =>
@@ -2469,6 +2522,24 @@ void main() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
       });
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      Completer<int?>? choice;
+      Map? selectionMenu;
+      messenger.setMockMethodCallHandler(
+        const MethodChannel(nativeMenuChannelName),
+        (call) async {
+          if (call.method == 'show') {
+            selectionMenu = call.arguments as Map;
+            choice = Completer<int?>();
+            return choice!.future;
+          }
+          if (call.method == 'dismiss' && choice?.isCompleted == false) {
+            choice!.complete(null);
+          }
+          return null;
+        },
+      );
       try {
         await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
         await _readerAction(
@@ -2476,6 +2547,7 @@ void main() {
           () => f.searchController.open(category: BookSearchCategory.bookText),
         );
         for (final selectionAction in [true, false]) {
+          selectionMenu = null;
           await _readerAction(
             tester,
             () => f.event('selection', {
@@ -2484,12 +2556,12 @@ void main() {
               'settled': true,
             }),
           );
+          await _pumpUntil(tester, () => selectionMenu != null);
           expect(service.terms, hasLength(selectionAction ? 0 : 1));
           if (selectionAction) {
-            await _readerAction(
-              tester,
-              () => f.action('dictionary'),
-              settle: false,
+            final entries = _nativeLeaves(selectionMenu!['entries'] as List);
+            choice!.complete(
+              entries.indexWhere((e) => e['label'] == 'Look Up'),
             );
           } else {
             unawaited(
@@ -2544,6 +2616,11 @@ void main() {
         expect(service.terms, ['ice cream', 'ice cream']);
         expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
       } finally {
+        if (choice?.isCompleted == false) choice!.complete(null);
+        messenger.setMockMethodCallHandler(
+          const MethodChannel(nativeMenuChannelName),
+          null,
+        );
         await _disposeHeaderApplication(tester, f);
       }
     },
@@ -2682,7 +2759,7 @@ void main() {
         final events = <Map>[];
         final subscription = f.reader.events.stream.listen(events.add);
         try {
-          await f.select();
+          await f.openSelectionPopover();
           if (kind != 'selection') await f.reader.showPopover(kind);
           final owner = f.popup['presentation'];
           f.calls.clear();
@@ -2741,7 +2818,7 @@ void main() {
       final subscription = f.reader.events.stream.listen(events.add);
       try {
         gate.failPut = true;
-        await f.select();
+        await f.openSelectionPopover();
         final anchor = jsonEncode(f.state.selection!['anchor']);
         await f.action('noteDraft', {
           'note': 'Already protected failed creation',
@@ -2814,7 +2891,7 @@ void main() {
       final subscription = f.reader.events.stream.listen(events.add);
       Future<void>? hidden;
       try {
-        await f.select();
+        await f.openSelectionPopover();
         final presentation = f.popup['presentation'];
         f.onNativeCall = (call) async {
           if (call.method == 'capturePopover') {
@@ -2866,7 +2943,7 @@ void main() {
         );
         try {
           gate.failPut = true;
-          await f.select();
+          await f.openSelectionPopover();
           await f.action('noteDraft', {'note': 'Keep this failed draft'});
           await _until(
             () => f.drafts.drafts.values.any((d) => d.error != null),
@@ -2877,7 +2954,7 @@ void main() {
             expect(await f.reader.prepareLookup(), isNotNull);
           }
           expect(f.drafts.drafts.values.single.text, 'Keep this failed draft');
-          await f.select();
+          await f.openSelectionPopover();
           f.onNativeCall = (call) async {
             if (call.method == 'capturePopover') {
               throw PlatformException(code: 'capture-failed');
@@ -2915,7 +2992,7 @@ void main() {
       });
       try {
         await _readerAction(tester, () async {
-          await f.select();
+          await f.openSelectionPopover();
           final target = await f.reader.prepareLookup();
           f.onNativeCall = (call) async {
             if (call.method == 'popover') {
@@ -2959,7 +3036,7 @@ void main() {
         expect(f.search.active, isFalse);
         expect(await f.reader.prepareLookup(), isNull);
         expect(service.terms, isEmpty);
-        await f.select();
+        await f.openSelectionPopover();
         final target = await f.reader.prepareLookup();
         f.onNativeCall = (call) async {
           if (call.method == 'popover') {
@@ -3103,7 +3180,7 @@ void main() {
       }
 
       try {
-        await f.select();
+        await f.openSelectionPopover();
         f.calls.clear();
         final owner = await f.reader.prepareAppearanceMenu(dismiss: dismiss);
         expect(owner, isNotNull);
@@ -3183,7 +3260,7 @@ void main() {
       final f = await _ReaderFixture.create('text.pdf');
       var dismissed = false;
       try {
-        await f.select();
+        await f.openSelectionPopover();
         final presentation = f.reader.presentationId;
         f.calls.clear();
         f.onNativeCall = (call) async {
@@ -3243,12 +3320,12 @@ void main() {
       final service = _ControlledDictionary();
       final f = await _ReaderFixture.create('text.pdf', dictionary: service);
       try {
-        await f.select();
+        await f.openSelectionPopover();
         final target = await f.reader.prepareLookup();
         await f.reader.showPopover('speech');
         await f.reader.lookup(target!);
         expect(f.popup['kind'], 'speech');
-        await f.select();
+        await f.openSelectionPopover();
         final leaving = await f.reader.prepareLookup();
         await f.reader.suspend();
         await f.reader.lookup(leaving!);
@@ -3601,7 +3678,7 @@ void main() {
         await tester.pumpAndSettle();
         await _readerAction(
           tester,
-          () => f.reader.editAnnotation(f.reader.annotations.single),
+          () => f.openAnnotationPopover(f.reader.annotations.single),
         );
         f.onNativeCall = (call) async {
           if (call.method == 'capturePopover') {
@@ -4451,7 +4528,7 @@ void main() {
         expect(gate.calls.length, before);
         await _readerAction(
           tester,
-          () => f.reader.editAnnotation(f.reader.annotations.single),
+          () => f.openAnnotationPopover(f.reader.annotations.single),
         );
         f.onNativeCall = (call) async {
           if (call.method == 'capturePopover') {
@@ -4505,7 +4582,7 @@ void main() {
         );
       });
       final entered = Completer<void>(), proceed = Completer<void>();
-      await _readerAction(tester, f.select);
+      await _readerAction(tester, f.openSelectionPopover);
       f.onNativeCall = (call) async {
         if (call.method == 'capturePopover') {
           if (!entered.isCompleted) entered.complete();
@@ -5464,7 +5541,7 @@ void main() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Saved A');
         highlight = f.reader.annotations.single;
         await f.checkedEvent('location', {
@@ -5573,10 +5650,10 @@ void main() {
       final delivered = <Map>[], rejected = <Map>[];
       await _readerAction(tester, () async {
         f = await _ReaderFixture.create('text.pdf');
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Saved A');
         annotation = f.reader.annotations.single;
-        await f.reader.editAnnotation(annotation);
+        await f.openAnnotationPopover(annotation);
       });
       _connectPopover(
         f,
@@ -5607,7 +5684,7 @@ void main() {
         );
         await _readerAction(
           tester,
-          () => f.reader.editAnnotation(f.reader.annotations.single),
+          () => f.openAnnotationPopover(f.reader.annotations.single),
         );
         await _popupUpdate(tester, f.popup);
         expect(
@@ -6939,18 +7016,50 @@ void main() {
                 ], retained);
                 // Exercise the renderer's actual highlight interaction route:
                 // EPUB resolves its CFI, PDF sends the drawn mark's stable ID.
+                final request = f.reader.events.stream.firstWhere(
+                  (e) => e['type'] == 'selectionMenu',
+                );
                 await f.checkedEvent(
                   'annotation',
                   format == 'epub'
                       ? {'cfi': expected.first.anchor['cfi']}
                       : {'id': expected.first.id},
                 );
-                expectSync(f.popup['annotationId'], expected.first.id);
-                expectSync(f.popup['note'], expected.first.note);
+                final target =
+                    (await request)['target'] as ReaderSelectionTarget;
+                expectSync(target.annotationId, expected.first.id);
+                expectSync(
+                  f.reader.selectionAnnotation(target)!.note,
+                  expected.first.note,
+                );
+                expectSync(target.passage!.containsKey('note'), false);
+                final owner = (await f.reader.prepareSelectionMenu(
+                  target,
+                  dismiss: () async {},
+                ))!;
+                await f.reader.selectionMenuAction(
+                  owner,
+                  ReaderSelectionAction.addNote,
+                );
+                f.notes.revealAnnotation(id, expected.first.id);
               });
-              _connectPopover(f);
-              await tester.pumpWidget(const ReaderPopoverApp());
-              await _popupUpdate(tester, f.popup);
+              await tester.pumpWidget(
+                UncontrolledProviderScope(
+                  container: f.container,
+                  child: MaterialApp(
+                    localizationsDelegates:
+                        AppLocalizations.localizationsDelegates,
+                    supportedLocales: AppLocalizations.supportedLocales,
+                    home: Scaffold(
+                      body: NotebookContent(id: f.state.bookId!, active: true),
+                    ),
+                  ),
+                ),
+              );
+              await _pumpUntil(
+                tester,
+                () => find.byType(TextField).evaluate().isNotEmpty,
+              );
               expect(
                 tester
                     .widget<TextField>(find.byType(TextField))
@@ -6960,7 +7069,7 @@ void main() {
               );
               final edited = '${expected.first.note}\nEdited after cold open';
               await tester.enterText(find.byType(TextField), edited);
-              await tester.tap(find.text('Save'));
+              await _readerAction(tester, f.notes.flush);
               await _pumpUntil(
                 tester,
                 () =>
@@ -7158,7 +7267,7 @@ void main() {
           final delivered = <Map>[], completed = <Map>[], rejected = <Map>[];
           await _readerAction(tester, () async {
             f = await _ReaderFixture.create('text.pdf');
-            await f.select();
+            await f.openSelectionPopover();
             if (kind == 'existing') {
               await f.reader.annotation('highlight', note: 'Baseline');
               // The full supported note is authored in the shared Notebook
@@ -7166,7 +7275,7 @@ void main() {
               final a = f.reader.annotations.single;
               f.notes.edit(a, note);
               await f.notes.save(a.id);
-              await f.reader.editAnnotation(f.reader.annotations.single);
+              await f.openAnnotationPopover(f.reader.annotations.single);
             }
           });
           _connectPopover(
@@ -7232,7 +7341,7 @@ void main() {
             await _readerAction(tester, () => f.verifyNote(id, note));
             await _readerAction(
               tester,
-              () => f.reader.editAnnotation(f.reader.annotations.single),
+              () => f.openAnnotationPopover(f.reader.annotations.single),
             );
             await _popupUpdate(tester, f.popup);
             expect(
@@ -7268,9 +7377,9 @@ void main() {
       final reject = {'noteDraft'};
       await _readerAction(tester, () async {
         f = await _ReaderFixture.create('text.pdf');
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Saved baseline');
-        await f.reader.editAnnotation(f.reader.annotations.single);
+        await f.openAnnotationPopover(f.reader.annotations.single);
       });
       _connectPopover(f, rejectActions: reject, rejected: rejected);
       final native = f.onNativeCall!;
@@ -7358,8 +7467,8 @@ void main() {
         var replaced = false;
         await tester.runAsync(() async {
           unawaited(
-            f.reader
-                .editAnnotation(f.reader.annotations.single)
+            f
+                .openAnnotationPopover(f.reader.annotations.single)
                 .then((_) => replaced = true),
           );
         });
@@ -7395,7 +7504,7 @@ void main() {
         );
         await _readerAction(
           tester,
-          () => f.reader.editAnnotation(f.reader.annotations.single),
+          () => f.openAnnotationPopover(f.reader.annotations.single),
         );
         await _popupUpdate(tester, f.popup);
         await tester.enterText(find.byType(TextField), 'Flush captures latest');
@@ -7441,9 +7550,9 @@ void main() {
           'text.pdf',
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Baseline');
-        await f.reader.editAnnotation(f.reader.annotations.single);
+        await f.openAnnotationPopover(f.reader.annotations.single);
         gate.entered = entered;
         gate.proceed = proceed;
       });
@@ -7517,10 +7626,10 @@ void main() {
           final text = 'A' * 70000;
           await _readerAction(tester, () async {
             f = await _ReaderFixture.create('text.pdf');
-            await f.select();
+            await f.openSelectionPopover();
             if (kind == 'existing') {
               await f.reader.annotation('highlight', note: 'Saved baseline');
-              await f.reader.editAnnotation(f.reader.annotations.single);
+              await f.openAnnotationPopover(f.reader.annotations.single);
             }
           });
           _connectPopover(
@@ -7617,7 +7726,7 @@ void main() {
             await _readerAction(tester, () => f.verifyNote(id, text));
             await _readerAction(
               tester,
-              () => f.reader.editAnnotation(f.reader.annotations.single),
+              () => f.openAnnotationPopover(f.reader.annotations.single),
             );
             await _popupUpdate(tester, f.popup);
             expect(
@@ -7656,10 +7765,10 @@ void main() {
           'text.pdf',
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.select();
+        await f.openSelectionPopover();
         if (kind == 'existing') {
           await f.reader.annotation('highlight', note: 'Persisted baseline');
-          await f.reader.editAnnotation(f.reader.annotations.single);
+          await f.openAnnotationPopover(f.reader.annotations.single);
           gate.entered = entered;
           gate.proceed = proceed;
         } else {
@@ -7758,7 +7867,7 @@ void main() {
         }
         await _readerAction(
           tester,
-          () => f.reader.editAnnotation(f.reader.annotations.single),
+          () => f.openAnnotationPopover(f.reader.annotations.single),
         );
         await _popupUpdate(tester, f.popup);
         expect(
@@ -7823,10 +7932,10 @@ void main() {
               'text.pdf',
               wrapStore: (s) => gate = AnnotationStoreGate(s),
             );
-            await f.select();
+            await f.openSelectionPopover();
             if (kind == 'existing') {
               await f.reader.annotation('highlight', note: 'Original baseline');
-              await f.reader.editAnnotation(f.reader.annotations.single);
+              await f.openAnnotationPopover(f.reader.annotations.single);
               gate.entered = entered;
               gate.proceed = proceed;
               gate.failAfterProceed = true;
@@ -7898,7 +8007,7 @@ void main() {
             }
             await _readerAction(
               tester,
-              () => f.reader.editAnnotation(f.drafts.sources[id]!),
+              () => f.openAnnotationPopover(f.drafts.sources[id]!),
             );
             await _popupUpdate(tester, f.popup);
             expect(
@@ -7924,7 +8033,7 @@ void main() {
             );
             await _readerAction(
               tester,
-              () => f.reader.editAnnotation(f.reader.annotations.single),
+              () => f.openAnnotationPopover(f.reader.annotations.single),
             );
             await _popupUpdate(tester, f.popup);
             expect(
@@ -7963,9 +8072,9 @@ void main() {
           'text.pdf',
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Saved baseline');
-        await f.reader.editAnnotation(f.reader.annotations.single);
+        await f.openAnnotationPopover(f.reader.annotations.single);
         gate.entered = entered;
         gate.proceed = proceed;
       });
@@ -8054,10 +8163,10 @@ void main() {
           'text.pdf',
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Replacement baseline');
         await f.reader.annotation('highlight', note: 'Original baseline');
-        await f.reader.editAnnotation(f.reader.annotations.last);
+        await f.openAnnotationPopover(f.reader.annotations.last);
         gate.entered = entered;
         gate.proceed = proceed;
       });
@@ -8099,7 +8208,7 @@ void main() {
             .onChanged!;
         await _readerAction(
           tester,
-          () => f.reader.editAnnotation(f.reader.annotations.first),
+          () => f.openAnnotationPopover(f.reader.annotations.first),
         );
         await _popupUpdate(tester, f.popup);
         final replacement = Map.of(f.popup);
@@ -8176,7 +8285,7 @@ void main() {
       try {
         gate.failPut = true;
         gate.putEntered = Completer<void>();
-        await f.select();
+        await f.openSelectionPopover();
         await f.action('noteDraft', {
           'note': 'New protected\npassage note',
           'color': 'pink',
@@ -8202,7 +8311,7 @@ void main() {
         expect(f.drafts.drafts[id]!.text, 'New protected\npassage note');
         await f.reader.open(source.bookId);
         await f.reader.show(true);
-        await f.reader.editAnnotation(source);
+        await f.openAnnotationPopover(source);
         expect(f.popup['note'], 'New protected\npassage note');
         expect(f.popup['noteError'], isNotNull);
         gate.failPut = false;
@@ -8228,7 +8337,7 @@ void main() {
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
         try {
-          await f.select();
+          await f.openSelectionPopover();
           await f.reader.annotation('highlight', note: 'Saved A');
           final a = f.reader.annotations.single;
           gate.fail = true;
@@ -8242,12 +8351,12 @@ void main() {
             await f.reader.open(a.bookId);
             await f.reader.show(true);
           } else {
-            await f.reader.editAnnotation(a);
+            await f.openAnnotationPopover(a);
             await f.action('noteDraft', {'note': 'Protected B'});
             await f.action('annotationNote', {'note': 'Protected B'});
             await f.action('dismiss');
           }
-          await f.reader.editAnnotation(a);
+          await f.openAnnotationPopover(a);
           expect(f.popup['note'], 'Protected B');
           expect(f.popup['noteError'], isNotNull);
           expect(f.drafts.drafts[a.id]!.baseline, 'Saved A');
@@ -8278,7 +8387,7 @@ void main() {
             'text.pdf',
             wrapStore: (s) => gate = AnnotationStoreGate(s),
           );
-          await f.select();
+          await f.openSelectionPopover();
           await f.reader.annotation('highlight', note: 'Saved A');
           final a = f.reader.annotations.single;
           gate.fail = true;
@@ -8289,12 +8398,12 @@ void main() {
               throwsA(isA<FileSystemException>()),
             );
           } else {
-            await f.reader.editAnnotation(a);
+            await f.openAnnotationPopover(a);
             await f.action('noteDraft', {'note': 'Protected B'});
             await f.action('annotationNote', {'note': 'Protected B'});
             await f.action('dismiss');
           }
-          await f.reader.editAnnotation(a);
+          await f.openAnnotationPopover(a);
         });
         try {
           _connectPopover(f);
@@ -8325,7 +8434,7 @@ void main() {
           );
           await _readerAction(
             tester,
-            () => f.reader.editAnnotation(f.reader.annotations.single),
+            () => f.openAnnotationPopover(f.reader.annotations.single),
           );
           await _popupUpdate(tester, f.popup);
           expect(
@@ -8361,7 +8470,7 @@ void main() {
             wrapStore: (s) => gate = AnnotationStoreGate(s),
           );
           gate.failPut = true;
-          await f.select();
+          await f.openSelectionPopover();
         });
         _connectPopover(f);
         try {
@@ -8391,7 +8500,7 @@ void main() {
                 beforeDismiss,
           );
           await tester.pumpWidget(const SizedBox.shrink());
-          await _readerAction(tester, f.select);
+          await _readerAction(tester, f.openSelectionPopover);
           expect(f.popup['annotationId'], source.id);
           await tester.pumpWidget(const ReaderPopoverApp());
           await _popupUpdate(tester, f.popup);
@@ -8490,7 +8599,7 @@ void main() {
           if (path == 'toolbar') {
             await f.reader.annotation('bookmark');
           } else {
-            await f.reader.editAnnotation(item);
+            await f.openAnnotationPopover(item);
             final popup =
                 f.calls.lastWhere((c) => c.method == 'popover').arguments
                     as Map;
@@ -8774,7 +8883,7 @@ void main() {
     () async {
       final f = await _ReaderFixture.create('text.pdf');
       try {
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Baseline');
         final a = f.reader.annotations.single;
         final note = '\u0001' * maxAnnotationTextLength;
@@ -8798,7 +8907,7 @@ void main() {
       try {
         gate.putEntered = Completer<void>();
         gate.putProceed = Completer<void>();
-        await f.select();
+        await f.openSelectionPopover();
         await f.action('noteDraft', {'note': 'First revision'});
         await gate.putEntered!.future;
         final id = f.drafts.sources.values.single.id;
@@ -8841,7 +8950,7 @@ void main() {
             gate.failPut = true;
             gate.putEntered = Completer<void>();
             gate.putProceed = Completer<void>();
-            await f.select();
+            await f.openSelectionPopover();
             final old = Map.of(f.popup);
             await f.action('noteDraft', {'note': 'First text'});
             await gate.putEntered!.future;
@@ -8919,7 +9028,7 @@ void main() {
           final other = f.reader.annotations.single;
           gate.putEntered = Completer<void>();
           gate.putProceed = Completer<void>();
-          await f.select();
+          await f.openSelectionPopover();
           await f.action('noteDraft', {'note': 'Pending creation'});
           await gate.putEntered!.future;
           final source = f.drafts.sources.values.single;
@@ -8992,7 +9101,7 @@ void main() {
       );
       try {
         gate.failPut = true;
-        await f.select();
+        await f.openSelectionPopover();
         await f.action('noteDraft', {'note': 'Never inserted'});
         await _until(() => f.drafts.drafts.values.any((d) => d.error != null));
         final id = f.drafts.sources.keys.single;
@@ -9022,7 +9131,7 @@ void main() {
         wrapStore: (s) => gate = AnnotationStoreGate(s),
       );
       try {
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Saved A');
         final a = f.reader.annotations.single;
         gate.entered = Completer<void>();
@@ -9030,7 +9139,7 @@ void main() {
         f.notes.edit(a, 'Older B');
         final saving = f.notes.save(a.id);
         await gate.entered!.future;
-        await f.reader.editAnnotation(a);
+        await f.openAnnotationPopover(a);
         expect(f.popup['note'], 'Older B');
         await f.action('noteDraft', {'note': 'Newer C'});
         gate.proceed!.complete();
@@ -9038,7 +9147,7 @@ void main() {
         expect(f.drafts.drafts[a.id]!.text, 'Newer C');
         await f.notes.flush();
         await f.verifyNote(a.id, 'Newer C');
-        await f.reader.editAnnotation(a);
+        await f.openAnnotationPopover(a);
         final obsolete = Map.of(f.popup);
         await f.container
             .read(workspaceControllerProvider.notifier)
@@ -9049,7 +9158,7 @@ void main() {
         await f.notes.flush();
         expect(f.drafts.drafts, isEmpty);
         expect(await f.store.call('annotations', a.bookId), isEmpty);
-        await f.select();
+        await f.openSelectionPopover();
         await f.event('popoverAction', {
           'presentation': obsolete['presentation'],
           'action': 'noteDraft',
@@ -9253,6 +9362,7 @@ void main() {
           'reference': 'Chapter 1',
           'settled': true,
         });
+        await f.reader.showPopover('selection');
         final popup =
             f.calls.lastWhere((c) => c.method == 'popover').arguments as Map;
         await f.event('popoverAction', {
@@ -9284,52 +9394,56 @@ void main() {
     },
   );
   test(
-    'selection popover keeps reader visible and writes durable passage notes and chosen color',
+    'native selection ownership keeps reader visible and saves the captured passage and color',
     () async {
       final f = await _ReaderFixture.create('reflowable.epub');
       try {
         f.calls.clear();
         const anchor = {'cfi': 'epubcfi(/6/2!/4/2/1:6)', 'index': 0};
-        await f.event('selection', {
+        final owner = await f.selectionMenuOwner({
           'anchor': anchor,
           'text': 'A quiet library',
           'reference': 'Chapter 1',
-          'settled': true,
           'rect': {'x': 30, 'y': 20, 'width': 120, 'height': 24},
         });
-        final popup =
-            f.calls.singleWhere((c) => c.method == 'popover').arguments as Map;
-        expect(popup['kind'], 'selection');
-        expect(popup['session'], f.session);
+        expect(owner.target.session, f.session);
+        expect(
+          f.calls.where(
+            (c) => c.method == 'popover' || c.method == 'capturePopover',
+          ),
+          isEmpty,
+        );
         expect(
           f.calls.where((c) => c.method == 'visible' && c.arguments == false),
           isEmpty,
         );
-        await f.event('popoverAction', {
-          'presentation': popup['presentation'],
-          'action': 'highlight',
-          'color': 'blue',
-          'note': 'Keep this passage',
-        });
-        final annotations = f.container
-            .read(workspaceControllerProvider)
-            .annotations;
-        expect(annotations.single.anchor, anchor);
-        expect(annotations.single.note, 'Keep this passage');
-        expect(annotations.single.color, 'blue');
-        expect(f.reader.highlightColor, 'blue');
-        expect(f.calls.where((c) => c.method == 'dismissPopover'), isNotEmpty);
-        final stale = popup['presentation'];
-        await f.event('popoverAction', {
-          'presentation': stale,
-          'action': 'highlight',
-          'color': 'pink',
-          'note': 'stale',
-        });
-        expect(
-          f.container.read(workspaceControllerProvider).annotations.length,
-          1,
+        await f.event('selection', {'anchor': null, 'text': ''});
+        await f.reader.selectionMenuAction(
+          owner,
+          ReaderSelectionAction.highlight,
+          color: 'blue',
         );
+        final a = f.reader.annotations.single;
+        f.notes.edit(a, 'Keep this passage');
+        await f.notes.flush();
+        expect(f.reader.annotations.single.anchor, anchor);
+        expect(f.reader.annotations.single.note, 'Keep this passage');
+        expect(f.reader.annotations.single.color, 'blue');
+        expect(f.reader.highlightColor, 'blue');
+        await f.reader.selectionMenuAction(
+          owner,
+          ReaderSelectionAction.highlight,
+          color: 'pink',
+        );
+        await f.event('popoverAction', {
+          'presentation': owner.target.presentation,
+          'action': 'highlight',
+          'note': 'stale',
+          'color': 'pink',
+        });
+        expect(f.reader.annotations, hasLength(1));
+        expect(f.reader.annotations.single.note, 'Keep this passage');
+        await f.verifyNote(a.id, 'Keep this passage');
       } finally {
         await f.dispose();
       }
@@ -9615,19 +9729,23 @@ void main() {
           ...page,
           'region': [.1, .2, .3, .4],
         };
-        await f.event('regionSelected', {
+        final regionMenu = await f.selectionMenuOwner({
           'anchor': region,
           'text': '',
           'reference': 'Page 1',
           'rect': {'x': 10, 'y': 20, 'width': 30, 'height': 40},
-        });
-        expect(f.popup['annotationKind'], 'region');
-        expect(f.popup['editing'], isTrue);
+        }, type: 'regionSelected');
+        expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
+        await f.reader.selectionMenuAction(
+          regionMenu,
+          ReaderSelectionAction.addNote,
+        );
         gate.failPut = true;
-        await f.action('highlight', {
-          'note': 'Private image note',
-          'color': 'blue',
-        });
+        final created = f.drafts.sources.values.single;
+        f.notes.edit(created, 'Private image note');
+        try {
+          await f.notes.save(created.id);
+        } catch (_) {}
         await _until(
           () =>
               f.drafts.drafts.isNotEmpty &&
@@ -9659,7 +9777,7 @@ void main() {
               .single['annotationKind'],
           'region',
         );
-        await f.reader.editAnnotation(f.reader.annotations.single);
+        await f.openAnnotationPopover(f.reader.annotations.single);
         await f.action('annotationNote', {'note': 'Edited region note'});
         expect(
           (await f.store.call('annotations', book.id) as List).single['note'],
@@ -9844,10 +9962,14 @@ void _professionalWorkspaceTests() {
           'pageId': index['pages'][0]['file'],
           'region': [.1, .1, .3, .3],
         };
-        await f.event('regionSelected', {'anchor': region, 'text': ''});
-        await f.action('annotationNote', {
-          'note': 'Private region note.\nA complete second line.',
-        });
+        final menu = await f.selectionMenuOwner({
+          'anchor': region,
+          'text': '',
+        }, type: 'regionSelected');
+        await f.reader.selectionMenuAction(menu, ReaderSelectionAction.addNote);
+        final a = f.drafts.sources.values.single;
+        f.notes.edit(a, 'Private region note.\nA complete second line.');
+        await f.notes.flush();
       });
       try {
         // Wait for the actual cache read before settling animations. An
@@ -9885,7 +10007,7 @@ void _professionalWorkspaceTests() {
           'text.pdf',
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Private note');
       });
       try {
@@ -9940,7 +10062,7 @@ void _professionalWorkspaceTests() {
           'text.pdf',
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Private note');
         f.notes.revealAnnotation(
           f.state.bookId!,
@@ -10097,7 +10219,7 @@ void _professionalWorkspaceTests() {
           speech: _Speech(),
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation(
           'highlight',
           note: 'Shared private note\nSecond line',
@@ -10423,7 +10545,7 @@ void _professionalWorkspaceTests() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           searchController: _CachedSearchSnapshot.new,
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Deleted search needle');
       });
       try {
@@ -10495,7 +10617,7 @@ void _professionalWorkspaceTests() {
                 nativeWindow: _HeaderWindow(),
               ),
             );
-            await f.select();
+            await f.openSelectionPopover();
             await f.event('location', {
               'anchor': {'page': 0},
             });
@@ -10586,7 +10708,7 @@ void _professionalWorkspaceTests() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           wrapStore: (store) => gate = AnnotationStoreGate(store),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Saved note');
         pending = f.reader.annotations.single.copy({
           'id': 'annotation-unsaved-search',
@@ -10864,7 +10986,7 @@ void _professionalWorkspaceTests() {
     () async {
       final f = await _ReaderFixture.create('text.pdf');
       try {
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation(
           'highlight',
           note: 'A needle in the notebook',
@@ -10945,7 +11067,7 @@ void _professionalWorkspaceTests() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: 'Saved baseline');
         f.notes.revealAnnotation(
           f.state.bookId!,
@@ -11013,7 +11135,7 @@ void _professionalWorkspaceTests() {
           'text.pdf',
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.select();
+        await f.openSelectionPopover();
         await f.reader.annotation('highlight', note: note);
       });
       try {
@@ -11732,5 +11854,438 @@ void _professionalWorkspaceTests() {
         );
       }
     }
+  }
+}
+
+void _nativeSelectionTests() {
+  for (final action in [
+    ReaderSelectionAction.search,
+    ReaderSelectionAction.lookUp,
+    ReaderSelectionAction.readAloud,
+  ]) {
+    test(
+      'native selection $action uses the captured passage after blur',
+      () async {
+        final speech = _Speech();
+        final f = await _ReaderFixture.create('text.pdf', speech: speech);
+        final events = <Map>[];
+        final subscription = f.reader.events.stream.listen(events.add);
+        try {
+          final owner = await f.selectionMenuOwner({
+            'anchor': {'page': 0, 'textOffset': 3, 'textLength': 7},
+            'text': '  library  ',
+            'reference': 'Page 1',
+          });
+          await f.event('selection', {'anchor': null, 'text': ''});
+          await f.reader.selectionMenuAction(owner, action);
+          if (action == ReaderSelectionAction.readAloud) {
+            expect(
+              speech.calls.singleWhere((c) => c.action == 'speak').args['text'],
+              '  library  ',
+            );
+            expect(
+              f.dispatches.lastWhere(
+                (c) => c['action'] == 'speaking',
+              )['anchor'],
+              owner.target.passage!['anchor'],
+            );
+          } else {
+            final type = action == ReaderSelectionAction.search
+                ? 'searchSelection'
+                : 'lookup';
+            await _until(() => events.any((e) => e['type'] == type));
+            final event = events.singleWhere((e) => e['type'] == type);
+            if (action == ReaderSelectionAction.search) {
+              expect(event['text'], '  library  ');
+            } else {
+              final target = event['target'] as ReaderSelectionTarget;
+              expect(target.text, 'library');
+              expect(
+                target.passage!['anchor'],
+                owner.target.passage!['anchor'],
+              );
+            }
+          }
+          expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
+        } finally {
+          await subscription.cancel();
+          await f.dispose();
+          await speech.dispose();
+        }
+      },
+    );
+  }
+  test(
+    'native selection accepted highlight is drained before closing the book',
+    () async {
+      late AnnotationStoreGate gate;
+      final f = await _ReaderFixture.create(
+        'text.pdf',
+        wrapStore: (s) => gate = AnnotationStoreGate(s),
+      );
+      try {
+        final owner = await f.selectionMenuOwner({
+          'anchor': {'page': 0},
+          'text': 'Save before close',
+        });
+        gate.putEntered = Completer<void>();
+        gate.putProceed = Completer<void>();
+        final saving = f.reader.selectionMenuAction(
+          owner,
+          ReaderSelectionAction.highlight,
+        );
+        await gate.putEntered!.future;
+        var closed = false;
+        final closing = f.reader.close().then((_) => closed = true);
+        await _until(() => f.dispatches.any((c) => c['action'] == 'flush'));
+        expect(closed, false);
+        expect(f.calls.where((c) => c.method == 'close'), isEmpty);
+        gate.putProceed!.complete();
+        await saving;
+        await closing;
+        final annotations =
+            await f.store.call('annotations', owner.target.bookId) as List;
+        expect(annotations, hasLength(1));
+        expect(annotations.single['text'], 'Save before close');
+      } finally {
+        if (gate.putProceed?.isCompleted == false) gate.putProceed!.complete();
+        await f.dispose();
+      }
+    },
+  );
+  for (final fixture in ['text.pdf', 'reflowable.epub']) {
+    test(
+      'native selection preserves $fixture passage when visual focus collapses',
+      () async {
+        final f = await _ReaderFixture.create(fixture);
+        final copied = <String>[];
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(SystemChannels.platform, (
+          call,
+        ) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        });
+        try {
+          final anchor = fixture.endsWith('.pdf')
+              ? <String, dynamic>{'page': 0, 'textOffset': 0, 'textLength': 9}
+              : <String, dynamic>{'cfi': 'epubcfi(/6/2!/4/2/1:0)', 'index': 0};
+          final owner = await f.selectionMenuOwner({
+            'anchor': anchor,
+            'text': '  library\n文字  ',
+            'reference': 'Page 1',
+          });
+          await f.event('selection', {'anchor': null, 'text': ''});
+          expect(f.reader.ownsSelectionMenu(owner), isTrue);
+          expect(owner.target.passage!['anchor'], anchor);
+          await f.reader.selectionMenuAction(owner, ReaderSelectionAction.copy);
+          expect(copied, ['  library\n文字  ']);
+          expect(
+            f.calls.where(
+              (c) => c.method == 'popover' || c.method == 'capturePopover',
+            ),
+            isEmpty,
+          );
+        } finally {
+          messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+          await f.dispose();
+        }
+      },
+    );
+  }
+  for (final retirement in ['replacement', 'close', 'chrome', 'geometry']) {
+    test(
+      'native selection rejects $retirement retirement before action delivery',
+      () async {
+        final f = await _ReaderFixture.create('text.pdf');
+        try {
+          final owner = await f.selectionMenuOwner({
+            'anchor': {'page': 0},
+            'text': 'Original source',
+          });
+          if (retirement == 'replacement') {
+            await f.event('selection', {
+              'anchor': {'page': 1},
+              'text': 'Replacement source',
+            });
+          } else if (retirement == 'close') {
+            await f.reader.close();
+          } else if (retirement == 'chrome') {
+            await f.reader.prepareChromeChange();
+          } else {
+            await f.reader.updateViewport(
+              const Rect.fromLTWH(0, 0, 800, 600),
+              bookId: f.state.bookId!,
+            );
+          }
+          expect(f.reader.ownsSelectionMenu(owner), isFalse);
+          await f.reader.selectionMenuAction(
+            owner,
+            ReaderSelectionAction.highlight,
+          );
+          expect(
+            await f.store.call('annotations', owner.target.bookId),
+            isEmpty,
+          );
+        } finally {
+          await f.dispose();
+        }
+      },
+    );
+  }
+  test(
+    'native selection Add Note creates one protected Notebook draft without a secondary surface',
+    () async {
+      final f = await _ReaderFixture.create('text.pdf');
+      final edits = <Map>[];
+      final subscription = f.reader.events.stream.listen((e) {
+        if (e['type'] == 'editAnnotationNote') edits.add(e);
+      });
+      try {
+        final owner = await f.selectionMenuOwner({
+          'anchor': {'page': 0},
+          'text': 'Saved source',
+          'reference': 'Page 1',
+        });
+        await f.event('selection', {'anchor': null, 'text': ''});
+        await f.reader.selectionMenuAction(
+          owner,
+          ReaderSelectionAction.addNote,
+        );
+        await _until(() => edits.isNotEmpty);
+        expect(
+          f.reader.ownsNoteEditRequest(edits.single.cast<String, dynamic>()),
+          isTrue,
+        );
+        final id = edits.single['annotationId'] as String;
+        final a = f.drafts.sources[id]!;
+        expect(a.text, 'Saved source');
+        f.notes.edit(a, 'Primary Notebook note');
+        await f.notes.flush();
+        await f.verifyNote(id, 'Primary Notebook note');
+        expect(f.reader.annotations, hasLength(1));
+        expect(
+          f.calls.where(
+            (c) => c.method == 'popover' || c.method == 'capturePopover',
+          ),
+          isEmpty,
+        );
+      } finally {
+        await subscription.cancel();
+        await f.dispose();
+      }
+    },
+  );
+  test(
+    'native selection failed highlight creation remains retryable and color changes preserve notes',
+    () async {
+      late AnnotationStoreGate gate;
+      final f = await _ReaderFixture.create(
+        'text.pdf',
+        wrapStore: (s) => gate = AnnotationStoreGate(s),
+      );
+      try {
+        final owner = await f.selectionMenuOwner({
+          'anchor': {'page': 0},
+          'text': 'Retained source',
+        });
+        gate.failPut = true;
+        await expectLater(
+          f.reader.selectionMenuAction(
+            owner,
+            ReaderSelectionAction.highlight,
+            color: 'green',
+          ),
+          throwsA(anything),
+        );
+        final a = f.drafts.sources.values.single;
+        f.notes.edit(a, 'Protected note');
+        gate.failPut = false;
+        await f.notes.flush();
+        final request = f.reader.events.stream.firstWhere(
+          (e) => e['type'] == 'selectionMenu',
+        );
+        await f.event('annotation', {'id': a.id});
+        final target = (await request)['target'] as ReaderSelectionTarget;
+        final menu = (await f.reader.prepareSelectionMenu(
+          target,
+          dismiss: () async {},
+        ))!;
+        await f.reader.selectionMenuAction(
+          menu,
+          ReaderSelectionAction.highlight,
+          color: 'pink',
+        );
+        expect(f.reader.annotations.single.note, 'Protected note');
+        expect(f.reader.annotations.single.color, 'pink');
+        await f.verifyNote(a.id, 'Protected note');
+      } finally {
+        gate.failPut = false;
+        await f.dispose();
+      }
+    },
+  );
+  for (final route in ['read', 'split', 'fallback', 'existing']) {
+    testWidgets(
+      'native selection menu on $route uses the primary host and opens the Notebook editor',
+      (tester) async {
+        late _ReaderFixture f;
+        await _readerAction(tester, () async {
+          f = await _ReaderFixture.create(
+            'text.pdf',
+            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          );
+          if (route == 'existing') {
+            final owner = await f.selectionMenuOwner({
+              'anchor': {'page': 0, 'textOffset': 0, 'textLength': 7},
+              'text': 'library',
+              'reference': 'Page 1',
+            });
+            await f.reader.selectionMenuAction(
+              owner,
+              ReaderSelectionAction.highlight,
+            );
+            f.notes.edit(
+              f.reader.annotations.single,
+              'Existing protected note',
+            );
+            await f.notes.flush();
+          }
+        });
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        final chosen = Completer<int?>();
+        Map? request;
+        messenger.setMockMethodCallHandler(
+          const MethodChannel(nativeMenuChannelName),
+          (call) async {
+            if (call.method == 'show') {
+              request = call.arguments as Map;
+              if (route == 'fallback') {
+                throw PlatformException(code: 'unavailable');
+              }
+              return chosen.future;
+            }
+            return null;
+          },
+        );
+        var initialized = false;
+        final initial = f.reader.events.stream.listen((e) {
+          if (e['type'] == 'focusBook') initialized = true;
+        });
+        try {
+          final id = f.state.bookId!;
+          await _mountHeaderApplication(
+            tester,
+            f,
+            '/${route == 'split' ? 'split' : 'read'}/$id',
+          );
+          await _pumpUntil(tester, () => initialized && f.reader.interactive);
+          f.calls.clear();
+          await _readerAction(
+            tester,
+            () => route == 'existing'
+                ? f.event('annotation', {
+                    'id': f.reader.annotations.single.id,
+                    'rect': {'x': 30, 'y': 20, 'width': 120, 'height': 24},
+                  })
+                : f.event('selection', {
+                    'anchor': {'page': 0, 'textOffset': 0, 'textLength': 7},
+                    'text': 'library',
+                    'reference': 'Page 1',
+                    'settled': true,
+                    'rect': {'x': 30, 'y': 20, 'width': 120, 'height': 24},
+                  }),
+            settle: false,
+          );
+          await _pumpUntil(tester, () => request != null, settle: false);
+          final entries = _nativeLeaves(request!['entries'] as List);
+          expect(
+            entries.map((e) => e['label']),
+            containsAll([
+              'Highlight',
+              'Highlight Color',
+              route == 'existing' ? 'Edit Note' : 'Add Note',
+              'Copy',
+              'Search in This Book',
+              'Look Up',
+              'Read Aloud',
+            ]),
+          );
+          expect(request!['anchor'], {
+            'x': f.reader.viewport.left + 30,
+            'y': f.reader.viewport.top + 20,
+            'width': 120.0,
+            'height': 24.0,
+          });
+          expect(
+            f.calls.where(
+              (c) => c.method == 'popover' || c.method == 'capturePopover',
+            ),
+            isEmpty,
+          );
+          await _readerAction(
+            tester,
+            () => f.event('selection', {'anchor': null, 'text': ''}),
+            settle: false,
+          );
+          if (route == 'fallback') {
+            final item = find.widgetWithText(MenuItemButton, 'Add Note');
+            await _pumpUntil(tester, () => item.evaluate().isNotEmpty);
+            await tester.tap(item);
+          } else {
+            chosen.complete(
+              entries.indexWhere(
+                (e) =>
+                    e['label'] ==
+                    (route == 'existing' ? 'Edit Note' : 'Add Note'),
+              ),
+            );
+          }
+          await _pumpUntil(
+            tester,
+            () =>
+                find.byType(NotebookContent).evaluate().isNotEmpty &&
+                find.byType(TextField).evaluate().isNotEmpty,
+          );
+          final editor = find.descendant(
+            of: find.byType(NotebookContent),
+            matching: find.byType(TextField),
+          );
+          expect(editor, findsOneWidget);
+          if (route == 'existing') {
+            expect(
+              tester.widget<TextField>(editor).controller!.text,
+              'Existing protected note',
+            );
+          }
+          await tester.enterText(editor, 'Notebook selection note');
+          await _readerAction(tester, f.notes.flush);
+          expect(f.reader.annotations.single.note, 'Notebook selection note');
+          expect(
+            f.container
+                .read(appRouterProvider)
+                .routeInformationProvider
+                .value
+                .uri
+                .path,
+            '/${route == 'split' ? 'split' : 'notebook'}/$id',
+          );
+          expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
+          expect(tester.takeException(), isNull);
+        } finally {
+          unawaited(initial.cancel());
+          if (!chosen.isCompleted) chosen.complete(null);
+          messenger.setMockMethodCallHandler(
+            const MethodChannel(nativeMenuChannelName),
+            null,
+          );
+          await _disposeHeaderApplication(tester, f);
+        }
+      },
+    );
   }
 }

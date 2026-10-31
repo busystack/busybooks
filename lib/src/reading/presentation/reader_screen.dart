@@ -17,6 +17,7 @@ import '../../search/book_search_session.dart';
 import '../../workspace/workspace_controller.dart';
 import '../application/narration_controller.dart';
 import '../application/reader_controller.dart';
+import 'selection_menu.dart';
 
 class ReadingContent extends ConsumerStatefulWidget {
   const ReadingContent({
@@ -54,6 +55,40 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
         BusyBooksToastOverlay.show(
           context,
           message: event['message'] as String,
+        );
+      }
+      if (event['type'] == 'editAnnotationNote' &&
+          _reader.ownsNoteEditRequest(event)) {
+        unawaited(
+          runAppAction(
+            context,
+            () => openNotebook(
+              context,
+              ref,
+              event['bookId'] as String,
+              annotationId: event['annotationId'] as String,
+              canActivate: () => _reader.ownsNoteEditRequest(event),
+            ),
+          ),
+        );
+      }
+      if (event['type'] == 'selectionMenu') {
+        final target = event['target'] as ReaderSelectionTarget;
+        unawaited(
+          runAppAction(
+            context,
+            () => showReadingSelectionMenu(
+              context,
+              _reader,
+              target,
+              isCurrent: () =>
+                  mounted &&
+                  widget.active &&
+                  widget.visible &&
+                  widget.id == target.bookId &&
+                  ModalRoute.of(context)?.isCurrent != false,
+            ),
+          ),
         );
       }
       if (event['type'] == 'external') {

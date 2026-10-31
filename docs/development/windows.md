@@ -37,10 +37,11 @@ Same-volume no-clobber `MoveFileExW` omits `COPY_ALLOWED`; cross-volume moves us
 verified staging, a durable journal and guarded source removal. The decoder
 uses wide paths, a memory-limited Job Object and bounded streaming callbacks.
 
-A reusable transient `FlutterViewController` above WebView2 presents selection,
-inline notes, appearance, Go To and voice controls. It starts the same packaged
+A reusable transient `FlutterViewController` above WebView2 presents Go To,
+lookup, footnotes and voice controls. It starts the same packaged
 Flutter bundle through the restricted popover entry before profile/window
-bootstrap. Main menus use the Win32 host and shared menu/session contract.
+bootstrap. Main menus, View Options and selection actions use the Win32 host and
+shared menu/session contract; note editing opens the existing Notebook editor.
 Popovers and native menus keep the publication visible; main-route dialogs hide
 it. Channel readiness, first-frame readiness and a Flutter paint acknowledgement
 precede presentation/focus. See [workspace architecture](reading-workspace.md).
