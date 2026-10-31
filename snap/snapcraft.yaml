@@ -16,6 +16,10 @@ platforms:
   amd64:
     build-on: [amd64]
     build-for: [amd64]
+layout:
+  # Keep WebKit's helpers and injected bundle with the staged WebKit library.
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.1:
+    bind: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/webkit2gtk-4.1
 plugs:
   browser-support:
     interface: browser-support
