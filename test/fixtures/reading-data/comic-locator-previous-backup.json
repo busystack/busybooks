@@ -1,0 +1,390 @@
+{
+  "type": "busybooks-reading-data",
+  "schema": 3,
+  "records": [
+    {
+      "kind": "book",
+      "id": "dc54dba2676449771076b562b2d39d13309a86bab64f558501d1070461578288",
+      "format": "cbz",
+      "title": "Legacy cbz fixture",
+      "author": "BusyBooks Fixtures",
+      "state": "reading",
+      "paths": [
+        "/busybooks-fixture-originals/formats/comic-stored.cbz"
+      ],
+      "added": 1700000000000,
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbz",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "point": []
+      },
+      "outline": [
+        {
+          "id": "outline:0",
+          "label": "First page",
+          "anchor": {
+            "kind": "comic",
+            "version": 1,
+            "format": "cbz",
+            "page": 0,
+            "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+            "position": [
+              0.25,
+              0.5
+            ],
+            "point": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "book",
+      "id": "a1fbf6148b447c94bd899be6e5b6d54ebcd38546a01956ceae219bf4225fbb9e",
+      "format": "cbr",
+      "title": "Legacy cbr fixture",
+      "author": "BusyBooks Fixtures",
+      "state": "reading",
+      "paths": [
+        "/busybooks-fixture-originals/formats/comic-rar5-solid.cbr"
+      ],
+      "added": 1700000000000,
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbr",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "point": []
+      },
+      "outline": [
+        {
+          "id": "outline:0",
+          "label": "First page",
+          "anchor": {
+            "kind": "comic",
+            "version": 1,
+            "format": "cbr",
+            "page": 0,
+            "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+            "position": [
+              0.25,
+              0.5
+            ],
+            "point": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "book",
+      "id": "d5cecc58191e11bf37eb3efbc7ab5eb819f3ae30e6ca61bbc54307e4aec3f06b",
+      "format": "pdf",
+      "title": "Legacy pdf fixture",
+      "author": "BusyBooks Fixtures",
+      "state": "reading",
+      "paths": [
+        "/busybooks-fixture-originals/text.pdf"
+      ],
+      "added": 1700000000000,
+      "anchor": {
+        "page": 0,
+        "point": [
+          22,
+          44
+        ]
+      },
+      "outline": [
+        {
+          "id": "outline:0",
+          "label": "First page",
+          "anchor": {
+            "page": 0,
+            "point": [
+              22,
+              44
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "annotation",
+      "id": "annotation-legacy-cbz-0",
+      "bookId": "dc54dba2676449771076b562b2d39d13309a86bab64f558501d1070461578288",
+      "annotationKind": "region",
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbz",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "point": [],
+        "region": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ]
+      },
+      "text": "",
+      "note": "Edited in previous implementation — cbz.",
+      "color": "pink",
+      "reference": "Page 1",
+      "created": 1700000000001
+    },
+    {
+      "kind": "annotation",
+      "id": "annotation-legacy-cbz-1",
+      "bookId": "dc54dba2676449771076b562b2d39d13309a86bab64f558501d1070461578288",
+      "annotationKind": "region",
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbz",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "region": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ]
+      },
+      "text": "",
+      "note": "Private cbz note 1 — <&> original.",
+      "color": "blue",
+      "reference": "Page 1",
+      "created": 1700000000002
+    },
+    {
+      "kind": "annotation",
+      "id": "annotation-legacy-cbz-2",
+      "bookId": "dc54dba2676449771076b562b2d39d13309a86bab64f558501d1070461578288",
+      "annotationKind": "bookmark",
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbz",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "point": []
+      },
+      "text": "",
+      "note": "Private cbz note 2 — <&> original.",
+      "color": "blue",
+      "reference": "Page 1",
+      "created": 1700000000003
+    },
+    {
+      "kind": "annotation",
+      "id": "annotation-legacy-cbr-0",
+      "bookId": "a1fbf6148b447c94bd899be6e5b6d54ebcd38546a01956ceae219bf4225fbb9e",
+      "annotationKind": "region",
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbr",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "point": [],
+        "region": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ]
+      },
+      "text": "",
+      "note": "Edited in previous implementation — cbr.",
+      "color": "pink",
+      "reference": "Page 1",
+      "created": 1700000000001
+    },
+    {
+      "kind": "annotation",
+      "id": "annotation-legacy-cbr-1",
+      "bookId": "a1fbf6148b447c94bd899be6e5b6d54ebcd38546a01956ceae219bf4225fbb9e",
+      "annotationKind": "region",
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbr",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "region": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ]
+      },
+      "text": "",
+      "note": "Private cbr note 1 — <&> original.",
+      "color": "blue",
+      "reference": "Page 1",
+      "created": 1700000000002
+    },
+    {
+      "kind": "annotation",
+      "id": "annotation-legacy-cbr-2",
+      "bookId": "a1fbf6148b447c94bd899be6e5b6d54ebcd38546a01956ceae219bf4225fbb9e",
+      "annotationKind": "bookmark",
+      "anchor": {
+        "kind": "comic",
+        "version": 1,
+        "format": "cbr",
+        "page": 0,
+        "pageId": "d202896b9c92e49eb9a249139952c29dbacfd2e9e93f6011919e52e1ce1b6572",
+        "position": [
+          0.25,
+          0.5
+        ],
+        "point": []
+      },
+      "text": "",
+      "note": "Private cbr note 2 — <&> original.",
+      "color": "blue",
+      "reference": "Page 1",
+      "created": 1700000000003
+    },
+    {
+      "kind": "annotation",
+      "id": "annotation-legacy-pdf",
+      "bookId": "d5cecc58191e11bf37eb3efbc7ab5eb819f3ae30e6ca61bbc54307e4aec3f06b",
+      "annotationKind": "highlight",
+      "anchor": {
+        "page": 0,
+        "point": [
+          22,
+          44
+        ]
+      },
+      "text": "Original quoted text — unchanged.",
+      "note": "PDF point stays intact.",
+      "color": "yellow",
+      "reference": "Page 1",
+      "created": 1700000000001
+    },
+    {
+      "book_id": "dc54dba2676449771076b562b2d39d13309a86bab64f558501d1070461578288",
+      "path": "/busybooks-fixture-originals/formats/comic-stored.cbz",
+      "status": "unverified",
+      "verified": null,
+      "preferred": 1,
+      "kind": "location"
+    },
+    {
+      "book_id": "a1fbf6148b447c94bd899be6e5b6d54ebcd38546a01956ceae219bf4225fbb9e",
+      "path": "/busybooks-fixture-originals/formats/comic-rar5-solid.cbr",
+      "status": "unverified",
+      "verified": null,
+      "preferred": 1,
+      "kind": "location"
+    },
+    {
+      "book_id": "d5cecc58191e11bf37eb3efbc7ab5eb819f3ae30e6ca61bbc54307e4aec3f06b",
+      "path": "/busybooks-fixture-originals/text.pdf",
+      "status": "unverified",
+      "verified": null,
+      "preferred": 1,
+      "kind": "location"
+    }
+  ],
+  "preferences": {
+    "schema": 1,
+    "theme": "system",
+    "locale": null,
+    "grid": true,
+    "sort": "added",
+    "sidebar": true,
+    "reading": {
+      "publisher": true,
+      "font": "serif",
+      "size": 20.0,
+      "weight": 400,
+      "line": 1.5,
+      "paragraph": 0.6,
+      "margin": 32.0,
+      "width": 720.0,
+      "align": "start",
+      "hyphenate": true,
+      "color": "system",
+      "spread": false,
+      "rotation": 0,
+      "flow": "paginated",
+      "zoom": "fit-page"
+    },
+    "pdfReading": {
+      "publisher": true,
+      "font": "serif",
+      "size": 20.0,
+      "weight": 400,
+      "line": 1.5,
+      "paragraph": 0.6,
+      "margin": 32.0,
+      "width": 720.0,
+      "align": "start",
+      "hyphenate": true,
+      "color": "system",
+      "spread": false,
+      "rotation": 0,
+      "flow": "scrolled",
+      "zoom": "fit-width"
+    },
+    "comicReading": {
+      "publisher": true,
+      "font": "serif",
+      "size": 20.0,
+      "weight": 400,
+      "line": 1.5,
+      "paragraph": 0.6,
+      "margin": 32.0,
+      "width": 720.0,
+      "align": "start",
+      "hyphenate": true,
+      "color": "system",
+      "spread": false,
+      "rotation": 0,
+      "flow": "paginated",
+      "zoom": "fit-page",
+      "direction": "auto"
+    },
+    "readerSidebar": false,
+    "readerPanel": "outline",
+    "highlightColor": "yellow",
+    "shortcuts": {},
+    "voice": "",
+    "speed": 1.0
+  }
+}
