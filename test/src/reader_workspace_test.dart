@@ -1285,6 +1285,7 @@ void main() {
     (tester) async {
       late _ReaderFixture f;
       final pending = Completer<bool>();
+      StreamSubscription<Map<String, dynamic>>? openingEvents;
       await _readerAction(tester, () async {
         f = await _ReaderFixture.create(
           'text.pdf',
@@ -1293,8 +1294,18 @@ void main() {
       });
       try {
         final id = f.state.bookId!;
+        // The fixture is already interactive before mounting. The retained
+        // reader's asynchronous reopen can still issue its initial focusBook;
+        // finish that handoff before testing a later native focus revision.
+        var openingFinished = false;
+        openingEvents = f.reader.events.stream.listen((event) {
+          if (event['type'] == 'focusBook' &&
+              event['session'] == f.reader.sessionId) {
+            openingFinished = true;
+          }
+        });
         await _mountHeaderApplication(tester, f, '/split/$id');
-        await _pumpUntil(tester, () => f.reader.interactive);
+        await _pumpUntil(tester, () => openingFinished && f.reader.interactive);
         await _readerAction(tester, f.reader.focusChrome);
         FocusManager.instance.primaryFocus?.unfocus();
         await tester.pump();
@@ -1354,6 +1365,7 @@ void main() {
         );
         expect(tester.takeException(), isNull);
       } finally {
+        unawaited(openingEvents?.cancel());
         if (!pending.isCompleted) pending.complete(false);
         f.onNativeCall = null;
         await _disposeHeaderApplication(tester, f);

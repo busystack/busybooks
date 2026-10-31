@@ -50,16 +50,39 @@ permanent abort elimination or physical Wayland acceptance.
 See [shutdown causality and verification limits](linux-shutdown-causality.md)
 and [the guarded-close driver](../../tools/README.md#linux-workspace-and-shutdown-diagnostics).
 
-## Intermittent focus-test transition timeout
+## Focus-test transition sequencing
 
-The serial widget suite can time out in `reader_workspace_test.dart`'s
-"native focus mirroring repairs confirmed loss once and rejects a later Notebook
-handoff" case while waiting for its second native-focus query. The unchanged
-case passed alone, with its neighboring focus cases, and after the preceding
-workspace cases; the failed transition's state and cause remain unidentified.
-No focus behavior, assertion or deadline was changed to hide that failure.
-A targeted pass or an earlier complete suite does not replace the failed final
-suite in release qualification.
+The retained-reader focus test now waits for the mounted reader's asynchronous
+reopen to finish its initial `focusBook` handoff. The fixture's existing
+`interactive` state alone did not establish that boundary. A controlled delayed
+reopen reproduced the missing second native-focus query: the initial handoff
+focused and marked the new revision as already mirrored before the test's next
+native event. Skipping reconciliation in that state is correct application
+behavior. The test now finishes initialization before exercising its later
+focus-loss and Notebook-handoff assertions; production focus behavior, deadlines,
+assertions and skips are unchanged. Release qualification still requires a
+completed passing full suite on the final source.
+
+## GTK accessibility/input crash blocks Linux qualification
+
+The corrected installed release encountered a new `SIGSEGV` during AT-SPI
+inspection and keyboard input on physical GNOME X11, without a shutdown request.
+The fault is in GTK's accessibility keyboard-listener traversal. A controlled
+trace on the unchanged release measured AT-SPI client disconnection reentering
+that callback, deleting its exact live `GSList` node, and returning to GTK with
+the iterator pointing to freed storage. This establishes an unsafe runtime
+interval in the same faulting loop; the original uncontrolled crash has no
+same-execution debugger stack linking its node identity to that trace.
+
+The installed official Ubuntu GTK package is `3.24.41-4ubuntu1.3`, also the
+available candidate at qualification. The
+[upstream listener implementation](https://github.com/GNOME/gtk/blob/3.24.41/gtk/a11y/gtkaccessibilityutil.c)
+iterates the mutable list across callbacks. No GTK/ATK, Flutter, WebKit or vendor
+change, accessibility-disable setting, vtable interception or input workaround
+has been adopted. Installed desktop qualification remains blocked pending a
+permitted runtime correction and renewed acceptance. This is separate from the
+accepted renderer/compositor shutdown correction. Raw logs and matching-node
+observations are retained under ignored `evidence/release-final-20261030/`.
 
 ## Distribution and desktop coverage
 
