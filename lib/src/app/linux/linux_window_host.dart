@@ -314,7 +314,7 @@ class _LinuxWindowControlCluster extends ConsumerWidget {
           ),
         ),
       ),
-      GtkWindowDecorationElement.minimize => Tooltip(
+      GtkWindowDecorationElement.minimize => BusyBooksHeaderTooltip(
         message: context.l10n.windowMinimize,
         child: _LinuxWindowControl(
           iconColor: iconColor,
@@ -323,7 +323,7 @@ class _LinuxWindowControlCluster extends ConsumerWidget {
           onTap: state.isMinimizable == false ? null : window.minimize,
         ),
       ),
-      GtkWindowDecorationElement.maximize => Tooltip(
+      GtkWindowDecorationElement.maximize => BusyBooksHeaderTooltip(
         message: restorePresentation
             ? context.l10n.windowRestore
             : context.l10n.windowMaximize,
@@ -342,7 +342,7 @@ class _LinuxWindowControlCluster extends ConsumerWidget {
               : window.maximize,
         ),
       ),
-      GtkWindowDecorationElement.close => Tooltip(
+      GtkWindowDecorationElement.close => BusyBooksHeaderTooltip(
         message: material.closeButtonTooltip,
         child: _LinuxWindowControl(
           iconColor: iconColor,

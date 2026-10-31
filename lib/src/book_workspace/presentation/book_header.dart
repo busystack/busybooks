@@ -35,10 +35,7 @@ class BookHeader extends ConsumerStatefulWidget {
 }
 
 class _BookHeaderState extends ConsumerState<BookHeader> {
-  final _location = GlobalKey(),
-      _previous = GlobalKey(),
-      _appearance = GlobalKey(),
-      _context = GlobalKey();
+  final _appearance = GlobalKey(), _context = GlobalKey();
   late final ReaderController _reader;
   late final Rect? Function() _appearanceBounds;
   @override
@@ -81,12 +78,7 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
       builder: (context, constraints) {
         final insets = LinuxPageHeaderInsetsScope.of(context);
         Offset tooltipPosition(TooltipPositionContext info) =>
-            BusyBooksTooltipStyle.insideHeader(
-              context,
-              info,
-              leftObstruction: insets.leftObstruction,
-              rightObstruction: insets.rightObstruction,
-            );
+            BusyBooksTooltipStyle.belowHeader(context, info);
         final available =
             constraints.maxWidth -
             insets.leftObstruction -
@@ -134,28 +126,23 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
                     : closeWorkspace(context, ref),
               ),
               if (paging) ...[
-                KeyedSubtree(
-                  key: _previous,
-                  child: BusyBooksLinuxHeaderIconButton(
-                    key: const ValueKey('reader-previous'),
-                    tooltip: l.previousPage,
-                    shortcut: binding(BusyBooksCommandIds.previous),
-                    icon: BusyBooksGlyphs.headerBackFor(
-                      Directionality.of(context),
-                    ),
-                    nativeIcon: BusyBooksLinuxHeaderIcon.previous,
-                    onPressed:
-                        state.canPrevious &&
-                            _reader.interactive &&
-                            registry[BusyBooksCommandIds.previous]
-                                    ?.canExecute ==
-                                true
-                        ? () => registry.execute(BusyBooksCommandIds.previous)
-                        : null,
+                BusyBooksLinuxHeaderIconButton(
+                  key: const ValueKey('reader-previous'),
+                  tooltip: l.previousPage,
+                  shortcut: binding(BusyBooksCommandIds.previous),
+                  icon: BusyBooksGlyphs.headerBackFor(
+                    Directionality.of(context),
                   ),
+                  nativeIcon: BusyBooksLinuxHeaderIcon.previous,
+                  onPressed:
+                      state.canPrevious &&
+                          _reader.interactive &&
+                          registry[BusyBooksCommandIds.previous]?.canExecute ==
+                              true
+                      ? () => registry.execute(BusyBooksCommandIds.previous)
+                      : null,
                 ),
-                if (location)
-                  KeyedSubtree(key: _location, child: ReadingLocationControl()),
+                if (location) const ReadingLocationControl(),
                 BusyBooksLinuxHeaderIconButton(
                   key: const ValueKey('reader-next'),
                   tooltip: l.nextPage,
@@ -222,7 +209,6 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
                   reading: reading,
                   readingControlsVisible: readingControls,
                   pageControlsVisible: paging,
-                  locationVisible: location,
                 ),
               ),
               BusyBooksHeaderIconButton(

@@ -26,6 +26,7 @@ import 'app_router.dart';
 import 'app_settings.dart';
 import 'app_theme.dart';
 import 'busybooks_toast.dart';
+import 'busybooks_modal_surface.dart';
 import 'busybooks_search_field.dart';
 import 'command_registry.dart';
 import 'command_shortcuts.dart';
@@ -298,7 +299,6 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
               .toggleOpen();
         }
       },
-      BusyBooksCommandIds.goTo: () => reader.showGoTo(),
       BusyBooksCommandIds.backToCollection: () =>
           returnToWorkspace(context, ref),
       BusyBooksCommandIds.returnToPassage: () => reader.send('back'),
@@ -695,9 +695,14 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
                   },
                   child: GtkHeaderIconScope(
                     service: ref.watch(gtkHeaderIconServiceProvider),
-                    child: BusyBooksToastOverlay(
-                      child: desktopWindowHost(
-                        child ?? const SizedBox.shrink(),
+                    child: BusyBooksModalSurfaceScope(
+                      cover: ref
+                          .read(readerControllerProvider.notifier)
+                          .coverForModal,
+                      child: BusyBooksToastOverlay(
+                        child: desktopWindowHost(
+                          child ?? const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   ),

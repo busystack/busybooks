@@ -58,7 +58,7 @@ for(const outcome of ['failure','cancelled','success']){
 }
 for(const outcome of ['success','failure','cancelled','stale']){
   const {context,events}=adapter()
-  vm.runInContext(`remember=()=>{};pdf={numPages:3};gotoPdf=async()=>{${outcome==='failure'?"throw Error('injected Go To failure')":outcome==='cancelled'?'return false':'return true'}}`,context)
+  vm.runInContext(`remember=()=>{};pdf={numPages:3};gotoPdf=async()=>{${outcome==='failure'?"throw Error('injected navigation failure')":outcome==='cancelled'?'return false':'return true'}}`,context)
   await vm.runInContext(`dispatch({action:'goto',session:'${outcome==='stale'?'obsolete':'test'}',request:17,anchor:{page:2}})`,context)
   const replies=events.filter(e=>e.type==='navigationResult')
   assert.equal(replies.length,outcome==='stale'?0:1)
@@ -284,4 +284,4 @@ for(const obsolete of [false,true]){
     assert(events.some(event=>event.type==='selection'&&event.anchor===null))
   }
 }
-console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated Go To outcomes and text assistance, hidden-PDF quiescence/source retention/resume, search without display frames, keyboard-link selection invalidation and current/stale geometry failure cleanup; controlled adapter APIs'}))
+console.log(JSON.stringify({status:'passed',scope:'Unicode PDF ranges, item boundaries, first-page rejection/cancellation, retry, correlated renderer navigation outcomes and text assistance, hidden-PDF quiescence/source retention/resume, search without display frames, keyboard-link selection invalidation and current/stale geometry failure cleanup; controlled adapter APIs'}))

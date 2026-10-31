@@ -189,9 +189,7 @@ failure/restore work. Optional nested-Wayland inputs are exposed in `--help`.
 --xdotool PATH` runs guarded closes under GDB on an explicitly isolated display.
 It needs GDB, xdotool and a window manager, and refuses an existing matching app.
 Optional `--book`, `--seed-profile`, `--switch-book-views` and `--cycles` select
-inputs. `--reader-controls` requires `--book`, opens Go To, waits for its existing
-primary panel paint diagnostic and dismisses it before close. BusyBooks
-Welcome is left idle by default: Tab/Return opens a file chooser there and can
+inputs. BusyBooks Welcome is left idle by default: Tab/Return opens a file chooser there and can
 make a subsequent Alt+F4 close only that chooser. Use
 `--exercise-template-button` only for the untouched Flutter counter comparison.
 Each close produces a GDB log; `outcomes.json` records normal/aborted/segmentation

@@ -14,6 +14,8 @@ struct BusyBooksReaderHost {
   WebKitWebContext* context;
   FlMethodChannel* channel;
   FlMethodChannel* fonts;
+  GtkWidget* hint = nullptr;
+  gint64 hint_id = 0;
   std::string assets;
   std::string publication;
   std::string cache_directory;
@@ -96,11 +98,94 @@ static gboolean policy(WebKitWebView*, WebKitPolicyDecision* decision, WebKitPol
   if (g_str_has_prefix(uri, "busybooks://reader/") || g_str_has_prefix(uri, "blob:") || strcmp(uri,"about:blank")==0) return FALSE;
   webkit_policy_decision_ignore(decision); return TRUE;
 }
+static gboolean hide_hint(GtkWidget*, GdkEvent*, gpointer data) {
+  auto* h = static_cast<BusyBooksReaderHost*>(data);
+  if (h->hint) gtk_widget_hide(h->hint);
+  return FALSE;
+}
+static cairo_status_t snapshot_write(void* data, const unsigned char* bytes, unsigned int length) {
+  auto* output = static_cast<GByteArray*>(data);
+  if(output->len + static_cast<size_t>(length) > 64 * 1024 * 1024) return CAIRO_STATUS_WRITE_ERROR;
+  g_byte_array_append(output, bytes, length);
+  return CAIRO_STATUS_SUCCESS;
+}
+static void capture_finished(GObject* source, GAsyncResult* result, gpointer data) {
+  auto* method = FL_METHOD_CALL(data);
+  g_autoptr(GError) error = nullptr;
+  cairo_surface_t* frame = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(source), result, &error);
+  if (!frame) {
+    fl_method_call_respond_error(method, "reader-capture", error ? error->message : "Reader capture failed", nullptr, nullptr);
+  } else {
+    g_autoptr(GByteArray) bytes = g_byte_array_new();
+    const auto status = cairo_surface_write_to_png_stream(frame, snapshot_write, bytes);
+    if (status == CAIRO_STATUS_SUCCESS) {
+      g_autoptr(FlValue) value = fl_value_new_uint8_list(bytes->data, bytes->len);
+      fl_method_call_respond_success(method, value, nullptr);
+    } else {
+      fl_method_call_respond_error(method, "reader-capture", cairo_status_to_string(status), nullptr, nullptr);
+    }
+    cairo_surface_destroy(frame);
+  }
+  g_object_unref(method);
+  g_object_unref(source);
+}
+static void show_hint(BusyBooksReaderHost* h, FlValue* args) {
+  auto* text = fl_value_lookup_string(args, "message");
+  auto* identity = fl_value_lookup_string(args, "id");
+  auto* rect = fl_value_lookup_string(args, "anchor");
+  if (!text || !identity || !rect) return;
+  auto* window = gtk_widget_get_toplevel(h->chrome);
+  if (!GTK_IS_WINDOW(window) || !gtk_window_is_active(GTK_WINDOW(window))) return;
+  h->hint_id = fl_value_get_int(identity);
+  if (!h->hint) {
+    h->hint = gtk_window_new(GTK_WINDOW_POPUP);
+    gtk_window_set_type_hint(GTK_WINDOW(h->hint), GDK_WINDOW_TYPE_HINT_TOOLTIP);
+    gtk_window_set_transient_for(GTK_WINDOW(h->hint), GTK_WINDOW(window));
+    gtk_window_set_accept_focus(GTK_WINDOW(h->hint), FALSE);
+    gtk_widget_set_name(h->hint, "gtk-tooltip");
+    gtk_style_context_add_class(gtk_widget_get_style_context(h->hint), GTK_STYLE_CLASS_TOOLTIP);
+    auto* label = gtk_label_new(nullptr);
+    gtk_widget_set_margin_start(label, 8); gtk_widget_set_margin_end(label, 8);
+    gtk_widget_set_margin_top(label, 4); gtk_widget_set_margin_bottom(label, 4);
+    gtk_container_add(GTK_CONTAINER(h->hint), label);
+  }
+  auto number = [rect](const char* key) { return fl_value_get_float(fl_value_lookup_string(rect, key)); };
+  auto* label = gtk_bin_get_child(GTK_BIN(h->hint));
+  gtk_label_set_text(GTK_LABEL(label), fl_value_get_string(text));
+  gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
+  auto* metrics = pango_context_get_metrics(gtk_widget_get_pango_context(label), nullptr, nullptr);
+  const int character = std::max(1, pango_font_metrics_get_approximate_char_width(metrics) / PANGO_SCALE);
+  pango_font_metrics_unref(metrics);
+  gtk_label_set_max_width_chars(GTK_LABEL(label), std::clamp((gtk_widget_get_allocated_width(h->chrome)-32)/character, 8, 60));
+  gint view_x = 0, view_y = 0, origin_x = 0, origin_y = 0;
+  gtk_widget_translate_coordinates(h->chrome, window, 0, 0, &view_x, &view_y);
+  gdk_window_get_origin(gtk_widget_get_window(window), &origin_x, &origin_y);
+  GtkRequisition size;
+  gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(h->hint)));
+  gtk_widget_get_preferred_size(h->hint, nullptr, &size);
+  const int left = origin_x + view_x + 8;
+  const int right = origin_x + view_x + gtk_widget_get_allocated_width(h->chrome) - 8;
+  const int x = std::clamp(static_cast<int>(origin_x + view_x + number("x") + number("width") / 2 - size.width / 2), left, std::max(left, right - size.width));
+  const int y = static_cast<int>(origin_y + view_y + number("y") + number("height") + 8);
+  gtk_window_move(GTK_WINDOW(h->hint), x, y);
+  gtk_window_resize(GTK_WINDOW(h->hint), size.width, size.height);
+  gtk_widget_show(h->hint);
+}
 static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
   auto* h = static_cast<BusyBooksReaderHost*>(data);
   const char* name = fl_method_call_get_name(method);
   auto* args = fl_method_call_get_args(method);
-  if (strcmp(name, "surface") == 0) {
+  if (strcmp(name, "capture") == 0) {
+    hide_hint(nullptr, nullptr, h);
+    g_object_ref(h->web);
+    webkit_web_view_get_snapshot(h->web, WEBKIT_SNAPSHOT_REGION_VISIBLE,
+        WEBKIT_SNAPSHOT_OPTIONS_NONE, nullptr, capture_finished, g_object_ref(method));
+    return;
+  } else if (strcmp(name, "headerHint") == 0) {
+    show_hint(h, args);
+  } else if (strcmp(name, "hideHeaderHint") == 0) {
+    if (args && fl_value_get_int(args) == h->hint_id) hide_hint(nullptr, nullptr, h);
+  } else if (strcmp(name, "surface") == 0) {
     auto* value=fl_value_lookup_string(args,"canvas");
     if(value&&fl_value_get_type(value)==FL_VALUE_TYPE_INT){
       auto color=static_cast<guint32>(fl_value_get_int(value));
@@ -216,6 +301,9 @@ BusyBooksReaderHost* busybooks_reader_host_new(GtkWidget* overlay, FlView* view)
   g_signal_connect(h->web,"load-failed",G_CALLBACK(load_failed),h);
   g_signal_connect(h->web,"web-process-terminated",G_CALLBACK(process_terminated),h);
   h->fonts=busybooks_reading_font_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view)));
+  g_signal_connect(h->chrome,"key-press-event",G_CALLBACK(hide_hint),h);
+  g_signal_connect(h->chrome,"focus-out-event",G_CALLBACK(hide_hint),h);
+  g_signal_connect(h->web,"key-press-event",G_CALLBACK(hide_hint),h);
   h->surface=new BusyBooksReaderSurface(GTK_OVERLAY(overlay),GTK_WIDGET(h->web));
   g_autoptr(FlStandardMethodCodec) codec=fl_standard_method_codec_new();
   h->channel=fl_method_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view)),"io.busystack.busybooks/reader",FL_METHOD_CODEC(codec));
@@ -226,6 +314,8 @@ void busybooks_reader_host_free(BusyBooksReaderHost* h) {
   if(!h)return;
   fl_method_channel_set_method_call_handler(h->channel,nullptr,nullptr,nullptr);
   h->session.clear();
+  g_signal_handlers_disconnect_by_data(h->chrome,h);
+  if(h->hint) gtk_widget_destroy(h->hint);
   g_signal_handlers_disconnect_by_data(h->web,h);
   g_signal_handlers_disconnect_by_data(webkit_web_view_get_user_content_manager(h->web),h);
   webkit_web_view_stop_loading(h->web);

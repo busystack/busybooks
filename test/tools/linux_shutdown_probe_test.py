@@ -37,11 +37,7 @@ if 'alt+F4' in args: Path(os.environ['SHUTDOWN_FIXTURE_CLOSED']).touch()
 from pathlib import Path
 args=sys.argv[sys.argv.index('--args')+1:]
 child=subprocess.Popen(args)
-presented=False
 while child.poll() is None:
- p=Path(os.environ['SHUTDOWN_FIXTURE_COMMANDS'])
- if p.exists() and 'ctrl+g' in p.read_text() and not presented:
-  print('reader-panel stage=presented kind=goto',flush=True);presented=True
  time.sleep(.01)
 if os.environ.get('SHUTDOWN_FIXTURE_ABORT'):
  print('received signal SIGABRT')
@@ -87,18 +83,6 @@ else:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(outcome['cleanShutdownPassed'])
         self.assertIn(['key', '--clearmodifiers', 'Tab', 'Return'], self.keys())
-
-    def test_reader_surface_requires_its_presentation_acknowledgment(self):
-        book = self.root / 'fixture.pdf'
-        book.write_bytes(b'owned fixture')
-        result, outcome = self.run_probe('--book', str(book), '--reader-controls')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(outcome['cleanShutdownPassed'])
-        self.assertEqual(self.keys(), [
-            ['key', '--clearmodifiers', 'ctrl+g'],
-            ['key', '--clearmodifiers', 'Escape'],
-            ['key', '--clearmodifiers', 'alt+F4'],
-        ])
 
     def test_aborted_close_remains_a_failure(self):
         result, outcome = self.run_probe(abort=True)

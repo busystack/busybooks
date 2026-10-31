@@ -121,12 +121,11 @@ existing guarded Home command from Reading, Notebook, Split and collection works
 it flushes protected input and reading state before returning to Home. Repeated
 Home/close commands share one in-flight action. Back to Collection and reading history remain separate book-context commands.
 
-The content-sized location trigger displays a printed page label, physical-page
+The plain current-location text displays a printed page label, physical-page
 fallback or genuine EPUB reference/progress without a redundant Page prefix.
-Its tooltip names Go To; its accessibility description retains the full
-page/physical position, also shown in the primary Go To panel.
-It opens the panel below the header in the Reading pane and disappears before essential
-controls when space is short. Search hides both step buttons together; Home
+Its accessibility description retains the full page/physical position. It has
+no button, tooltip, editable control or keyboard shortcut. It yields space to
+essential controls when the window is narrow. Search hides both step buttons together; Home
 remains available and the retained title/search transition excludes inactive
 search input from focus and semantics. There is no permanent navigation footer;
 fit/zoom/rotation and image-only-PDF information live in Appearance/View Options.
@@ -163,7 +162,7 @@ a visible/nearby window of at most twelve, and a twenty-second per-page deadline
 Changing windows cancels obsolete jobs; failures wait for explicit Retry. The
 primary cache retains at most thirty-two previews and eight MiB. Images preserve
 aspect ratio; page selection uses the same location formatting/history as
-Outline and Go To. No EPUB page-preview capability is advertised.
+Outline. No EPUB page-preview capability is advertised.
 
 Marks uses publication order and typed All types/Highlights/Bookmarks/Region Notes
 filters plus Has Notes. Rows distinguish type, passage, effective private-note
@@ -273,23 +272,6 @@ an in-flight operation to another book. View transitions retain their original
 route through queued reads; a failed read leaves the current view intact.
 Settings accepts only Home, collection, Reading, Notebook and Split return targets;
 re-entry is disabled/no-op and cannot overwrite that original destination.
-
-Go To uses one primary-window input panel for the header, shortcut and command
-menu. It belongs to the Reading pane in both Reading and Split and takes a
-bounded, scrollable part of its layout. The native publication viewport is
-measured below the panel, so controls never overlap Notebook or require an input
-grab, secondary engine or independent window. Existing Yaru grouped entries,
-push buttons, semantic colors and native chapter menus supply its presentation.
-PDF's destination resolver treats integers as one-based physical pages, unique
-nonnumeric strings as exact printed labels, and `=label` as an explicit printed
-label, including numeric labels. Duplicate labels are rejected. Comics retain
-First/Last; EPUB/FB2 retain progress and chapter navigation. Current location,
-localized validation, physical Enter and IME submission share the existing
-navigation contract. Go To closes only after its correlated renderer result;
-failure keeps the entered destination available. Escape and Close restore the
-owned trigger/publication focus. Request, session and presentation revisions
-reject rapid replacement, book changes and obsolete navigation results. Pointer
-focus on the publication dismisses the panel without reclaiming input.
 
 Reading retains Foliate.js, PDF.js, the labeled sidebar, search, appearance,
 selection controls, dictionary and narration. Entering standalone Notebook stops
@@ -411,7 +393,7 @@ selection and request revisions cancel obsolete results; status updates do not
 reset keyboard focus. Consent can temporarily cover the reader without losing
 its captured selection. Dismissal cancels the request and restores publication
 focus only while that handoff still owns it. Narrow panes and scaled text scroll
-inside the same bounded primary layout as Go To.
+inside the bounded primary reading layout.
 See [readers.md](readers.md#selection-search-and-online-lookup) for the existing
 provider contract and excerpt bounds.
 
@@ -445,6 +427,32 @@ See [typography.md](typography.md) for the shared model, separate-engine cache,
 Settings chooser Escape/focus and disposal and durable reflow/selection
 ownership. The shared header/sidebar and single Reading/Notebook content trees
 are retained across Reading, Notebook and Split.
+
+
+## Shared modals and header hints
+
+The route observer follows the top **page** route. A modal above Reading or
+Split does not change route intent, close a lookup, invalidate selection or
+remount the book workspace. Before the shared modal route is pushed, the native
+host captures the current reader frame. The primary Flutter view acknowledges
+painting those pixels in the reader's existing rectangle before the live native
+surface is covered. The modal barrier then blocks background input while the
+book remains visible. Nested dialogs share that cover; the last removed route
+restores the live surface and owned focus without reopening the publication.
+
+The shared dialog future waits for `TransitionRoute.completed`, not just the
+pop result. Callers can then dispose text controllers after their fields have
+unmounted. Previously, Properties disposed controllers during the reverse
+transition; the first disposed-controller assertion caused dependent-element
+and GoRouter `GlobalObjectKey` assertion cascades. That key belongs to GoRouter's
+`_CustomNavigator` under `InheritedGoRouter`, derived from the existing navigator
+key, rather than a dialog field. The router, navigator and
+surrounding Linux/toast overlays retain one stable mounted location.
+
+Shared header controls request native tooltip windows below their buttons,
+centered and constrained to the window edges. They never hide or resize the
+reader. Chapter titles have no title tooltip; their full text remains in the
+outline row's accessible name.
 
 
 ## Shared search and adaptive presentation

@@ -244,12 +244,15 @@ class _BusyBooksSearchFieldState extends State<BusyBooksSearchField> {
               ),
               suffixIcon: _textIsEmpty
                   ? null
-                  : Tooltip(
+                  : BusyBooksHeaderTooltip(
                       message: clearLabel,
                       positionDelegate: widget.tooltipPositionDelegate,
                       child: IconButton(
                         onPressed: _clear,
-                        icon: const Icon(YaruIcons.edit_clear),
+                        icon: Semantics(
+                          label: clearLabel,
+                          child: const Icon(YaruIcons.edit_clear),
+                        ),
                       ),
                     ),
               suffixIconConstraints: const BoxConstraints.tightFor(

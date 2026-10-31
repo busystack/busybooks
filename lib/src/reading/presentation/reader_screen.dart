@@ -646,7 +646,12 @@ class _NativeReaderSurfaceState extends ConsumerState<_NativeReaderSurface>
         onBounds: _acceptBounds,
         child: ColoredBox(
           color: BusyBooksSurfaceColors.of(context).view,
-          child: const SizedBox.expand(),
+          child: ref.watch(readerControllerProvider).modalFrame != null
+              ? RawImage(
+                  image: ref.watch(readerControllerProvider).modalFrame,
+                  fit: BoxFit.fill,
+                )
+              : const SizedBox.expand(),
         ),
       ),
     );

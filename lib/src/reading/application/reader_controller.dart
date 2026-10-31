@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show AsyncCallback;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -112,19 +114,15 @@ class ReaderAppearanceMenuOwner {
   final int presentation;
 }
 
-enum ReaderPanelKind { goTo, lookup }
-
 /// Primary-window controls retain the reader session and presentation owner.
 class ReaderPanel {
   const ReaderPanel({
-    required this.kind,
     required this.bookId,
     required this.session,
     required this.presentation,
     this.term = '',
     this.lookup = const {'status': 'loading'},
   });
-  final ReaderPanelKind kind;
   final String bookId, session, term;
   final int presentation;
   final Map<String, dynamic> lookup;
@@ -135,6 +133,7 @@ class ReaderState {
     this.bookId,
     this.ready = false,
     this.surfaceVisible = false,
+    this.modalFrame,
     this.error,
     this.warning,
     this.panel,
@@ -165,6 +164,7 @@ class ReaderState {
   });
   final String? bookId, error, warning, errorCode;
   final ReaderPanel? panel;
+  final ui.Image? modalFrame;
   final String phase;
   final bool ready, searching, fixed, surfaceVisible;
   final TypographyCapabilities typography;
@@ -192,6 +192,8 @@ class ReaderState {
     String? bookId,
     bool? ready,
     bool? surfaceVisible,
+    ui.Image? modalFrame,
+    bool clearModalFrame = false,
     String? error,
     String? warning,
     String? errorCode,
@@ -226,6 +228,7 @@ class ReaderState {
     bookId: bookId ?? this.bookId,
     ready: ready ?? this.ready,
     surfaceVisible: surfaceVisible ?? this.surfaceVisible,
+    modalFrame: clearModalFrame ? null : modalFrame ?? this.modalFrame,
     error: error ?? this.error,
     warning: clearWarning ? null : warning ?? this.warning,
     panel: clearPanel ? null : panel ?? this.panel,
@@ -273,7 +276,6 @@ class ReaderController extends Notifier<ReaderState> {
   Rect get viewport => _viewport;
   Map<String, dynamic> _chrome = {};
   bool get _panelActive => state.panel != null;
-  FocusNode? _panelReturnFocus;
   int _panelRequest = 0;
   int _selectionRevision = 0;
   Map<String, dynamic>? _selectionIntent;
@@ -369,14 +371,13 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> lookup(ReaderSelectionTarget target) async {
     if (!_ownsSelection(target)) return;
-    await _showReaderPanel(ReaderPanelKind.lookup, term: target.text);
+    await _showLookupPanel(target.text);
     if (target.selectionRevision != null &&
             target.selectionRevision != _selectionRevision ||
         target.session != _session ||
         target.bookId != state.bookId ||
         target.presentation + 1 != _presentation ||
         !_panelActive ||
-        state.panel?.kind != ReaderPanelKind.lookup ||
         !_routeVisible ||
         !state.ready) {
       return;
@@ -387,9 +388,7 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> _runLookup() async {
     final term = _lookupTerm;
-    if (term == null ||
-        !_panelActive ||
-        state.panel?.kind != ReaderPanelKind.lookup) {
+    if (term == null || !_panelActive) {
       return;
     }
     _lookupRequest?.cancel();
@@ -405,7 +404,6 @@ class ReaderController extends Notifier<ReaderState> {
         bookId == state.bookId &&
         _lookupTerm == term &&
         _panelActive &&
-        state.panel?.kind == ReaderPanelKind.lookup &&
         _routeVisible &&
         !_suspended &&
         state.ready;
@@ -414,7 +412,6 @@ class ReaderController extends Notifier<ReaderState> {
       final panel = state.panel!;
       state = state.copy(
         panel: ReaderPanel(
-          kind: panel.kind,
           bookId: panel.bookId,
           session: panel.session,
           presentation: panel.presentation,
@@ -447,6 +444,7 @@ class ReaderController extends Notifier<ReaderState> {
   int get presentationId => _presentation;
   int get searchRevision => _searchRevision;
   bool get interactive =>
+      _modalOwners.isEmpty &&
       state.ready &&
       state.surfaceVisible &&
       _hasViewport &&
@@ -848,18 +846,7 @@ class ReaderController extends Notifier<ReaderState> {
           }
           return;
         }
-        if (msg['type'] == 'navigationResult' &&
-            msg['request'] == _navigationRequest) {
-          final pending = _navigationPending;
-          if (pending != null && !pending.isCompleted) {
-            if (msg['message'] is String) {
-              pending.completeError(StateError(msg['message'] as String));
-            } else {
-              pending.complete();
-            }
-          }
-          return;
-        }
+
         final operation = _eventTail.then((_) => _event(msg));
         _eventTail = operation.catchError((Object error) {
           if (msg['session'] == _session) {
@@ -870,6 +857,8 @@ class ReaderController extends Notifier<ReaderState> {
       }
     });
     ref.onDispose(() {
+      _modalImage?.dispose();
+      _modalImage = null;
       unawaited(_dismissSelectionMenu());
       unawaited(_dismissAppearanceMenu());
       _pendingJump?.cancel();
@@ -1375,7 +1364,7 @@ class ReaderController extends Notifier<ReaderState> {
           clearSelection: event['anchor'] is! Map,
         );
         if (replaced) {
-          if (state.panel?.kind == ReaderPanelKind.lookup) {
+          if (_panelActive) {
             await dismissReaderControls(restoreFocus: false);
           } else {
             await _dismissSelectionMenu();
@@ -1754,8 +1743,106 @@ class ReaderController extends Notifier<ReaderState> {
     await operation;
   }
 
+  final _modalOwners = <Object>{};
+  Future<void>? _modalPreparation;
+  Future<void>? _modalRelease;
+  ui.Image? _modalImage;
+  bool _modalFramePainted = false;
+  (String, int)? _modalReturnFocus;
+
+  Future<AsyncCallback> coverForModal() async {
+    while (_modalRelease != null) {
+      await _modalRelease;
+    }
+    final owner = Object();
+    _modalOwners.add(owner);
+    try {
+      await (_modalPreparation ??= _prepareModalFrame());
+    } catch (_) {
+      await _releaseModal(owner);
+      rethrow;
+    }
+    var released = false;
+    return () async {
+      if (released) return;
+      released = true;
+      await _releaseModal(owner);
+    };
+  }
+
+  Future<void> _releaseModal(Object owner) async {
+    _modalOwners.remove(owner);
+    if (_modalOwners.isNotEmpty || !ref.mounted) return;
+    _modalPreparation = null;
+    final operation = _restoreModalSurface();
+    _modalRelease = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_modalRelease, operation)) _modalRelease = null;
+    }
+  }
+
+  Future<void> _restoreModalSurface() async {
+    _modalFramePainted = false;
+    await _applyVisibility();
+    if (!ref.mounted) return;
+    final image = _modalImage;
+    _modalImage = null;
+    state = state.copy(clearModalFrame: true);
+    final restore = _modalReturnFocus;
+    _modalReturnFocus = null;
+    await WidgetsBinding.instance.endOfFrame;
+    image?.dispose();
+    if (ref.mounted &&
+        restore != null &&
+        restore.$1 == _session &&
+        restore.$2 == _focusRevision &&
+        interactive) {
+      await focusPublication(
+        isCurrent: () =>
+            ref.mounted &&
+            restore.$1 == _session &&
+            restore.$2 == _focusRevision &&
+            interactive,
+      );
+    }
+  }
+
+  Future<void> _prepareModalFrame() async {
+    final session = _session, id = state.bookId;
+    if (state.ready && state.surfaceVisible && id != null) {
+      final focused = await nativeContentHasFocus();
+      final bytes = await readerChannel.invokeMethod<Uint8List>('capture');
+      if (!ref.mounted || session != _session || id != state.bookId) return;
+      if (bytes == null) {
+        throw PlatformException(
+          code: 'reader-capture',
+          message: 'The reader could not be covered.',
+        );
+      }
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      if (!ref.mounted || session != _session || id != state.bookId) {
+        frame.image.dispose();
+        return;
+      }
+      _modalImage = frame.image;
+      state = state.copy(modalFrame: frame.image);
+      await focusChrome();
+      if (focused == true) _modalReturnFocus = (session, _focusRevision);
+      // The primary Flutter view must paint the exact captured pixels before
+      // the native surface is covered. This is a frame acknowledgement, not a delay.
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!ref.mounted) return;
+    _modalFramePainted = true;
+    await _applyVisibility();
+  }
+
   // Route visibility survives a native close/open on a retained reader route.
-  // Geometry and widget rebuilding do not own this state; dialogs do.
+  // Page navigation owns this intent; modal coverage has separate leases.
   Future<void> show(bool value) => _showRoute(value);
 
   Future<void> _showRoute(bool value) async {
@@ -1793,6 +1880,7 @@ class ReaderController extends Notifier<ReaderState> {
 
   int _visibilityRevision = 0;
   bool get _surfaceVisible =>
+      !(_modalOwners.isNotEmpty && _modalFramePainted) &&
       _routeVisible &&
       _workspaceVisible &&
       _hasViewport &&
@@ -2266,7 +2354,6 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> _dismissReaderControls({bool restoreFocus = true}) async {
     final panel = state.panel;
-    final previousFocus = _panelReturnFocus;
     final session = _session, presentation = _presentation;
     final focusRevision = _focusRevision;
     await _dismissSelectionMenu();
@@ -2276,11 +2363,7 @@ class ReaderController extends Notifier<ReaderState> {
     }
     _presentation++;
     _invalidateLookup();
-    _panelReturnFocus = null;
     if (panel != null) state = state.copy(clearPanel: true);
-    if (_navigationPending case final pending? when !pending.isCompleted) {
-      pending.completeError(StateError(_labels.navigationInterrupted));
-    }
     if (restoreFocus && panel != null) {
       final dismissed = _presentation;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2292,11 +2375,7 @@ class ReaderController extends Notifier<ReaderState> {
             _suspended) {
           return;
         }
-        if (previousFocus?.context?.mounted == true) {
-          previousFocus!.requestFocus();
-        } else {
-          _restoreLookupFocus(session, dismissed);
-        }
+        _restoreLookupFocus(session, dismissed);
       });
       WidgetsBinding.instance.scheduleFrame();
     }
@@ -2596,11 +2675,6 @@ class ReaderController extends Notifier<ReaderState> {
     }
   }
 
-  int _navigationRequest = 0;
-  Completer<void>? _navigationPending;
-
-  Future<void> showGoTo() => _showReaderPanel(ReaderPanelKind.goTo);
-
   bool ownsReaderPanel(ReaderPanel panel) =>
       ref.mounted &&
       state.panel?.presentation == panel.presentation &&
@@ -2611,10 +2685,7 @@ class ReaderController extends Notifier<ReaderState> {
       _routeVisible &&
       !_suspended;
 
-  Future<void> _showReaderPanel(
-    ReaderPanelKind kind, {
-    String term = '',
-  }) async {
+  Future<void> _showLookupPanel(String term) async {
     if (!state.ready || !_routeVisible || _suspended) return;
     final layout = ref.read(bookPresentationProvider);
     if (!_workspaceVisible &&
@@ -2623,7 +2694,6 @@ class ReaderController extends Notifier<ReaderState> {
       return;
     }
     final session = _session, request = ++_panelRequest;
-    final previousFocus = FocusManager.instance.primaryFocus;
     bool current() =>
         ref.mounted &&
         request == _panelRequest &&
@@ -2631,20 +2701,14 @@ class ReaderController extends Notifier<ReaderState> {
         _routeVisible &&
         !_suspended &&
         state.ready;
-    final fromPublication = await nativeContentHasFocus();
     if (!current()) return;
     await _dismissReaderControls(restoreFocus: false);
     if (!current()) return;
     final presentation = _presentation;
     await focusChrome();
     if (!current() || presentation != _presentation) return;
-    _panelReturnFocus =
-        kind == ReaderPanelKind.lookup || fromPublication == true
-        ? null
-        : previousFocus;
     state = state.copy(
       panel: ReaderPanel(
-        kind: kind,
         bookId: state.bookId!,
         session: session,
         presentation: presentation,
@@ -2656,31 +2720,8 @@ class ReaderController extends Notifier<ReaderState> {
         .focusPane(state.bookId!, BookPane.reading);
   }
 
-  /// Keep renderer acknowledgements correlated with the current primary panel.
-  Future<void> navigateFromPanel(
-    ReaderPanel panel,
-    Map<String, dynamic> anchor,
-  ) async {
-    if (!ownsReaderPanel(panel) || _navigationPending != null) return;
-    final pending = Completer<void>();
-    _navigationPending = pending;
-    final request = ++_navigationRequest;
-    try {
-      await Future.wait<void>([
-        pending.future.timeout(const Duration(seconds: 15)),
-        _send('goto', {
-          'anchor': anchor,
-          'request': request,
-        }, isCurrent: () => ownsReaderPanel(panel)),
-      ], eagerError: true);
-      if (ownsReaderPanel(panel)) await dismissReaderControls();
-    } finally {
-      if (identical(_navigationPending, pending)) _navigationPending = null;
-    }
-  }
-
   Future<void> retryLookup(ReaderPanel panel) async {
-    if (ownsReaderPanel(panel) && panel.kind == ReaderPanelKind.lookup) {
+    if (ownsReaderPanel(panel)) {
       await _runLookup();
     }
   }
@@ -2688,7 +2729,6 @@ class ReaderController extends Notifier<ReaderState> {
   void openLookupEntry(ReaderPanel panel) {
     final entry = _lookupResult?.entry;
     if (ownsReaderPanel(panel) &&
-        panel.kind == ReaderPanelKind.lookup &&
         entry != null &&
         entry.scheme == 'https' &&
         entry.host == 'en.wiktionary.org' &&

@@ -242,9 +242,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get resetBook => 'Buchdarstellung zurücksetzen';
 
   @override
-  String get goTo => 'Lesestelle aufrufen';
-
-  @override
   String get location => 'Lesestelle';
 
   @override
@@ -619,18 +616,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get pageLabel => 'Gedruckte Seitenbezeichnung';
 
   @override
-  String get pageNumberHelp =>
-      'Die physische Seitennummer verwenden, beginnend mit 1.';
-
-  @override
   String get invalidPage =>
       'Physische Seite im gültigen Bereich oder genaue Druckseitenbezeichnung eingeben. Für numerische Bezeichnungen = voranstellen.';
-
-  @override
-  String get bookProgress => 'Buchfortschritt (%)';
-
-  @override
-  String get invalidProgress => 'Einen Prozentwert von 0 bis 100 eingeben.';
 
   @override
   String get moreActions => 'Weitere Aktionen';
@@ -1030,12 +1017,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Das Buch ist beschädigt oder hat ungültige Inhalte. Eine vollständige, lesbare Kopie desselben Originals suchen, um seine Lesedaten zu behalten.';
 
   @override
-  String get firstPage => 'Erste Seite';
-
-  @override
-  String get lastPage => 'Letzte Seite';
-
-  @override
   String get home => 'Startseite';
 
   @override
@@ -1107,13 +1088,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get moreReadingSettings => 'Weitere Leseeinstellungen…';
-
-  @override
-  String get pageDestination => 'Seitenzahl oder gedruckte Seitenbezeichnung';
-
-  @override
-  String get pageDestinationHelp =>
-      'Zahlen wählen physische Seiten. Verwenden Sie =Bezeichnung für gedruckte Seitenbezeichnungen.';
 
   @override
   String bareBookmarks(int count) {

@@ -1,9 +1,13 @@
 // Adapted BusyMark modal shortcut boundary and theme-aware route.
 import 'dart:async';
+import 'package:flutter/foundation.dart' show AsyncCallback;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'command_registry.dart';
 import 'busybooks_design.dart';
+import 'busybooks_modal_surface.dart';
+import 'busybooks_toast.dart';
+import 'localization.dart';
 
 class _DismissBusyBooksModalIntent extends Intent {
   const _DismissBusyBooksModalIntent();
@@ -121,19 +125,44 @@ Future<T?> _showBusyBooksFlutterDialog<T>(
   required WidgetBuilder builder,
   Color? barrierColor,
   bool barrierDismissible = true,
-}) {
+}) async {
   final navigator = Navigator.of(context, rootNavigator: true);
   final themes = InheritedTheme.capture(from: context, to: navigator.context);
-  return navigator.push<T>(
-    _BusyBooksDialogRoute<T>(
-      context: context,
-      builder: builder,
-      themes: themes,
-      fixedBarrierColor: barrierColor,
-      initialBarrierColor: barrierColor ?? busyBooksModalBarrierColor(context),
-      barrierDismissible: barrierDismissible,
-    ),
+  AsyncCallback? release;
+  try {
+    release = await BusyBooksModalSurfaceScope.maybeOf(context)?.cover();
+  } on PlatformException catch (error) {
+    // A failed native capture must leave the live reader usable. Do not push
+    // a dialog that its native window would cover, or recursively open Error.
+    if (context.mounted) {
+      BusyBooksToastOverlay.show(
+        context,
+        message: '${context.l10n.error}: ${error.message ?? error.code}',
+      );
+    }
+    return null;
+  }
+  if (!context.mounted) {
+    await release?.call();
+    return null;
+  }
+  final route = _BusyBooksDialogRoute<T>(
+    context: context,
+    builder: builder,
+    themes: themes,
+    fixedBarrierColor: barrierColor,
+    initialBarrierColor: barrierColor ?? busyBooksModalBarrierColor(context),
+    barrierDismissible: barrierDismissible,
   );
+  try {
+    final result = await navigator.push<T>(route);
+    // pop completes before the reverse transition removes the route's widgets.
+    // Callers own form controllers and other resources until actual removal.
+    await route.completed;
+    return result;
+  } finally {
+    await release?.call();
+  }
 }
 
 class _BusyBooksDialogRoute<T> extends DialogRoute<T> {

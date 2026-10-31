@@ -288,7 +288,6 @@ abstract final class BusyBooksCommandIds {
   static const searchBooks = 'search.books';
   static const searchRecent = 'search.recent';
   static const sidebar = 'reader.sidebar';
-  static const goTo = 'reader.goTo';
   static const backToCollection = 'book.backToCollection';
   static const returnToPassage = 'reader.returnToPassage';
   static const nextResult = 'reader.nextResult';
@@ -466,12 +465,6 @@ abstract final class BusyBooksCommandCatalog {
         BusyBooksCommandIds.sidebar,
         (c) => c.l10n.sidebar,
         LogicalKeyboardKey.f9,
-      ),
-      command(
-        BusyBooksCommandIds.goTo,
-        (c) => c.l10n.goTo,
-        LogicalKeyboardKey.keyG,
-        control: true,
       ),
       command(
         BusyBooksCommandIds.nextResult,

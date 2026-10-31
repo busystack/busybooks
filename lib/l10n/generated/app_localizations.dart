@@ -555,12 +555,6 @@ abstract class AppLocalizations {
   /// **'Reset Book Appearance'**
   String get resetBook;
 
-  /// No description provided for @goTo.
-  ///
-  /// In en, this message translates to:
-  /// **'Go to Location'**
-  String get goTo;
-
   /// No description provided for @location.
   ///
   /// In en, this message translates to:
@@ -1257,29 +1251,11 @@ abstract class AppLocalizations {
   /// **'Printed page label'**
   String get pageLabel;
 
-  /// No description provided for @pageNumberHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Use the physical page number, starting at 1.'**
-  String get pageNumberHelp;
-
   /// No description provided for @invalidPage.
   ///
   /// In en, this message translates to:
   /// **'Enter a physical page in range or an exact printed label. Use = for a numeric label.'**
   String get invalidPage;
-
-  /// No description provided for @bookProgress.
-  ///
-  /// In en, this message translates to:
-  /// **'Book progress (%)'**
-  String get bookProgress;
-
-  /// No description provided for @invalidProgress.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter a percentage from 0 to 100.'**
-  String get invalidProgress;
 
   /// No description provided for @moreActions.
   ///
@@ -1983,18 +1959,6 @@ abstract class AppLocalizations {
   /// **'The book is damaged or has invalid content. Locate a complete, readable copy of the same original to keep its reading data.'**
   String get damagedBookHelp;
 
-  /// No description provided for @firstPage.
-  ///
-  /// In en, this message translates to:
-  /// **'First page'**
-  String get firstPage;
-
-  /// No description provided for @lastPage.
-  ///
-  /// In en, this message translates to:
-  /// **'Last page'**
-  String get lastPage;
-
   /// No description provided for @home.
   ///
   /// In en, this message translates to:
@@ -2138,18 +2102,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More Reading Settings…'**
   String get moreReadingSettings;
-
-  /// No description provided for @pageDestination.
-  ///
-  /// In en, this message translates to:
-  /// **'Page number or printed label'**
-  String get pageDestination;
-
-  /// No description provided for @pageDestinationHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Numbers select physical pages. Use =label for a printed label.'**
-  String get pageDestinationHelp;
 
   /// No description provided for @bareBookmarks.
   ///

@@ -37,14 +37,17 @@ Same-volume no-clobber `MoveFileExW` omits `COPY_ALLOWED`; cross-volume moves us
 verified staging, a durable journal and guarded source removal. The decoder
 uses wide paths, a memory-limited Job Object and bounded streaming callbacks.
 
-A reusable transient `FlutterViewController` above WebView2 presents Go To,
-lookup, footnotes and voice controls. It starts the same packaged
-Flutter bundle through the restricted popover entry before profile/window
-bootstrap. Main menus, View Options and selection actions use the Win32 host and
-shared menu/session contract; note editing opens the existing Notebook editor.
-Popovers and native menus keep the publication visible; main-route dialogs hide
-it. Channel readiness, first-frame readiness and a Flutter paint acknowledgement
-precede presentation/focus. See [workspace architecture](reading-workspace.md).
+Reader information uses the primary Flutter application: Look Up is a bounded
+panel in the reading pane, and footnotes stay in the renderer. Main menus, View
+Options, speech choices and selection actions use the Win32 host and shared
+menu/session contract; note editing opens the existing Notebook editor. The
+current-location indicator is read-only. Shared modal routes retain the reader
+session and paint a captured WebView2 frame behind the modal barrier while the
+native input surface is covered. Closing waits for actual route removal before
+releasing form resources and restoring the live surface. Header hints use the
+operating system tooltip control, centered below their anchors and constrained
+to the window. No second Flutter engine is created.
+See [workspace architecture](reading-workspace.md).
 
 Reading, Notebook and Split use the same workspace and reader. In Split, the
 WebView2 child is bounded to the reader pane. Native visibility waits for an
@@ -59,7 +62,7 @@ notification from script/import/rejection failures. Resize notifications remain
 session-scoped diagnostics; actual exceptions and authored lookalikes remain
 fatal. This boundary belongs to BusyBooks' bootstrap, with no browser/SDK patch.
 
-Both Flutter engines register the local-font channel. A joined worker uses
+The primary Flutter engine registers the local-font channel. A joined worker uses
 DirectWrite's local-only collection and canonical/localized family and face
 identities. Samples use DirectWrite/Direct2D/WIC; WebView2 receives private local
 FontFace aliases. See [typography.md](typography.md).

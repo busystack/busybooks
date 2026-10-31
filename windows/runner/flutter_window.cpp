@@ -55,6 +55,7 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if(reader_host_ && (message==WM_MOVE || message==WM_DPICHANGED || message==WM_ACTIVATE || message==WM_KEYDOWN)) reader_host_->DismissHeaderHint();
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

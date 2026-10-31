@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 import 'dart:isolate';
 
 import 'package:busybooks/l10n/generated/app_localizations.dart';
@@ -19,6 +20,7 @@ import 'package:busybooks/src/app/busybooks_search_field.dart';
 import 'package:busybooks/src/app/command_focus.dart';
 import 'package:busybooks/src/app/command_registry.dart';
 import 'package:busybooks/src/app/keymap_controller.dart';
+import 'package:busybooks/src/app/product_actions.dart' as product;
 import 'package:busybooks/src/app/linux/linux_header_style.dart';
 import 'package:busybooks/src/app/linux/linux_page_frame.dart';
 import 'package:busybooks/src/app/settings_screen.dart';
@@ -85,7 +87,9 @@ Future<void> _pumpUntil(
     if (watch.elapsed > const Duration(seconds: 30)) {
       fail('Expected widget transition did not complete');
     }
-    await tester.pump();
+    // Drive route transitions as well as storage callbacks. A modal's result
+    // now waits for its reverse animation and actual widget removal.
+    await tester.pump(const Duration(milliseconds: 16));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 5)),
     );
@@ -239,9 +243,9 @@ class _ReaderFixture {
       _,
       panel,
     ) {
-      if (panel?.kind == ReaderPanelKind.lookup) {
+      if (panel != null) {
         test.lookupUpdates.add({
-          'lookupTerm': panel!.term,
+          'lookupTerm': panel.term,
           'lookup': panel.lookup,
         });
       }
@@ -270,6 +274,9 @@ class _ReaderFixture {
           }
           if (call.method == 'capturePopover' || call.method == 'popover') {
             return nativeResult;
+          }
+          if (call.method == 'capture') {
+            return image.encodePng(image.Image(width: 2, height: 2));
           }
           if (call.method == 'open') {
             test.session = (call.arguments as Map)['session'] as String;
@@ -450,7 +457,7 @@ class _ReaderFixture {
   String? editedAnnotation;
   ReaderSelectionTarget? editingTarget;
   Map get panelSnapshot => {
-    'kind': state.panel?.kind == ReaderPanelKind.lookup ? 'lookup' : 'goto',
+    'kind': 'lookup',
     'presentation': state.panel?.presentation,
     'lookupTerm': state.panel?.term,
     'lookup': state.panel?.lookup,
@@ -965,6 +972,197 @@ Future<void> _startLookup(_ReaderFixture f, String term) async {
 }
 
 void main() {
+  for (final view in ['read', 'split']) {
+    testWidgets(
+      'production $view modals preserve router, book and protected draft',
+      (tester) async {
+        late _ReaderFixture f;
+        late AnnotationStoreGate gate;
+        late ReadingAnnotation annotation;
+        await _readerAction(tester, () async {
+          f = await _ReaderFixture.create(
+            'text.pdf',
+            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+            wrapStore: (store) => gate = AnnotationStoreGate(store),
+          );
+          await f.openSelectionNote();
+          await f.reader.annotation('highlight', note: 'Saved note');
+          annotation = f.reader.annotations.single;
+          gate.fail = true;
+          f.notes.edit(annotation, 'Protected unsaved note');
+          try {
+            await f.notes.save(annotation.id);
+          } catch (_) {}
+        });
+        try {
+          await _mountHeaderApplication(tester, f, '/$view/${f.state.bookId}');
+          final navigator = rootNavigatorKey.currentState;
+          final router = f.container.read(appRouterProvider);
+          final workspace = find.byType(BookWorkspaceScreen).evaluate().single;
+          final session = f.reader.sessionId;
+          final location = Map.of(f.state.location);
+          final draft = f.drafts.drafts[annotation.id]!;
+          for (final dismissal in ['escape', 'cancel', 'backdrop']) {
+            unawaited(
+              _appCommands(tester).execute(BusyBooksCommandIds.bookProperties),
+            );
+            await _pumpUntil(
+              tester,
+              () => find.text('Book Properties').evaluate().isNotEmpty,
+            );
+            expect(tester.takeException(), isNull);
+            expect(rootNavigatorKey.currentState, same(navigator));
+            expect(f.state.modalFrame, isNotNull);
+            expect(
+              find.byWidgetPredicate(
+                (w) => w is RawImage && w.image == f.state.modalFrame,
+              ),
+              findsOneWidget,
+            );
+            expect(f.reader.interactive, isFalse);
+            final previous = f.dispatches.length;
+            await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+            expect(f.dispatches.length, previous);
+            switch (dismissal) {
+              case 'escape':
+                await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+              case 'cancel':
+                await tester.tap(
+                  find.widgetWithText(BusyBooksDialogButton, 'Cancel'),
+                );
+              case 'backdrop':
+                await tester.tapAt(const Offset(12, 200));
+            }
+            await _pumpUntil(
+              tester,
+              () => f.state.modalFrame == null && f.reader.interactive,
+            );
+            expect(find.text('Book Properties'), findsNothing);
+            expect(tester.takeException(), isNull);
+            expect(f.container.read(appRouterProvider), same(router));
+            expect(
+              find.byType(BookWorkspaceScreen).evaluate().single,
+              same(workspace),
+            );
+            expect(f.reader.sessionId, session);
+            expect(f.state.location, location);
+            expect(f.drafts.drafts[annotation.id]!.text, draft.text);
+            expect(f.drafts.drafts[annotation.id]!.revision, draft.revision);
+            await _mainMenuSelect(tester, 'About BusyBooks');
+            await _pumpUntil(
+              tester,
+              () => find.byType(BusyBooksDialogShell).evaluate().isNotEmpty,
+            );
+            expect(f.state.modalFrame, isNotNull);
+            await tester.tap(
+              find.widgetWithText(BusyBooksDialogButton, 'Close'),
+            );
+            await _pumpUntil(
+              tester,
+              () => f.state.modalFrame == null && f.reader.interactive,
+            );
+            expect(tester.takeException(), isNull);
+            expect(f.reader.sessionId, session);
+            expect(f.state.location, location);
+          }
+          // A nested error is another production shared-modal consumer. It must
+          // keep the outer cover until both routes have actually unmounted.
+          unawaited(
+            _appCommands(tester).execute(BusyBooksCommandIds.bookProperties),
+          );
+          await _pumpUntil(
+            tester,
+            () => find.text('Book Properties').evaluate().isNotEmpty,
+          );
+          final image = f.state.modalFrame;
+          unawaited(
+            product.showError(
+              rootNavigatorKey.currentContext!,
+              StateError('Modal recovery'),
+            ),
+          );
+          await _pumpUntil(
+            tester,
+            () => find.text('Error').evaluate().isNotEmpty,
+          );
+          expect(f.state.modalFrame, same(image));
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+          expect(find.text('Book Properties'), findsOneWidget);
+          expect(f.state.modalFrame, same(image));
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await _pumpUntil(
+            tester,
+            () => f.state.modalFrame == null && f.reader.interactive,
+          );
+          expect(tester.takeException(), isNull);
+          expect(f.reader.sessionId, session);
+          expect(f.state.location, location);
+          final openCalls = f.calls.where((c) => c.method == 'open').length;
+          await _readerAction(tester, () => f.reader.send('next'));
+          expect(f.dispatches.last['action'], 'next');
+          expect(f.calls.where((c) => c.method == 'open').length, openCalls);
+        } finally {
+          gate.fail = false;
+          await _disposeHeaderApplication(tester, f);
+        }
+      },
+    );
+  }
+  testWidgets(
+    'production modal capture failure leaves the reader usable and reports recovery',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+        final session = f.reader.sessionId, location = Map.of(f.state.location);
+        f.onNativeCall = (call) async {
+          if (call.method == 'capture') {
+            throw PlatformException(
+              code: 'reader-capture',
+              message: 'Capture unavailable',
+            );
+          }
+          return null;
+        };
+        await _readerAction(tester, () async {
+          await _appCommands(
+            tester,
+          ).execute(BusyBooksCommandIds.bookProperties);
+        });
+        expect(find.byType(BusyBooksDialogShell), findsNothing);
+        expect(find.textContaining('Capture unavailable'), findsOneWidget);
+        expect(f.state.modalFrame, isNull);
+        expect(f.reader.interactive, isTrue);
+        expect(f.reader.sessionId, session);
+        expect(f.state.location, location);
+        expect(tester.takeException(), isNull);
+        f.onNativeCall = null;
+        unawaited(
+          _appCommands(tester).execute(BusyBooksCommandIds.bookProperties),
+        );
+        await _pumpUntil(
+          tester,
+          () => find.byType(BusyBooksDialogShell).evaluate().isNotEmpty,
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await _pumpUntil(
+          tester,
+          () => f.state.modalFrame == null && f.reader.interactive,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        f.onNativeCall = null;
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
   _professionalWorkspaceTests();
   _nativeSelectionTests();
   for (final invalidation in ['capacity', 'book']) {
@@ -2579,7 +2777,7 @@ void main() {
     'outside dismissal',
     'Notebook',
     'book switch',
-    'different panel',
+    'replacement lookup',
   ]) {
     test(
       'dictionary $transition invalidates pending replies without reopening or focusing',
@@ -2601,8 +2799,8 @@ void main() {
                   .read(workspaceControllerProvider.notifier)
                   .openPath(p.absolute('test/fixtures/mixed-pages.pdf'));
               await f.reader.open(next.books.single.id);
-            case 'different panel':
-              await f.reader.showGoTo();
+            case 'replacement lookup':
+              await _startLookup(f, 'replacement');
           }
           final calls = f.calls.length;
           service.complete(0);
@@ -2857,9 +3055,9 @@ void main() {
       try {
         await f.openSelectionNote();
         final target = await f.reader.prepareLookup();
-        await f.reader.showGoTo();
+        await f.reader.dismissReaderControls();
         await f.reader.lookup(target!);
-        expect(f.panelSnapshot['kind'], 'goto');
+        expect(f.state.panel, isNull);
         await f.openSelectionNote();
         final leaving = await f.reader.prepareLookup();
         await f.reader.suspend();
@@ -4519,6 +4717,24 @@ void main() {
       try {
         await tester.pumpWidget(_sidebarApplication(f));
         await tester.pumpAndSettle();
+        expect(find.byTooltip('Front matter'), findsNothing);
+        expect(find.byTooltip('Section 0'), findsNothing);
+        expect(
+          find.ancestor(
+            of: find.text('Section 0'),
+            matching: find.byType(Tooltip),
+          ),
+          findsNothing,
+        );
+        expect(
+          tester
+              .widget<Semantics>(
+                find.byKey(const ValueKey('outline-semantics-node-0')),
+              )
+              .properties
+              .label,
+          'Section 0',
+        );
         final disclosure = find.byKey(
           const ValueKey('outline-disclosure-group'),
         );
@@ -5530,114 +5746,96 @@ void main() {
     'reflowable EPUB',
     'fixed EPUB',
   ]) {
-    testWidgets(
-      'home header compact location and live Go To anchor for $mode',
-      (tester) async {
-        late _ReaderFixture f;
-        final pdf = mode.endsWith('PDF');
-        await _readerAction(tester, () async {
-          f = await _ReaderFixture.create(
-            pdf
-                ? 'text.pdf'
-                : mode.startsWith('fixed')
-                ? 'fixed-layout.epub'
-                : 'reflowable.epub',
-            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
-          );
-          await f.checkedEvent('metadata', {
-            'pages': mode == 'printed PDF' ? 322 : 3,
-            'labels': mode == 'printed PDF'
-                ? List.generate(322, (i) => '${i - 25}')
-                : mode == 'Roman PDF'
-                ? ['i', 'ii', '1']
-                : mode == 'empty-label PDF'
-                ? ['', '', '']
-                : <String>[],
-            'fixed': mode != 'reflowable EPUB',
-          });
-          await f.checkedEvent('location', {
-            'anchor': pdf
-                ? {'page': mode == 'printed PDF' ? 48 : 1}
-                : {'cfi': 'epubcfi(/6/2!/4/2/1:0)'},
-            'progress': .42,
-            if (mode == 'fixed EPUB') 'printPage': '23',
-          });
+    testWidgets('home header read-only location for $mode', (tester) async {
+      late _ReaderFixture f;
+      final pdf = mode.endsWith('PDF');
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          pdf
+              ? 'text.pdf'
+              : mode.startsWith('fixed')
+              ? 'fixed-layout.epub'
+              : 'reflowable.epub',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        await f.checkedEvent('metadata', {
+          'pages': mode == 'printed PDF' ? 322 : 3,
+          'labels': mode == 'printed PDF'
+              ? List.generate(322, (i) => '${i - 25}')
+              : mode == 'Roman PDF'
+              ? ['i', 'ii', '1']
+              : mode == 'empty-label PDF'
+              ? ['', '', '']
+              : <String>[],
+          'fixed': mode != 'reflowable EPUB',
         });
-        try {
-          await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
-          final location = find.byKey(const ValueKey('reader-location'));
-          final label = switch (mode) {
-            'printed PDF' => '23',
-            'Roman PDF' => 'ii',
-            'unlabelled PDF' || 'empty-label PDF' => '2',
-            'fixed EPUB' => '23',
-            _ => '42%',
-          };
-          expect(
-            find.descendant(of: location, matching: find.text(label)),
-            findsOneWidget,
-          );
-          expect(tester.getSize(location).width, lessThanOrEqualTo(132));
-          if (mode == 'printed PDF') {
-            expect(find.text('Page 23'), findsNothing);
-            expect(
-              find.bySemanticsLabel(
-                RegExp(
-                  RegExp.escape(
-                    'Go to Location · Page 23 · Physical page 49 / 322',
-                  ),
-                ),
-              ),
-              findsOneWidget,
-            );
-            expect(find.byTooltip('Go to Location'), findsOneWidget);
-          }
-          final anchor = f.state.location;
-          for (final width in [1200.0, 1000.0]) {
-            tester.view.physicalSize = Size(width, 850);
-            await tester.pumpAndSettle();
-            await tester.tap(location);
-            await _pumpUntil(
-              tester,
-              () => find.byType(ReaderInformationPanel).evaluate().isNotEmpty,
-            );
-            expect(f.state.panel!.kind, ReaderPanelKind.goTo);
-            expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
-            expect(
-              tester.getRect(find.byType(ReaderInformationPanel)).top,
-              greaterThan(tester.getRect(location).bottom),
-            );
-            await _readerAction(tester, f.reader.dismissReaderControls);
-            expect(f.state.location, anchor);
-          }
-          await _readerAction(
-            tester,
-            () => f.checkedEvent('navigation', {
-              'previous': false,
-              'next': true,
-              'back': true,
-            }),
-          );
-          final previous = find.byKey(const ValueKey('reader-previous'));
-          expect(
-            tester.widget<BusyBooksLinuxHeaderIconButton>(previous).onPressed,
-            isNull,
-          );
-          expect(
-            tester
-                .widget<BusyBooksLinuxHeaderIconButton>(
-                  find.byKey(const ValueKey('reader-next')),
-                )
-                .onPressed,
-            isNotNull,
-          );
-          expect(f.state.navigation['back'], true);
-          expect(tester.takeException(), isNull);
-        } finally {
-          await _disposeHeaderApplication(tester, f);
+        await f.checkedEvent('location', {
+          'anchor': pdf
+              ? {'page': mode == 'printed PDF' ? 48 : 1}
+              : {'cfi': 'epubcfi(/6/2!/4/2/1:0)'},
+          'progress': .42,
+          if (mode == 'fixed EPUB') 'printPage': '23',
+        });
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+        final location = find.byKey(const ValueKey('reader-location'));
+        final label = switch (mode) {
+          'printed PDF' => '23',
+          'Roman PDF' => 'ii',
+          'unlabelled PDF' || 'empty-label PDF' => '2',
+          'fixed EPUB' => '23',
+          _ => '42%',
+        };
+        expect(tester.widget<Text>(location).data, label);
+        expect(tester.getSize(location).width, lessThanOrEqualTo(132));
+        final locationBefore = f.state.location;
+        expect(
+          find.ancestor(of: location, matching: find.byType(TextButton)),
+          findsNothing,
+        );
+        expect(
+          find.ancestor(of: location, matching: find.byType(Tooltip)),
+          findsNothing,
+        );
+        for (final width in [1200.0, 1000.0]) {
+          tester.view.physicalSize = Size(width, 850);
+          await tester.pumpAndSettle();
+          await tester.tap(location, warnIfMissed: false);
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+          await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+          await tester.pumpAndSettle();
+          expect(find.byType(ReaderInformationPanel), findsNothing);
+          expect(f.state.location, locationBefore);
         }
-      },
-    );
+        await _readerAction(
+          tester,
+          () => f.checkedEvent('navigation', {
+            'previous': false,
+            'next': true,
+            'back': true,
+          }),
+        );
+        final previous = find.byKey(const ValueKey('reader-previous'));
+        expect(
+          tester.widget<BusyBooksLinuxHeaderIconButton>(previous).onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<BusyBooksLinuxHeaderIconButton>(
+                find.byKey(const ValueKey('reader-next')),
+              )
+              .onPressed,
+          isNotNull,
+        );
+        expect(f.state.navigation['back'], true);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    });
   }
 
   testWidgets(
@@ -5759,15 +5957,11 @@ void main() {
         expect(find.text('281 / 322'), findsNothing);
         expect(
           find.bySemanticsLabel(
-            RegExp(
-              RegExp.escape(
-                'Go to Location · Page 255 · Physical page 281 / 322',
-              ),
-            ),
+            RegExp(RegExp.escape('Page 255 · Physical page 281 / 322')),
           ),
           findsOneWidget,
         );
-        expect(find.byTooltip('Go to Location'), findsOneWidget);
+        expect(find.byTooltip('Go to Location'), findsNothing);
         tester.view.physicalSize = const Size(640, 850);
         await tester.pumpAndSettle();
         expect(previous, findsOneWidget);
@@ -7316,25 +7510,42 @@ void _professionalWorkspaceTests() {
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await tester.pumpAndSettle();
-        final home = find.descendant(
-          of: find.byKey(const ValueKey('book-home')),
-          matching: find.byType(Tooltip),
+        final pointer = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
         );
-        tester.state<TooltipState>(home).ensureTooltipVisible();
+        await pointer.addPointer(location: Offset.zero);
+        addTearDown(pointer.removePointer);
+        await pointer.moveTo(
+          tester.getCenter(find.byKey(const ValueKey('book-home'))),
+        );
         await tester.pump(const Duration(seconds: 1));
-        final homeBounds = tester.getRect(find.text('Home'));
-        final headerBounds = tester.getRect(find.byType(BookHeader));
-        expect(homeBounds.top, greaterThanOrEqualTo(headerBounds.top));
-        expect(homeBounds.bottom, lessThanOrEqualTo(headerBounds.bottom));
-        Tooltip.dismissAllToolTips();
+        final hint =
+            f.calls.lastWhere((call) => call.method == 'headerHint').arguments
+                as Map;
+        expect(hint['message'], 'Home');
+        final anchor = hint['anchor'] as Map;
+        expect(
+          anchor['y'] + anchor['height'],
+          lessThanOrEqualTo(tester.getRect(find.byType(BookHeader)).bottom),
+        );
+        expect(find.text('Home'), findsNothing);
+        await pointer.moveTo(Offset.zero);
         await tester.pumpAndSettle();
+        expect(
+          f.calls
+              .lastWhere((call) => call.method == 'hideHeaderHint')
+              .arguments,
+          hint['id'],
+        );
         final selector = find.descendant(
           of: find.byKey(const ValueKey('reader-sidebar-view-menu')),
           matching: find.byType(Tooltip),
         );
-        tester.state<TooltipState>(selector).ensureTooltipVisible();
+        await pointer.moveTo(tester.getCenter(selector));
         await tester.pump(const Duration(seconds: 1));
-        expect(find.text('Sidebar View'), findsOneWidget);
+        final selectorHint =
+            f.calls.lastWhere((c) => c.method == 'headerHint').arguments as Map;
+        expect(selectorHint['message'], 'Sidebar View');
         await _readerAction(
           tester,
           () => f.searchController.open(
@@ -7352,24 +7563,31 @@ void _professionalWorkspaceTests() {
           tester.element(clear),
         ).clearButtonTooltip;
         expect(tester.widget<Tooltip>(clear).message, clearLabel);
-        tester.state<TooltipState>(clear).ensureTooltipVisible();
+        await pointer.moveTo(tester.getCenter(clear));
         await tester.pump(const Duration(seconds: 1));
-        final clearBounds = tester.getRect(find.text(clearLabel));
-        expect(clearBounds.top, greaterThanOrEqualTo(headerBounds.top));
-        expect(clearBounds.bottom, lessThanOrEqualTo(headerBounds.bottom));
-        Tooltip.dismissAllToolTips();
+        expect(
+          (f.calls.lastWhere((call) => call.method == 'headerHint').arguments
+              as Map)['message'],
+          clearLabel,
+        );
+        await pointer.moveTo(Offset.zero);
         await tester.pumpAndSettle();
         final close = find.byWidgetPredicate(
           (widget) => widget is Tooltip && widget.message == 'Close Search',
         );
-        tester.state<TooltipState>(close).ensureTooltipVisible();
+        await pointer.moveTo(tester.getCenter(close));
         await tester.pump(const Duration(seconds: 1));
-        final bounds = tester.getRect(find.text('Close Search'));
-        final surface = tester.getRect(find.byType(BookSearchSidebar));
-        expect(bounds.left, greaterThanOrEqualTo(surface.left));
-        expect(bounds.right, lessThanOrEqualTo(surface.right));
+        final closeHint =
+            f.calls.lastWhere((c) => c.method == 'headerHint').arguments as Map;
+        expect(closeHint['message'], 'Close Search');
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pumpAndSettle();
+        expect(
+          f.calls
+              .where((c) => c.method == 'hideHeaderHint')
+              .map((c) => c.arguments),
+          contains(closeHint['id']),
+        );
         expect(find.text('Close Search'), findsNothing);
         expect(f.sidebar.open, true);
         expect(tester.takeException(), isNull);
@@ -9757,307 +9975,6 @@ void _nativeSelectionTests() {
       },
     );
   }
-  for (final view in [BookView.reading, BookView.split]) {
-    testWidgets(
-      'primary Go To header and command preserve navigation in ${view.name}',
-      (tester) async {
-        late _ReaderFixture f;
-        await _readerAction(tester, () async {
-          f = await _ReaderFixture.create(
-            'text.pdf',
-            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
-          );
-          await f.event('metadata', {
-            'pages': 3,
-            'labels': ['i', '5', 'ii'],
-          });
-          await f.event('location', {
-            'anchor': {'page': 0},
-            'progress': 0,
-          });
-        });
-        f.onDispatch = (command) async {
-          if (command['action'] == 'goto' && command['request'] is int) {
-            scheduleMicrotask(() async {
-              await f.event('location', {
-                'anchor': command['anchor'],
-                'progress': .5,
-              });
-              await f.event('navigationResult', {
-                'request': command['request'],
-              });
-            });
-          }
-        };
-        try {
-          await _mountHeaderApplication(
-            tester,
-            f,
-            '/${view == BookView.split ? 'split' : 'read'}/${f.state.bookId}',
-          );
-          await tester.tap(find.byKey(const ValueKey('reader-location')));
-          await _pumpUntil(
-            tester,
-            () => find.byType(ReaderInformationPanel).evaluate().isNotEmpty,
-          );
-          expect(find.byType(MaterialApp), findsOneWidget);
-          expect(find.byType(ReaderInformationPanel), findsOneWidget);
-          expect(f.state.panel!.kind, ReaderPanelKind.goTo);
-          final entry = find.descendant(
-            of: find.byType(ReaderInformationPanel),
-            matching: find.byType(TextField),
-          );
-          expect(
-            tester
-                .widget<EditableText>(
-                  find.descendant(
-                    of: entry,
-                    matching: find.byType(EditableText),
-                  ),
-                )
-                .focusNode
-                .hasFocus,
-            isTrue,
-          );
-          await tester.enterText(entry, '0');
-          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-          await tester.pump();
-          expect(
-            find.text(AppLocalizations.of(tester.element(entry)).invalidPage),
-            findsOneWidget,
-          );
-          expect(f.state.panel, isNotNull);
-          await tester.enterText(entry, '3');
-          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-          await _pumpUntil(tester, () => f.state.panel == null);
-          expect(f.state.location['anchor'], {'page': 2});
-          await _readerAction(tester, () async {
-            await _appCommands(tester).execute(BusyBooksCommandIds.goTo);
-          });
-          expect(find.byType(ReaderInformationPanel), findsOneWidget);
-          await tester.enterText(entry, '=5');
-          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-          await _pumpUntil(tester, () => f.state.panel == null);
-          expect(f.state.location['anchor'], {'page': 1});
-          await _readerAction(tester, f.reader.flush);
-          final saved = await tester.runAsync(
-            () => f.store.call('book', f.state.bookId),
-          );
-          expect((saved as Map)['anchor'], {'page': 1});
-          tester.view.physicalSize = const Size(640, 560);
-          tester.platformDispatcher.textScaleFactorTestValue = 1.75;
-          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-          await tester.pumpAndSettle();
-          await _readerAction(tester, () async {
-            await _appCommands(tester).execute(BusyBooksCommandIds.goTo);
-          });
-          expect(find.byType(ReaderInformationPanel), findsOneWidget);
-          expect(
-            tester.getSize(find.byType(ReaderInformationPanel)).height,
-            lessThan(560),
-          );
-          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-          await tester.pumpAndSettle();
-          expect(f.state.panel, isNull);
-          expect(
-            f.calls.where(
-              (c) => [
-                'popover',
-                'capturePopover',
-                'popoverResult',
-              ].contains(c.method),
-            ),
-            isEmpty,
-          );
-          expect(tester.takeException(), isNull);
-        } finally {
-          await _disposeHeaderApplication(tester, f);
-        }
-      },
-    );
-  }
-
-  testWidgets(
-    'primary Go To retains failed navigation and rejects obsolete completion',
-    (tester) async {
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create(
-          'text.pdf',
-          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
-        );
-        await f.event('metadata', {
-          'pages': 3,
-          'labels': ['i', '1', '2'],
-        });
-        await f.event('location', {
-          'anchor': {'page': 0},
-        });
-      });
-      try {
-        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
-        await _readerAction(tester, f.reader.showGoTo);
-        final first = f.state.panel!;
-        final entry = find.descendant(
-          of: find.byType(ReaderInformationPanel),
-          matching: find.byType(TextField),
-        );
-        await tester.enterText(entry, '2');
-        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-        await _pumpUntil(
-          tester,
-          () => f.dispatches.any(
-            (d) => d['action'] == 'goto' && d['request'] != null,
-          ),
-        );
-        final request = f.dispatches.lastWhere(
-          (d) => d['action'] == 'goto',
-        )['request'];
-        await _readerAction(
-          tester,
-          () => f.event('navigationResult', {
-            'request': request,
-            'message': 'Controlled navigation failure',
-          }),
-        );
-        await tester.pumpAndSettle();
-        expect(f.state.panel, first);
-        expect(tester.widget<TextField>(entry).controller!.text, '2');
-        expect(
-          find.text(
-            AppLocalizations.of(tester.element(entry)).navigationInterrupted,
-          ),
-          findsOneWidget,
-        );
-        await _readerAction(tester, f.reader.dismissReaderControls);
-        await _readerAction(tester, f.reader.showGoTo);
-        final replacement = f.state.panel!;
-        await _readerAction(
-          tester,
-          () => f.event('navigationResult', {'request': request}),
-        );
-        expect(f.state.panel, replacement);
-        await _readerAction(
-          tester,
-          () => f.reader.navigateFromPanel(first, {'page': 2}),
-        );
-        expect(f.dispatches.where((d) => d['action'] == 'goto'), hasLength(1));
-      } finally {
-        await _disposeHeaderApplication(tester, f);
-      }
-    },
-  );
-
-  for (final fixture in ['reflowable.epub', 'formats/comic-deflated.cbz']) {
-    testWidgets(
-      'primary Go To keeps progress, chapter and comic destinations for $fixture',
-      (tester) async {
-        late _ReaderFixture f;
-        await _readerAction(tester, () async {
-          f = await _ReaderFixture.create(
-            fixture,
-            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
-          );
-          await f.event('metadata', {
-            'pages': 7,
-            'labels': [],
-            'toc': [
-              {
-                'id': 'chapter1',
-                'label': 'Chapter One',
-                'href': 'chapter.xhtml',
-                'depth': 0,
-              },
-            ],
-          });
-          Map<String, dynamic> comicAnchor = {'page': 0};
-          if (fixture.endsWith('.cbz')) {
-            final descriptor =
-                await f.store.call('prepare', {
-                      'id': f.state.bookId,
-                      'path': f.reader.book!.path,
-                    })
-                    as Map;
-            final index =
-                jsonDecode(
-                      await File(
-                        '${descriptor['cacheDirectory']}.json',
-                      ).readAsString(),
-                    )
-                    as Map;
-            comicAnchor = {
-              'kind': 'comic',
-              'version': 1,
-              'format': 'cbz',
-              'page': 0,
-              'pageId': index['pages'][0]['file'],
-            };
-          }
-          await f.event('location', {
-            'anchor': fixture.endsWith('.cbz')
-                ? comicAnchor
-                : {'cfi': 'epubcfi(/6/2!/4/2/1:6)', 'index': 0},
-            'progress': .25,
-          });
-        });
-        f.onDispatch = (command) async {
-          if (command['action'] == 'goto' && command['request'] != null) {
-            scheduleMicrotask(
-              () =>
-                  f.event('navigationResult', {'request': command['request']}),
-            );
-          }
-        };
-        try {
-          await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
-          await _readerAction(tester, f.reader.showGoTo);
-          if (fixture.endsWith('.cbz')) {
-            await tester.tap(find.text('Last page'));
-            await _pumpUntil(tester, () => f.state.panel == null);
-            expect(
-              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
-              {'page': 6},
-            );
-            await _readerAction(tester, f.reader.showGoTo);
-            await tester.tap(find.text('First page'));
-            await _pumpUntil(tester, () => f.state.panel == null);
-            expect(
-              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
-              {'page': 0},
-            );
-          } else {
-            final entry = find.descendant(
-              of: find.byType(ReaderInformationPanel),
-              matching: find.byType(TextField),
-            );
-            await tester.enterText(entry, '42');
-            await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-            await _pumpUntil(tester, () => f.state.panel == null);
-            expect(
-              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
-              {'fraction': .42},
-            );
-            await _readerAction(tester, f.reader.showGoTo);
-            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-                .setMockMethodCallHandler(
-                  const MethodChannel(nativeMenuChannelName),
-                  (call) async => call.method == 'show' ? 0 : null,
-                );
-            await tester.tap(find.text('1. Chapter One'));
-            await _pumpUntil(tester, () => f.state.panel == null);
-            expect(
-              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
-              {'href': 'chapter.xhtml'},
-            );
-          }
-          expect(tester.takeException(), isNull);
-        } finally {
-          await _disposeHeaderApplication(tester, f);
-        }
-      },
-    );
-  }
-
   testWidgets(
     'primary lookup shows loading errors retry full entry and Escape',
     (tester) async {

@@ -6,12 +6,26 @@ void main() {
   test('all reader control entry points stay in the primary application', () {
     final main = File('lib/main.dart').readAsStringSync();
     expect(main, isNot(contains('--busybooks-reader-popover')));
-    for (final path in [
+    final indicator = File(
       'lib/src/book_workspace/presentation/reading_location_control.dart',
-      'lib/src/app/busybooks_app.dart',
-    ]) {
-      expect(File(path).readAsStringSync(), contains('reader.showGoTo()'));
+    ).readAsStringSync();
+    expect(indicator, isNot(matches(r'TextButton|Tooltip|onPressed|Focus\(')));
+    for (final file in Directory(
+      'lib/src',
+    ).listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.dart')) continue;
+      expect(
+        file.readAsStringSync(),
+        isNot(matches(r'reader\.goTo|showGoTo|ReaderPanelKind|goto-entry')),
+        reason: file.path,
+      );
     }
+    expect(
+      File(
+        'lib/src/reading/application/reader_controller.dart',
+      ).readAsStringSync(),
+      contains("send('goto'"),
+    );
     for (final path in [
       'lib/src/reading/presentation/reader_popover.dart',
       'linux/runner/reader_popover.cc',

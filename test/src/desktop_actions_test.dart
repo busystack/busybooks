@@ -1202,7 +1202,12 @@ void main() {
               'close/open on a retained reader route must restore native visibility',
         );
 
-        // Reopening while a modal is above that same route must remain hidden.
+        // This fixture isolates routing without the production native cover.
+        // A popup route must retain the underlying page's visibility intent;
+        // reader_workspace_test exercises the real app's modal frame/barrier.
+        final reader =
+            container.read(readerControllerProvider.notifier) as _UiReader;
+        final routeRequests = [...reader.requestedVisibility];
         final dialog = showBusyBooksModalDialog<void>(
           origin,
           builder: (_) => const BusyBooksDialogShell(
@@ -1211,14 +1216,15 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(visible, isFalse);
+        expect(visible, isTrue);
+        expect(reader.requestedVisibility, routeRequests);
         await _action(
           tester,
           () => openPaths(origin, origin as WidgetRef, paths: [book.path]),
         );
         await tester.pumpAndSettle();
         expect(opens, 3);
-        expect(visible, isFalse);
+        expect(visible, isTrue);
         rootNavigatorKey.currentState!.pop();
         await tester.pumpAndSettle();
         await dialog;
@@ -1226,7 +1232,6 @@ void main() {
         container.read(appRouterProvider).go('/settings');
         await tester.pumpAndSettle();
         expect(visible, isFalse);
-        final reader = container.read(readerControllerProvider.notifier);
         final id = container.read(readerControllerProvider).bookId!;
         await _action(tester, () async {
           await reader.close();

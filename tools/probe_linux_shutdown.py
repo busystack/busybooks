@@ -24,21 +24,15 @@ parser.add_argument('--cycles', type=int, default=5)
 parser.add_argument('--book', type=Path)
 parser.add_argument('--seed-profile', type=Path)
 parser.add_argument('--switch-book-views', action='store_true')
-parser.add_argument('--reader-controls', action='store_true',
-                    help='Open and dismiss Go To before close (requires --book)')
 parser.add_argument('--exercise-template-button', action='store_true',
                     help='Press Tab/Return for a stock Flutter counter template only')
 args = parser.parse_args()
 if args.cycles < 1:
     parser.error('--cycles must be positive')
-if args.reader_controls and not args.book:
-    parser.error('--reader-controls requires --book')
 args.evidence.mkdir(parents=True, exist_ok=True)
 runtime = Path(tempfile.mkdtemp(prefix='busybooks-shutdown-proof-'))
 environment = {**os.environ, 'DISPLAY': args.display, 'GDK_BACKEND': 'x11',
                'BUSYBOOKS_PROFILE': str(runtime / 'profile'), 'GIO_USE_VFS': 'local'}
-if args.reader_controls:
-    environment['BUSYBOOKS_READER_DIAGNOSTICS'] = '1'
 if args.seed_profile:
     shutil.copytree(args.seed_profile, runtime / 'profile')
 
@@ -98,19 +92,6 @@ def run_cycle(cycle):
                 time.sleep(.4)
             elif args.exercise_template_button:
                 x('key', '--clearmodifiers', 'Tab', 'Return')
-            if args.reader_controls:
-                x('key', '--clearmodifiers', 'ctrl+g')
-                deadline = time.monotonic() + 18
-                while time.monotonic() < deadline:
-                    if 'stage=presented kind=goto' in target.read_text():
-                        break
-                    if debugger.poll() is not None:
-                        failure = 'Exited before Go To presentation'
-                        break
-                    time.sleep(.05)
-                else:
-                    failure = 'Go To did not acknowledge presentation'
-                x('key', '--clearmodifiers', 'Escape')
             x('key', '--clearmodifiers', 'alt+F4')
             debugger.wait(timeout=45)
     except (RuntimeError, subprocess.SubprocessError, OSError) as error:

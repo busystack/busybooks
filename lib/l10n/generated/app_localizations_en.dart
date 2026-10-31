@@ -241,9 +241,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetBook => 'Reset Book Appearance';
 
   @override
-  String get goTo => 'Go to Location';
-
-  @override
   String get location => 'Location';
 
   @override
@@ -616,17 +613,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pageLabel => 'Printed page label';
 
   @override
-  String get pageNumberHelp => 'Use the physical page number, starting at 1.';
-
-  @override
   String get invalidPage =>
       'Enter a physical page in range or an exact printed label. Use = for a numeric label.';
-
-  @override
-  String get bookProgress => 'Book progress (%)';
-
-  @override
-  String get invalidProgress => 'Enter a percentage from 0 to 100.';
 
   @override
   String get moreActions => 'More Actions';
@@ -1016,12 +1004,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The book is damaged or has invalid content. Locate a complete, readable copy of the same original to keep its reading data.';
 
   @override
-  String get firstPage => 'First page';
-
-  @override
-  String get lastPage => 'Last page';
-
-  @override
   String get home => 'Home';
 
   @override
@@ -1093,13 +1075,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get moreReadingSettings => 'More Reading Settings…';
-
-  @override
-  String get pageDestination => 'Page number or printed label';
-
-  @override
-  String get pageDestinationHelp =>
-      'Numbers select physical pages. Use =label for a printed label.';
 
   @override
   String bareBookmarks(int count) {

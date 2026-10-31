@@ -281,30 +281,7 @@ void main() {
     const error = ReaderState(bookId: 'fixture', error: 'Original unavailable');
     expect(error.copy(clearSelection: true).error, 'Original unavailable');
   });
-  test(
-    'Go To separates physical page numbers from supplied labels and rejects invalid or ambiguous input',
-    () {
-      const labels = ['i', 'ii', '17', '18'];
-      int? resolve(String text, bool printed) =>
-          resolvePdfPage(text, pages: 4, labels: labels, printedLabel: printed);
-      expect(resolve('3', false), 2);
-      expect(resolve('17', true), 2);
-      expect(resolve('ii', true), 1);
-      for (final text in ['', '0', '5', '-1', '1.5', 'ii', '17']) {
-        expect(resolve(text, false), isNull);
-      }
-      expect(resolve('3', true), isNull);
-      expect(
-        resolvePdfPage(
-          '1',
-          pages: 3,
-          labels: ['1', '1', '2'],
-          printedLabel: true,
-        ),
-        isNull,
-      );
-    },
-  );
+
   test(
     'PDF bookmarks identify the page independently of viewport coordinates',
     () {
@@ -385,23 +362,6 @@ void main() {
         container.read(collectionViewProvider('collection:${'b' * 32}')).filter,
         'finished',
       );
-    },
-  );
-  test(
-    'compact page input resolves physical numbers and explicit printed labels deterministically',
-    () {
-      const labels = ['i', 'ii', '1', '2', 'A', 'A'];
-      int? resolve(String text) =>
-          resolvePageDestination(text, pages: 6, labels: labels);
-      expect(resolve('1'), 0);
-      expect(resolve('=1'), 2);
-      expect(resolve('ii'), 1);
-      expect(resolve('=A'), isNull);
-      expect(resolve('0'), isNull);
-      expect(resolve('7'), isNull);
-      expect(resolve('=7'), isNull);
-      expect(resolve(' =2 '), 3);
-      expect(resolvePageDestination('2', pages: 3, labels: const []), 1);
     },
   );
 }

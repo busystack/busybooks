@@ -76,7 +76,7 @@ void main() {
     expect(find.byTooltip('Search'), findsOneWidget);
     semantics.dispose();
   });
-  testWidgets('header hints avoid overlaid window caption controls', (
+  testWidgets('header hints center below controls and clamp at window edges', (
     tester,
   ) async {
     late BuildContext headerContext;
@@ -101,7 +101,7 @@ void main() {
     );
     const captionControls = Rect.fromLTWH(476, 0, 124, 48);
     const tooltipSize = Size(100, 30);
-    final offset = BusyBooksTooltipStyle.insideHeader(
+    final offset = BusyBooksTooltipStyle.belowHeader(
       headerContext,
       const TooltipPositionContext(
         target: Offset(450, 24),
@@ -110,18 +110,26 @@ void main() {
         verticalOffset: 8,
         overlaySize: Size(800, 600),
       ),
-      rightObstruction: captionControls.width,
     );
     final tooltip = offset & tooltipSize;
     expect(tooltip.overlaps(captionControls), isFalse);
-    expect(
-      const Rect.fromLTWH(0, 0, 600, 48).contains(tooltip.topLeft),
-      isTrue,
-    );
-    expect(
-      const Rect.fromLTWH(0, 0, 600, 48).contains(tooltip.bottomRight),
-      isTrue,
-    );
+    expect(tooltip.left, 400);
+    expect(tooltip.top, greaterThan(41));
+    expect(tooltip.right, lessThanOrEqualTo(800));
+    for (final target in [4.0, 798.0]) {
+      final edge = BusyBooksTooltipStyle.belowHeader(
+        headerContext,
+        TooltipPositionContext(
+          target: Offset(target, 24),
+          targetSize: const Size(34, 34),
+          tooltipSize: tooltipSize,
+          verticalOffset: 8,
+          overlaySize: const Size(800, 600),
+        ),
+      );
+      expect(edge.dy, 49);
+      expect(edge.dx, inInclusiveRange(8, 692));
+    }
   });
   for (final brightness in Brightness.values) {
     test('semantic surfaces preserve Yaru control geometry in $brightness', () {
@@ -266,7 +274,7 @@ void main() {
   }
 
   testWidgets(
-    'Go To style entries preserve IME composition and read-only input on physical Enter',
+    'desktop entries preserve IME composition and read-only input on physical Enter',
     (tester) async {
       final controller = TextEditingController(text: '23');
       var submits = 0;

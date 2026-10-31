@@ -5,6 +5,7 @@
 #include <shlobj.h>
 #include <shlwapi.h>
 #include <shellapi.h>
+#include <commctrl.h>
 #include <sapi.h>
 #include <dwmapi.h>
 // The SDK's SAPI helper definitions still call GetVersionExW internally.
@@ -43,13 +44,73 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
   menus_=std::make_unique<NativeMenuHost>(parent_,messenger);
   channel_->SetMethodCallHandler([this](const auto& call,auto result){
     const auto& name=call.method_name();
-    if(name=="surface"){
+    if(name=="capture"){
+      DismissHeaderHint();
+      if(!web_||capture_){result->Error("reader-capture","Reader is unavailable or capture is pending");return;}
+      Microsoft::WRL::ComPtr<IStream> stream; stream.Attach(SHCreateMemStream(nullptr,0));
+      if(!stream){result->Error("reader-capture","Could not create frame stream");return;}
+      capture_=std::shared_ptr<flutter::MethodResult<EncodableValue>>(std::move(result));
+      std::weak_ptr<flutter::MethodResult<EncodableValue>> reply=capture_;
+      auto session=session_;auto alive=alive_;
+      HRESULT started=web_->CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG,stream.Get(),
+        Callback<ICoreWebView2CapturePreviewCompletedHandler>([this,alive,reply,session,stream](HRESULT status)->HRESULT {
+          if(!*alive)return S_OK;
+          auto pending=reply.lock();if(!pending)return S_OK;
+          if(capture_==pending)capture_.reset();
+          if(FAILED(status)||session!=session_){pending->Error("reader-capture","Reader frame is obsolete or unavailable");return S_OK;}
+          STATSTG stat{};LARGE_INTEGER start{};ULONG read=0;
+          if(FAILED(stream->Stat(&stat,STATFLAG_NONAME))||stat.cbSize.QuadPart>64*1024*1024||FAILED(stream->Seek(start,STREAM_SEEK_SET,nullptr))){pending->Error("reader-capture","Invalid reader frame");return S_OK;}
+          std::vector<uint8_t> bytes(static_cast<size_t>(stat.cbSize.QuadPart));
+          if(FAILED(stream->Read(bytes.data(),static_cast<ULONG>(bytes.size()),&read))||read!=bytes.size()){pending->Error("reader-capture","Incomplete reader frame");return S_OK;}
+          pending->Success(EncodableValue(bytes));return S_OK;
+        }).Get());
+      if(FAILED(started)){capture_->Error("reader-capture","Reader capture failed");capture_.reset();}
+      return;
+    }else if(name=="headerHint"){
+      const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
+      const auto* rect=map&&field(*map,"anchor")?std::get_if<EncodableMap>(field(*map,"anchor")):nullptr;
+      if(!map||!rect){result->Error("header-hint","Missing hint anchor");return;}
+      auto* id=field(*map,"id");const auto* identity=id?std::get_if<int32_t>(id):nullptr;
+      const auto* identity64=id?std::get_if<int64_t>(id):nullptr;
+      hint_id_=identity?*identity:identity64?*identity64:0;
+      hint_text_=wide(stringField(*map,"message"));
+      HWND owner=GetAncestor(parent_,GA_ROOT);
+      if(GetForegroundWindow()!=owner){result->Success();return;}
+      if(!hint_){
+        // Use the operating system tooltip control without adding a package or
+        // another Flutter view. Common controls are an existing Windows component.
+        static HMODULE module=LoadLibraryW(L"comctl32.dll");
+        using Init=BOOL(WINAPI*)(const INITCOMMONCONTROLSEX*);
+        auto initialize=module?reinterpret_cast<Init>(GetProcAddress(module,"InitCommonControlsEx")):nullptr;
+        INITCOMMONCONTROLSEX controls{sizeof(controls),ICC_WIN95_CLASSES};if(initialize)initialize(&controls);
+        hint_=CreateWindowExW(WS_EX_TOPMOST|WS_EX_NOACTIVATE,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP|TTS_NOPREFIX,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,owner,nullptr,GetModuleHandle(nullptr),nullptr);
+        TOOLINFOW tool{};tool.cbSize=sizeof(tool);tool.hwnd=parent_;tool.uId=1;tool.uFlags=TTF_TRACK|TTF_ABSOLUTE|TTF_TRANSPARENT;tool.lpszText=hint_text_.data();
+        if(hint_)SendMessageW(hint_,TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
+      }
+      if(hint_){
+        TOOLINFOW tool{};tool.cbSize=sizeof(tool);tool.hwnd=parent_;tool.uId=1;tool.lpszText=hint_text_.data();
+        SendMessageW(hint_,TTM_UPDATETIPTEXTW,0,reinterpret_cast<LPARAM>(&tool));
+        RECT client{};GetClientRect(parent_,&client);double scale=GetDpiForWindow(parent_)/96.0;
+        SendMessageW(hint_,TTM_SETMAXTIPWIDTH,0,std::max(1L,client.right-16));
+        LRESULT size=SendMessageW(hint_,TTM_GETBUBBLESIZE,0,reinterpret_cast<LPARAM>(&tool));
+        int x=static_cast<int>((number(*rect,"x")+number(*rect,"width")/2)*scale)-LOWORD(size)/2;
+        x=std::clamp(x,8,std::max(8,static_cast<int>(client.right)-LOWORD(size)-8));
+        POINT point{x,static_cast<LONG>((number(*rect,"y")+number(*rect,"height")+8)*scale)};ClientToScreen(parent_,&point);
+        SendMessageW(hint_,TTM_TRACKPOSITION,0,MAKELPARAM(point.x,point.y));
+        SendMessageW(hint_,TTM_TRACKACTIVATE,TRUE,reinterpret_cast<LPARAM>(&tool));
+      }
+    }else if(name=="hideHeaderHint"){
+      const auto* id=call.arguments()?std::get_if<int32_t>(call.arguments()):nullptr;
+      const auto* id64=call.arguments()?std::get_if<int64_t>(call.arguments()):nullptr;
+      if((id&&*id==hint_id_)||(id64&&*id64==hint_id_))DismissHeaderHint();
+    }else if(name=="surface"){
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       auto color=map?field(*map,"canvas"):nullptr;
       if(color){if(auto color64=std::get_if<int64_t>(color))background_=static_cast<uint32_t>(*color64);else if(auto color32=std::get_if<int32_t>(color))background_=static_cast<uint32_t>(*color32);}
       Microsoft::WRL::ComPtr<ICoreWebView2Controller2> themed;
       if(controller_&&SUCCEEDED(controller_.As(&themed)))themed->put_DefaultBackgroundColor({255,static_cast<BYTE>(background_>>16),static_cast<BYTE>(background_>>8),static_cast<BYTE>(background_)});
     }else if(name=="open"){
+      if(capture_){capture_->Error("reader-replaced","Reader replaced");capture_.reset();}
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       auto string_arg=[map](const char* key)->const std::string* { if(!map)return nullptr;auto it=map->find(EncodableValue(key));return it==map->end()?nullptr:std::get_if<std::string>(&it->second); };
       const auto* path=string_arg("publicationPath");const auto* cache=string_arg("cacheDirectory");
@@ -96,6 +157,7 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       if(json->size()>1048576){Event("{\"type\":\"bridgeError\",\"session\":\""+session_+"\",\"direction\":\"command\",\"message\":\"Reader bridge frame limit exceeded\"}");result->Error("reader-bridge-limit","Reader bridge frame limit exceeded");return;}
       auto script=wide("window.busybooks?.dispatch("+*json+")");web_->ExecuteScript(script.c_str(),nullptr);
     }else if(name=="close"){
+      if(capture_){capture_->Error("reader-closed","Reader closed");capture_.reset();}
       if(pending_){pending_->Error("reader-closed","Reader was closed");pending_.reset();}
       // A completed close must release WebView2 response/file-stream handles
       // before an explicit Move Book starts. Navigating to blank is asynchronous.
@@ -194,4 +256,6 @@ void ReaderHost::FileOpened(const wchar_t* path){if(!path||!*path)return;std::ws
 void ReaderHost::FilesDropped(HDROP drop){EncodableList paths;UINT count=DragQueryFileW(drop,0xffffffff,nullptr,0);for(UINT i=0;i<count;i++){UINT n=DragQueryFileW(drop,i,nullptr,0);std::wstring path(n+1,0);DragQueryFileW(drop,i,path.data(),n+1);if(input_ready_)paths.emplace_back(utf8(path.c_str()));else pending_files_.push_back(utf8(path.c_str()));}DragFinish(drop);if(!paths.empty())input_->InvokeMethod("assetFilesDropped",std::make_unique<EncodableValue>(paths));}
 void ReaderHost::AppearanceChanged(){DWORD color=0;BOOL opaque=FALSE;if(SUCCEEDED(DwmGetColorizationColor(&color,&opaque)))desktop_->InvokeMethod("accentChanged",std::make_unique<EncodableValue>(static_cast<int64_t>(color|0xff000000)));}
 void ReaderHost::SpeechEvents(){if(!voice_)return;SPEVENT event{};ULONG fetched=0;while(voice_->GetEvents(1,&event,&fetched)==S_OK&&fetched){if(event.eEventId==SPEI_END_INPUT_STREAM&&event.ulStreamNum==speech_stream_)speech_->InvokeMethod("event",std::make_unique<EncodableValue>("stopped"));SpClearEvent(&event);}}
-ReaderHost::~ReaderHost(){*alive_=false;menus_.reset();input_->SetMethodCallHandler(nullptr);desktop_->SetMethodCallHandler(nullptr);channel_->SetMethodCallHandler(nullptr);speech_->SetMethodCallHandler(nullptr);if(voice_)voice_->Speak(nullptr,SPF_PURGEBEFORESPEAK,nullptr);if(controller_)controller_->Close();web_.Reset();controller_.Reset();environment_.Reset();std::error_code error;std::filesystem::remove_all(profile_,error);}
+ReaderHost::~ReaderHost(){*alive_=false;if(capture_){capture_->Error("reader-closed","Reader closed");capture_.reset();}if(hint_)DestroyWindow(hint_);menus_.reset();input_->SetMethodCallHandler(nullptr);desktop_->SetMethodCallHandler(nullptr);channel_->SetMethodCallHandler(nullptr);speech_->SetMethodCallHandler(nullptr);if(voice_)voice_->Speak(nullptr,SPF_PURGEBEFORESPEAK,nullptr);if(controller_)controller_->Close();web_.Reset();controller_.Reset();environment_.Reset();std::error_code error;std::filesystem::remove_all(profile_,error);}
+
+void ReaderHost::DismissHeaderHint(){if(hint_){TOOLINFOW tool{};tool.cbSize=sizeof(tool);tool.hwnd=parent_;tool.uId=1;SendMessageW(hint_,TTM_TRACKACTIVATE,FALSE,reinterpret_cast<LPARAM>(&tool));}}

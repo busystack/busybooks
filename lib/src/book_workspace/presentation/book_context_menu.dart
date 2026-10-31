@@ -13,12 +13,8 @@ class BookContextMenu extends ConsumerWidget {
     required this.reading,
     required this.readingControlsVisible,
     required this.pageControlsVisible,
-    required this.locationVisible,
   });
-  final bool reading,
-      readingControlsVisible,
-      pageControlsVisible,
-      locationVisible;
+  final bool reading, readingControlsVisible, pageControlsVisible;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final registry =
@@ -46,7 +42,6 @@ class BookContextMenu extends ConsumerWidget {
             item(BusyBooksCommandIds.previous, icon: BusyBooksGlyphs.back),
             item(BusyBooksCommandIds.next, icon: BusyBooksGlyphs.forward),
           ],
-          if (!locationVisible) item(BusyBooksCommandIds.goTo),
           if (!readingControlsVisible) ...[
             item(BusyBooksCommandIds.bookmark, icon: BusyBooksGlyphs.bookmark),
             item(

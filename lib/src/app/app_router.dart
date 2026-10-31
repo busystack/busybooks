@@ -48,16 +48,53 @@ class _ReaderRouteObserver extends NavigatorObserver {
     await Future.wait<void>([hidden, shown]);
   }
 
+  final _routes = <Route<dynamic>>[];
+  bool? _pageVisible;
+  void _sync() {
+    final page = _routes.whereType<PageRoute<dynamic>>().lastOrNull;
+    final visible =
+        page?.settings.name == 'reader' || page?.settings.name == 'split';
+    if (visible == _pageVisible) return;
+    _pageVisible = visible;
+    unawaited(_showTop(visible, ++_revision));
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.add(route);
+    _sync();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.remove(route);
+    _sync();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.remove(route);
+    _sync();
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    final index = oldRoute == null ? -1 : _routes.indexOf(oldRoute);
+    if (index >= 0) {
+      if (newRoute == null) {
+        _routes.removeAt(index);
+      } else {
+        _routes[index] = newRoute;
+      }
+    }
+    _sync();
+  }
+
   @override
   void didChangeTop(
     Route<dynamic> topRoute,
     Route<dynamic>? previousTopRoute,
-  ) => unawaited(
-    _showTop(
-      topRoute.settings.name == 'reader' || topRoute.settings.name == 'split',
-      ++_revision,
-    ),
-  );
+  ) => _sync();
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {

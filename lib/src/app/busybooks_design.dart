@@ -188,52 +188,139 @@ abstract final class BusyBooksLinuxPalette {
   static const black = Color(0xFF000000);
 }
 
+/// A header hint uses a host tooltip window, never the embedded book's pixels.
+/// Flutter's tooltip remains metadata; native windows keep hints above WebKit.
+class BusyBooksHeaderTooltip extends StatefulWidget {
+  const BusyBooksHeaderTooltip({
+    super.key,
+    required this.message,
+    required this.child,
+    this.excludeFromSemantics = true,
+    this.positionDelegate,
+  });
+  final String message;
+  final Widget child;
+  final bool excludeFromSemantics;
+  final TooltipPositionDelegate? positionDelegate;
+  @override
+  State<BusyBooksHeaderTooltip> createState() => _BusyBooksHeaderTooltipState();
+}
+
+class _BusyBooksHeaderTooltipState extends State<BusyBooksHeaderTooltip>
+    with WidgetsBindingObserver {
+  static const _channel = MethodChannel('io.busystack.busybooks/reader');
+  static int _serial = 0;
+  Timer? _timer;
+  int? _identity;
+  bool get _native =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.windows);
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    HardwareKeyboard.instance.addHandler(_key);
+  }
+
+  bool _key(KeyEvent event) {
+    _hide();
+    return false;
+  }
+
+  @override
+  void didChangeMetrics() => _hide();
+  Future<void> _invoke(String method, Object? value) async {
+    try {
+      await _channel.invokeMethod<void>(method, value);
+    } on MissingPluginException {
+      /* No desktop host in a widget-only environment. */
+    } on PlatformException catch (error) {
+      debugPrint('Header hint: $error');
+    }
+  }
+
+  void _hide() {
+    _timer?.cancel();
+    final id = _identity;
+    _identity = null;
+    if (id != null) unawaited(_invoke('hideHeaderHint', id));
+  }
+
+  void _enter() {
+    _hide();
+    final id = ++_serial;
+    _identity = id;
+    _timer = Timer(BusyBooksMotion.tooltipWait, () {
+      if (!mounted || _identity != id) return;
+      final box = context.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return;
+      final rect = box.localToGlobal(Offset.zero) & box.size;
+      unawaited(
+        _invoke('headerHint', {
+          'id': id,
+          'message': widget.message,
+          'anchor': {
+            'x': rect.left,
+            'y': rect.top,
+            'width': rect.width,
+            'height': rect.height,
+          },
+        }),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _hide();
+    HardwareKeyboard.instance.removeHandler(_key);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: _native ? (_) => _enter() : null,
+    onExit: _native ? (_) => _hide() : null,
+    child: Listener(
+      onPointerDown: (_) => _hide(),
+      child: TooltipVisibility(
+        visible: !_native,
+        child: Tooltip(
+          message: widget.message,
+          excludeFromSemantics: widget.excludeFromSemantics,
+          positionDelegate: positionDelegate,
+          child: widget.child,
+        ),
+      ),
+    ),
+  );
+  TooltipPositionDelegate get positionDelegate =>
+      widget.positionDelegate ??
+      (info) => BusyBooksTooltipStyle.belowHeader(context, info);
+}
+
 /// Cross-toolkit tooltip visuals.
 ///
 /// Flutter and the native GTK header bar render their own tooltip widgets.
 /// Keeping the palette and shape here lets each toolkit retain its native
 /// layout, positioning, focus, and motion while presenting the same surface.
 abstract final class BusyBooksTooltipStyle {
-  /// Place book-header hints beside their trigger, within Flutter's header.
-  static Offset insideHeader(
+  /// Center header hints below their controls, within the window edges.
+  static Offset belowHeader(
     BuildContext context,
-    TooltipPositionContext info, {
-    double leftObstruction = 0,
-    double rightObstruction = 0,
-  }) {
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null ||
-        !box.hasSize ||
-        !box.constraints.hasBoundedWidth ||
-        !box.constraints.hasBoundedHeight) {
-      return info.target;
-    }
-    final origin = box.localToGlobal(Offset.zero),
-        left = origin.dx + leftObstruction + BusyBooksSpacing.sm,
-        right =
-            origin.dx +
-            box.constraints.maxWidth -
-            rightObstruction -
-            BusyBooksSpacing.sm;
-    final after =
-        info.target.dx + info.targetSize.width / 2 + BusyBooksSpacing.sm;
-    final before =
-        info.target.dx -
-        info.targetSize.width / 2 -
-        BusyBooksSpacing.sm -
-        info.tooltipSize.width;
-    return Offset(
-      (after + info.tooltipSize.width <= right ? after : before).clamp(
-        left,
-        math.max(left, right - info.tooltipSize.width),
+    TooltipPositionContext info,
+  ) => Offset(
+    (info.target.dx - info.tooltipSize.width / 2).clamp(
+      BusyBooksSpacing.sm,
+      math.max(
+        BusyBooksSpacing.sm,
+        info.overlaySize.width - info.tooltipSize.width - BusyBooksSpacing.sm,
       ),
-      origin.dy +
-          math.max(
-            0,
-            (box.constraints.maxHeight - info.tooltipSize.height) / 2,
-          ),
-    );
-  }
+    ),
+    info.target.dy + info.targetSize.height / 2 + BusyBooksSpacing.sm,
+  );
 
   /// Keep sidebar tooltips inside their Flutter surface, above native content.
   static Offset positionWithin(
@@ -833,7 +920,7 @@ class BusyBooksHeaderIconButton extends StatelessWidget {
     // reparented when workspace controls are replaced during search.
     final labeledButton = Semantics(
       container: true,
-      child: Tooltip(
+      child: BusyBooksHeaderTooltip(
         message: shortcut == null ? tooltip : '$tooltip ($shortcut)',
         excludeFromSemantics: true,
         positionDelegate: tooltipPosition,
@@ -900,7 +987,7 @@ class BusyBooksCompactIconButton extends StatelessWidget {
     );
     final labeledButton = Semantics(
       container: true,
-      child: Tooltip(
+      child: BusyBooksHeaderTooltip(
         message: tooltip,
         excludeFromSemantics: true,
         child: button,
@@ -2699,7 +2786,6 @@ class BusyBooksComboRow<T> extends StatelessWidget {
     this.errorText,
     this.leading,
     this.enabled = true,
-    this.activateSelected = false,
     this.tooltip,
     this.width = BusyBooksSizes.controlRowWidth,
   }) : values = List<T>.unmodifiable(values) {
@@ -2742,7 +2828,6 @@ class BusyBooksComboRow<T> extends StatelessWidget {
   final String? errorText;
   final Widget? leading;
   final bool enabled;
-  final bool activateSelected;
   final String? tooltip;
   final double width;
 
@@ -2781,7 +2866,7 @@ class BusyBooksComboRow<T> extends StatelessWidget {
           enabled: enabled,
           onSelected: (index) {
             final value = values[index];
-            if (activateSelected || value != selected) {
+            if (value != selected) {
               onSelected(value);
             }
           },

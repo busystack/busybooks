@@ -24,11 +24,16 @@ class ReaderHost {
   void FileOpened(const wchar_t* path);
   void AppearanceChanged();
   void SpeechEvents();
+  void DismissHeaderHint();
  private:
   void Initialize();
   void Event(const std::string& json, std::size_t limit = 1048576);
   std::shared_ptr<bool> alive_=std::make_shared<bool>(true);
   HWND parent_;
+  HWND hint_ = nullptr;
+  int64_t hint_id_ = 0;
+  std::wstring hint_text_;
+  std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> capture_;
   std::unique_ptr<ReadingFontChannel> fonts_;
   std::unique_ptr<NativeMenuHost> menus_;
   RECT bounds_{};

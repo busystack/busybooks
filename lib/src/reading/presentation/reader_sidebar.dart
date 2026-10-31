@@ -339,16 +339,13 @@ class _SidebarTreeRow extends StatelessWidget {
               ),
               const SizedBox(width: BusyBooksSpacing.xs),
               Expanded(
-                child: Tooltip(
-                  message: node.title,
-                  child: Text(
-                    node.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: colors.foreground),
-                  ),
+                child: Text(
+                  node.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: colors.foreground),
                 ),
               ),
               trailing,
