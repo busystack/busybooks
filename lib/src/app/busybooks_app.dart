@@ -298,7 +298,7 @@ class _BusyBooksAppState extends ConsumerState<BusyBooksApp> {
               .toggleOpen();
         }
       },
-      BusyBooksCommandIds.goTo: () => reader.showPopover('goto'),
+      BusyBooksCommandIds.goTo: () => reader.showGoTo(),
       BusyBooksCommandIds.backToCollection: () =>
           returnToWorkspace(context, ref),
       BusyBooksCommandIds.returnToPassage: () => reader.send('back'),

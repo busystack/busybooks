@@ -160,7 +160,7 @@ class NativeMenuService {
       return const NativeMenuResult.unavailable();
     } on PlatformException catch (error) {
       // Invalid contracts are programming errors. Host presentation failures
-      // use the same themed fallback as an absent host, without a modal dialog.
+      // return unavailability for application feedback, without a substitute menu.
       if (error.code == 'invalid-arguments' || error.code == 'bad-arguments') {
         rethrow;
       }

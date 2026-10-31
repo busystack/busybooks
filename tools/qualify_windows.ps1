@@ -97,7 +97,6 @@ if ($build) {
                 $null = Invoke-Check "$probe-native" (Join-Path $source "$directory/Release/busybooks_native_${probe}_probe.exe") @()
                 if ($probe -eq 'menu') {
                     $null = Invoke-Check 'menu-selection' (Join-Path $source "$directory/Release/busybooks_menu_selection_test.exe") @()
-                    $null = Invoke-Check 'popover-geometry' (Join-Path $source "$directory/Release/busybooks_popover_geometry_test.exe") @()
                 }
             }
         }

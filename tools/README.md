@@ -73,7 +73,7 @@ headless CI. Build the Linux release first for bundled decoder/opening checks.
 
 | Entry point | Native boundary and supporting tools |
 | --- | --- |
-| `bash tools/probe_linux_input.sh` | Actual GTK input/teardown, portable menu contract and reader-pane popup placement from `test/src/linux_reader_surface_test.cc`, `native_menu_selection_test.cc` and `native_popover_geometry_test.cc` |
+| `bash tools/probe_linux_input.sh` | Actual GTK input/teardown, portable menu contract and view retirement from `test/src/linux_reader_surface_test.cc`, `native_menu_selection_test.cc` and `native_view_retirement_test.cc` |
 | `bash tools/probe_linux_engines.sh` | WebKitGTK engine smoke using `prepare_engine_probe.dart` and `native_engine_probe.cc` |
 | `bash tools/probe_linux_formats.sh` | Format matrix, typed locator validation and real-store/cache restart using `prepare_format_acceptance.dart`, `formats_native_proof.js` and `validate_native_locations.dart` |
 | `bash tools/probe_linux_format_review.sh` | Overflow/spread/region, spine fallback and unnamed FB2 section regressions using `format_review_native_proof.js` and the same preparation/validation helpers |
@@ -189,8 +189,8 @@ failure/restore work. Optional nested-Wayland inputs are exposed in `--help`.
 --xdotool PATH` runs guarded closes under GDB on an explicitly isolated display.
 It needs GDB, xdotool and a window manager, and refuses an existing matching app.
 Optional `--book`, `--seed-profile`, `--switch-book-views` and `--cycles` select
-inputs. `--reader-popover` requires `--book`, opens Go To, waits for its existing
-native presentation acknowledgment and dismisses it before close. BusyBooks
+inputs. `--reader-controls` requires `--book`, opens Go To, waits for its existing
+primary panel paint diagnostic and dismisses it before close. BusyBooks
 Welcome is left idle by default: Tab/Return opens a file chooser there and can
 make a subsequent Alt+F4 close only that chooser. Use
 `--exercise-template-button` only for the untouched Flutter counter comparison.

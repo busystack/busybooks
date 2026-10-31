@@ -28,7 +28,7 @@ ThemeData buildBusyBooksTheme({
     surface: colors.view,
     onSurface: colors.foreground,
     onSurfaceVariant: colors.mutedForeground,
-    // Keep Material fallbacks on the same opaque, neutral elevation ladder as
+    // Keep framework surfaces on the same opaque, neutral elevation ladder as
     // BusyBooks's native Linux surfaces. Control fills remain translucent state
     // layers and must not leak into generic surface-container backgrounds.
     surfaceContainerLowest: colors.view,

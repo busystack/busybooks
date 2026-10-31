@@ -27,7 +27,3 @@ add_custom_command(TARGET busybooks_native_menu_probe POST_BUILD
 add_executable(busybooks_menu_selection_test ../../test/src/native_menu_selection_test.cc)
 target_compile_features(busybooks_menu_selection_test PRIVATE cxx_std_17)
 target_compile_options(busybooks_menu_selection_test PRIVATE /W4 /WX /UNDEBUG)
-add_executable(busybooks_popover_geometry_test ../../test/src/native_popover_geometry_test.cc)
-target_compile_features(busybooks_popover_geometry_test PRIVATE cxx_std_17)
-target_compile_definitions(busybooks_popover_geometry_test PRIVATE NOMINMAX)
-target_compile_options(busybooks_popover_geometry_test PRIVATE /W4 /WX /UNDEBUG)

@@ -190,23 +190,13 @@ class NarrationController extends Notifier<NarrationState> {
       await start(passage: _passage, continueReading: _continuous);
       if (paused && state.status == 'playing') await pauseResume();
     }
-    await options();
   }
 
-  Future<void> options() async {
-    final settings = ref.read(appSettingsControllerProvider).data;
-    await ref
-        .read(readerControllerProvider.notifier)
-        .showPopover(
-          'speech',
-          extra: {
-            'voices': ['', ...state.voices],
-            'voice': state.voices.contains(settings['voice'])
-                ? settings['voice']
-                : '',
-            'speed': settings['speed'],
-          },
-        );
+  Future<List<String>> availableVoices() async {
+    return (await ref.read(speechServiceProvider).call('voices') as List)
+        .cast<String>()
+        .toSet()
+        .toList();
   }
 }
 

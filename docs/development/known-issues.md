@@ -157,6 +157,15 @@ the failing component, not complete causality. The corrected package's two
 bounded closes exited normally, once under GDB and once untraced. This does not
 establish permanent elimination of the earlier driver-stack failure.
 
+The desktop UI correction's focused close check reproduced this NVIDIA EGL
+exit-handler fault. Its driver frames and offsets match the earlier strict-Snap
+capture; the accepted GTK retirement implementation is unchanged and its native
+ownership/input checks pass with balanced retirement counters. This limits clean
+shutdown acceptance without establishing a regression in the reader-control
+migration. The separate Go To diagnostic did not acknowledge presentation before
+its existing deadline, so that diagnostic is not counted as a successful panel
+acceptance. Direct graphical header/command navigation was verified separately.
+
 Confinement diagnostics include denied fallback library paths, hardware probes
 and a nested portal call; none prevented the completed workflows. No interfaces
 were added. Read Aloud reported Speech Dispatcher unavailable. Its packaged

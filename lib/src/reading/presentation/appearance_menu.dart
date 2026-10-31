@@ -175,7 +175,6 @@ Future<void> showReadingAppearanceMenu(
       context: context,
       anchorRect: anchor,
       session: menu,
-      fallbackOwner: owner,
       items: readingAppearanceMenuItems(
         l: context.l10n,
         preferences: reader.appearance,

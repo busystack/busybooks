@@ -229,6 +229,7 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
                 child: Semantics(
                   label: l.savedPassage,
                   child: SelectableText(
+                    contextMenuBuilder: busyBooksTextContextMenu,
                     a.text,
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
@@ -318,7 +319,10 @@ class _NotebookItemState extends ConsumerState<NotebookItem> {
               if (note.isNotEmpty)
                 GestureDetector(
                   onDoubleTap: widget.onSelect,
-                  child: SelectableText(_expanded ? note : _preview(note)),
+                  child: SelectableText(
+                    contextMenuBuilder: busyBooksTextContextMenu,
+                    _expanded ? note : _preview(note),
+                  ),
                 ),
               if (note.length > 600 || '\n'.allMatches(note).length > 4)
                 Align(

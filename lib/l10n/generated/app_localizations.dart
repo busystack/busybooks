@@ -2360,6 +2360,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show {pane}'**
   String showSplitPane(String pane);
+
+  /// No description provided for @menuUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The menu could not be opened. Please try again.'**
+  String get menuUnavailable;
 }
 
 class _AppLocalizationsDelegate

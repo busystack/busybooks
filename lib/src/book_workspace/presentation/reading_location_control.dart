@@ -77,7 +77,7 @@ class ReadingLocationControl extends ConsumerWidget {
                   ),
                 ),
             onPressed: available
-                ? () => runAppAction(context, () => reader.showPopover('goto'))
+                ? () => runAppAction(context, () => reader.showGoTo())
                 : null,
             child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),

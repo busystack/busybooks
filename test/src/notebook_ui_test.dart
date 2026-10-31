@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import '../support/desktop_menu.dart';
 
 class _Settings implements LocalSettingsStore {
   @override
@@ -163,15 +164,11 @@ void main() {
               .note,
           'Edited\nmultiline personal note',
         );
-        await tester.tap(find.byTooltip('Type'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Bookmarks'));
+        await chooseDesktopMenu(tester, find.byTooltip('Type'), 'Bookmarks');
         await tester.pumpAndSettle();
         expect(find.text('Saved quotation'), findsNothing);
         expect(find.text('Bookmark detail'), findsOneWidget);
-        await tester.tap(find.byTooltip('Type'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('All types'));
+        await chooseDesktopMenu(tester, find.byTooltip('Type'), 'All types');
         await tester.pumpAndSettle();
         await tester.tap(
           find.byWidgetPredicate(
@@ -288,9 +285,11 @@ Future<void> _discardRegression(
     await tester.enterText(find.byType(TextField), 'Discarded edit');
     await tester.pump();
     if (mode == 'delete') {
-      await tester.tap(find.byTooltip('Annotation Actions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete'));
+      await chooseDesktopMenu(
+        tester,
+        find.byTooltip('Annotation Actions'),
+        'Delete',
+      );
     } else {
       await tester.tap(find.text('Discard'));
     }

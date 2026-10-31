@@ -124,8 +124,8 @@ Home/close commands share one in-flight action. Back to Collection and reading h
 The content-sized location trigger displays a printed page label, physical-page
 fallback or genuine EPUB reference/progress without a redundant Page prefix.
 Its tooltip names Go To; its accessibility description retains the full
-page/physical position, also shown in the native Go To surface.
-It uses its current header bounds for Go To and disappears before essential
+page/physical position, also shown in the primary Go To panel.
+It opens the panel below the header in the Reading pane and disappears before essential
 controls when space is short. Search hides both step buttons together; Home
 remains available and the retained title/search transition excludes inactive
 search input from focus and semantics. There is no permanent navigation footer;
@@ -225,7 +225,8 @@ multiple selected entries in one contiguous exclusive group. GTK radio actions
 use string state/targets; Win32 preserves disabled/radio/selected flags and the
 same preorder command indices. Activation checks enabled state and owning menu/
 route identity. Recoverable host presentation errors log diagnostics and use the
-existing Flutter menu fallback; invalid contracts remain programming errors.
+existing nonblocking notification host; invalid contracts remain programming errors.
+There is no Flutter menu fallback on either supported desktop.
 Native failures do not open a blocking error dialog.
 
 The Marks fallback glyph is `YaruIcons.rule_and_pen`; GTK uses the installed
@@ -245,8 +246,7 @@ the existing Yaru glyphs at the current display scale (16–64 pixels). The Win3
 host colors their DIBs with system menu/high-contrast colors, validates dimensions
 and a 64 KiB aggregate mask cap, and owns bitmaps until menu disposal. Labels,
 radio checks and command/session indices remain unchanged. Preparation checks
-owning context/session again before presenting. The existing Flutter fallback
-uses the same glyphs. This follows the existing native menu contract with
+owning context/session again before presenting. This follows the existing native menu contract with
 optional bitmap fields, not a new menu host or icon dependency; actual Windows
 compilation/painting requires a Windows environment. Win32 bitmap item behavior
 uses [MENUITEMINFO](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-menuiteminfoa).
@@ -258,9 +258,7 @@ It does not create a secondary Flutter view. All invocation paths resolve the
 current header bounds after draft capture and dismissal; narrow layouts use the
 Book Actions trigger. Results belong to the captured route, workspace, book,
 renderer session and presentation. Closing, replacing or resizing that owner
-dismisses its menu and rejects late selections. The existing fallback menu route
-may hide the native reader without retiring its own matching menu; other route
-changes retire it. Publication focus callbacks and forwarded reader shortcuts
+dismisses its menu and rejects late selections. Route changes retire the menu. Publication focus callbacks and forwarded reader shortcuts
 cannot reclaim input while the menu owns it. A selected preference captures its
 existing transaction before menu input ownership ends; waiting for rendering or
 storage does not leave an invisible menu consuming reader input. Header space
@@ -272,49 +270,26 @@ Bookmark guards cover the complete captured book/location toggle before SQL is
 queued. Pending activation disables every entry point for that location; failure
 clears the guard and preserves the committed selection. Navigation does not move
 an in-flight operation to another book. View transitions retain their original
-route through queued reads; failed capture/read leaves the current view intact.
+route through queued reads; a failed read leaves the current view intact.
 Settings accepts only Home, collection, Reading, Notebook and Split return targets;
 re-entry is disabled/no-op and cannot overwrite that original destination.
 
-Go To resolves its current header anchor for pointer, shortcut and menu entry.
-PDF printed labels and physical position remain distinct; reflowable EPUB/FB2 use
-progress/chapter and publisher references without invented screen-page counts.
-Comics use physical page count/references, First/Last and the same Go To surface.
-PDF's one destination input resolves bare integers as one-based physical pages,
-unique nonnumeric strings as exact printed labels, and `=label` as an explicit
-printed label (including numeric labels). Duplicate labels are rejected. The
-current reference describes both printed and physical positions. There is no
-printed/physical mode selector. The compact surface measures its natural height, including feedback and text scaling, and
-scrolls inside the acknowledged reader pane. The primary supplies its measured
-pane rectangle with each presentation; application-owned native placement caps
-the body and its natural-height update to that pane with space for native borders
-and the GTK arrow. Header anchors outside the pane cannot place controls over
-Notebook. Windows converts the logical pane to screen pixels once and intersects
-it with the monitor work area. Controls retain their text scale and wrap or scroll
-at the available width. Native preparation allocates a frame
-surface without exposing empty interactive controls: GTK maps a transparent,
-nonmodal view; Windows uses the existing first-frame callback and redraw sequence.
-Channel ready only delivers data. A presentation-specific Flutter paint
-acknowledgement, plus native frame readiness, permits presentation and focus.
-When GTK closes a non-lookup popup before its child receives Escape, the primary
-controller captures and seals retained note input before releasing that popup's
-ownership. Failed capture keeps protected recovery intact. A later Notebook or
-chrome handoff cancels the old popup's focus return; stale hidden notifications
-cannot dismiss a replacement presentation.
-
-Each presentation has a keyboard scope below its dismissal shortcuts, so Escape
-works before a selection control is focused. The fallback adds no traversal stop;
-editor and default-button autofocus retain their normal targets and composition.
-Initialization, delivery and build failure settle a bounded primary request with
-retry feedback. Retry settles the primary frame that removes this feedback before
-requesting native presentation, so its publication-bounds update cannot cancel
-the new popup; rapid replacements share the same bounded layout barrier. Cancellation, replacement and stale callbacks cannot reveal the
-old presentation. A never-ready timed-out engine can be recreated on retry;
-engines that may contain accepted input remain available for protected capture.
-Go To waits for a correlated renderer navigation result before closing; failed or
-cancelled page work keeps the form available. Controlled tests exercise the
-channel/paint protocol; actual GTK/WebView2 placement and focus require native
-acceptance as described in [development tools](../../tools/README.md).
+Go To uses one primary-window input panel for the header, shortcut and command
+menu. It belongs to the Reading pane in both Reading and Split and takes a
+bounded, scrollable part of its layout. The native publication viewport is
+measured below the panel, so controls never overlap Notebook or require an input
+grab, secondary engine or independent window. Existing Yaru grouped entries,
+push buttons, semantic colors and native chapter menus supply its presentation.
+PDF's destination resolver treats integers as one-based physical pages, unique
+nonnumeric strings as exact printed labels, and `=label` as an explicit printed
+label, including numeric labels. Duplicate labels are rejected. Comics retain
+First/Last; EPUB/FB2 retain progress and chapter navigation. Current location,
+localized validation, physical Enter and IME submission share the existing
+navigation contract. Go To closes only after its correlated renderer result;
+failure keeps the entered destination available. Escape and Close restore the
+owned trigger/publication focus. Request, session and presentation revisions
+reject rapid replacement, book changes and obsolete navigation results. Pointer
+focus on the publication dismisses the panel without reclaiming input.
 
 Reading retains Foliate.js, PDF.js, the labeled sidebar, search, appearance,
 selection controls, dictionary and narration. Entering standalone Notebook stops
@@ -325,54 +300,24 @@ separate from geometry, but a positive native reveal requires acknowledgement of
 the current book/session's measured reader-pane bounds. Hidden panes, overlays and
 modal routes cannot receive native pointer, keyboard or accessibility focus.
 
-The existing restricted transient Flutter view above WebKit/WebView2 is retained.
-It runs the same official Flutter bundle and shared controls. Persistence remains
-in the primary application. Note draft messages reach primary application state
-before transient controls disappear. Reopened editors use the effective shared
-draft without changing the authoritative Discard baseline. Session/presentation
-and revision guards protect status replies; asynchronous status updates never
-reset an active text field. Explicit Save latches its request synchronously:
-the note becomes read-only, including the input event before the next frame,
-and repeated Save is ignored. Timeout reports an unconfirmed operation and
-keeps that guard until the primary reply. Failure unlocks the owning editor;
-success seals its closing presentation until replacement. Actions retain their
-original session/presentation, and ignored queued actions are acknowledged
-without changing current data. Close/Escape still preserves shared drafts.
-Speech Voice and Speed use the same native menu implementation as the main
-window, registered for each owned reader view. Anchors are local to that view;
-the host translates them into native window coordinates and returns focus to
-the active owner. Hiding or replacing a reader presentation cancels its menus
-and rejects queued selections. Hidden views cannot open a native menu.
+Reader controls use the primary application and shared desktop controls.
+Notebook owns every note editor and its protected, revisioned draft,
+independently of reader controls. Annotation text retains its
+1,000,000 UTF-16-unit bound and existing conditional save, autosave, Retry,
+Discard, deletion and first-insertion contracts. No note text travels through a
+transient reader-view channel. Initial publication opening and later annotation
+updates retain the same non-mutating projection: locations, identities, kinds,
+colors and quotations/references remain; private notes stay in primary state.
+Publication event/command bounds remain 1 MiB. Close, export and backup drain
+accepted reader actions, reading positions and Notebook writes in their existing
+owners. Removing the transient note transport does not change stored records.
 
-Reading and storage share the existing 1,000,000 UTF-16-unit note bound (no
-null characters). The Reading field refuses unsupported changes without
-replacing its prior text. Popover actions allow at most 6,065,536 UTF-8 bytes:
-six bytes per unit for worst-case JSON escaping, plus 64 KiB for the envelope.
-Both popover hosts and their trusted forwarding callbacks use the same header
-constant; the primary validates this popover-only budget and leaves publication
-event/command bounds unchanged. Initial publication opening and later annotation
-updates use the same non-mutating projection: locations, identities, kind,
-colors and saved quotations/references remain; private notes stay in primary
-state. Private note length cannot inflate either renderer command. Annotation
-counts, quotations and geometry still share the ordinary 1 MiB dispatch bound.
-`reader-action-size` means native rejected before forwarding: it settles the
-local request, restores editing and reports that text is still local. Unknown
-delivery failures and timeouts retain their real result waiter and Save guard.
-A direct native-reply observer remains active after timeout: a later definitive
-rejection releases only that request, while an uncertain outcome stays guarded.
-
-Before replacement, dismissal, flush or close, the primary uses the existing
-native channel's bounded `capturePopover` handoff. The transient view returns
-only its unacknowledged revision and ownership; the primary attaches it to the
-existing book/passage context and shared draft lifecycle. Closing/replacing
-seals the field synchronously until handoff succeeds; a failed handoff retains
-the editor and blocks destructive disposal. Book replacement captures before
-the preparing phase invalidates the old session. Existing drafts retain their
-book identity and conditional update; no creation is inferred from a missing
-loaded-list item. Successful capture is
-acknowledged by revision before the presentation changes. Backup/export still
-flush shared notes after the renderer/capture phase, so delivery or save failure
-cannot silently produce an incomplete successful flush.
+Speech Voice and Speed use checked native submenus in the primary window. Voice
+enumeration uses the existing speech service, includes System, and preserves the
+selected voice and exact speed, including a value between presets. Existing
+configuration persistence and paused/current-passage behavior remain in
+NarrationController. The reader's menu owner cancels stale enumeration/selection
+on route, book, viewport and session changes.
 
 Startup has module-initialization and publication-opening phases. A handshake
 starts a separate bounded first-passage deadline; only `opened` declares usable
@@ -435,7 +380,7 @@ artwork. This adds no persistence domain or backup field.
 Selected text opens the primary window's existing native menu service, anchored
 to the passage. Highlight, highlight colors, Add Note/Edit Note, Copy, Search in
 This Book, Look Up and Read Aloud use a captured passage independent of WebKit's
-visual selection and the secondary-popover lifecycle. Book, renderer session,
+visual selection and temporary focus changes. Book, renderer session,
 presentation and selection revisions reject replaced or retired actions. Closing
 or resizing the owning reader dismisses the menu. Cancellation restores reading
 focus only while the original focus handoff still owns it. This automatic path
@@ -456,36 +401,27 @@ navigation command is chosen; Back/Forward and Return keep their existing engine
 history. The header controller receives external query changes only; ordinary
 edits, caret positions and IME composition are not overwritten during rebuilds.
 
-Look Up and Book Actions' Dictionary command share one workflow. After the existing
-explicit online-consent dialog, a compact owned native popover shows the full
-term, loading state, selectable plain-text definition excerpts, language/part of
-speech labels, English Wiktionary attribution and Close. Open Full Entry is an
-explicit browser action when an entry is available. Errors remain inside the
-popover; connection, timeout, service and invalid-response failures offer Retry.
-Escape dismisses using the existing native focus-return path. Lookup dismissal
-returns Flutter and native keyboard focus to the publication even while search
-is open, including GTK's own Escape dismissal before a Flutter action; book/session/presentation checks reject an obsolete focus handoff. The surface scrolls
-inside narrow bounds and keeps the publication visible at the same location.
+Look Up and Book Actions' Dictionary command share the existing explicit
+online-consent workflow and one primary-window information panel. The panel
+shows the full captured term, loading/offline/missing/unavailable/error states,
+selectable plain-text excerpts, language/part-of-speech labels, attribution,
+Retry and explicit Open Full Entry navigation. Requests remain owned by
+ReaderController and the existing dictionary service. Book/session/presentation,
+selection and request revisions cancel obsolete results; status updates do not
+reset keyboard focus. Consent can temporarily cover the reader without losing
+its captured selection. Dismissal cancels the request and restores publication
+focus only while that handoff still owns it. Narrow panes and scaled text scroll
+inside the same bounded primary layout as Go To.
+See [readers.md](readers.md#selection-search-and-online-lookup) for the existing
+provider contract and excerpt bounds.
 
-Both handoffs retain protected note capture, annotation ownership and save-failure
-recovery. Lookup results are scoped to their captured book/session/presentation,
-term and revision. Status updates neither replace a newer popover nor request
-focus. Native dismissal invalidates pending work even without a Flutter action.
-See [readers.md](readers.md#selection-search-and-online-lookup) for the verified API
-format, English-only definition text, phrase/selection limits and excerpt bounds.
-
-
-The lookup shares Go To's natural-height/paint acknowledgement. Its complete
-scrolling contents are measured independently of the current native allocation,
-so replacing a short loading state can grow into a readable definition. Long
-excerpts scroll inside native bounds. Stable keys keep keyboard focus attached to
-the same action when a status update adds Retry or Open Full Entry beside Close.
-GTK transient-view construction clears the owning view's current GDK GL context
-before creating the pinned Flutter engine and before explicit realization; this
-avoids the reproduced blank compositor surface without changing the SDK or host.
-A hide notification preceding failed presentation still preserves primary Retry
-feedback. [Known issues](known-issues.md) describes remaining
-qualification boundaries. Controlled checks do not establish native acceptance.
+The retired reader application entry point, secondary Flutter views, popup action
+channel, native placement/paint protocol and transient draft capture machinery
+are removed. Session ownership, navigation acknowledgements, annotation action
+draining, lookup cancellation and Notebook autosave remain in their original
+primary owners. The accepted GTK view-retirement implementation still owns the
+primary Flutter renderer and its lifetime; removing a secondary view does not
+change that ownership contract.
 
 ## Local font selection
 
@@ -613,7 +549,7 @@ overlay still dismisses for activation independently of this Split width policy.
 Native visibility uses separate route/modal and workspace gates. Opening shared
 chrome captures transient input, dismisses without restoring publication focus,
 and explicitly transfers GTK/Win32 ownership to Flutter. Session-scoped handoff
-cannot focus an inactive window or owned native popover. Flutter focus alone does
+cannot focus an inactive window or owned reader control. Flutter focus alone does
 not transfer GTK/WebView2 ownership. Trusted pointer/focus notifications identify
 only the current visible publication document; the primary verifies native focus,
 session and focus revision before accepting them. Late native keys cannot replace
@@ -622,7 +558,7 @@ once; its inactive-window blur does not itself reclaim OS focus. If that first
 mirror loses native ownership, one post-frame native query can reconcile it only
 while the same publication focus target, session, revision and presentation remain
 current. Explicit chrome/editor handoffs cancel that reconciliation. Positive
-native focus requests also validate their renderer session and exclude popovers.
+native focus requests also validate their renderer session and exclude reader controls.
 Divider/sidebar/window resizing updates native
 bounds to the reader pane before reveal and refreshes selection rectangles without
 changing their durable anchors or reopening selection popovers. Closing search
@@ -639,7 +575,7 @@ focus targets; native visibility uses separate route/modal and workspace gates.
 Opening shared chrome captures transient input, dismisses without restoring native
 publication focus, and explicitly transfers GTK/Win32 ownership to the main view.
 That request carries the renderer session and cannot focus an inactive window or
-an owned native popover. Native Tab traversal uses the same handoff. Flutter focus
+an owned reader control. Native Tab traversal uses the same handoff. Flutter focus
 alone does not move GTK/WebView2 keyboard ownership. Restore's confirmation uses
 its own Restore label, rather than the generic Open default.
 
@@ -653,7 +589,7 @@ Shortcut maps include visible commands in the current route, so hidden Collectio
 Search cannot shadow Book Search's Ctrl+F in Notebook. Disabled visible commands
 still own their combination and retain the existing text-editing safeguards.
 
-GTK window destruction releases the native reader/popover, chrome hosts and
+GTK window destruction releases the native reader, chrome hosts and
 channels before GTK disposes the main Flutter view and overlay. Application
 disposal is an idempotent fallback. See [known issues](known-issues.md) for the
 separate intermittent Linux compositor shutdown abort.

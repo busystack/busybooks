@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -262,7 +263,7 @@ class _ReadingFontChooserState extends State<ReadingFontChooser> {
                               ),
                             ),
                           if (_applying)
-                            const LinearProgressIndicator(
+                            const YaruLinearProgressIndicator(
                               key: ValueKey('font-applying'),
                             ),
                           Row(

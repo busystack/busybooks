@@ -1226,4 +1226,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String showSplitPane(String pane) {
     return 'Show $pane';
   }
+
+  @override
+  String get menuUnavailable =>
+      'The menu could not be opened. Please try again.';
 }

@@ -1,6 +1,8 @@
 // Adapted from BusyMark shared foundation behavior.
 import 'package:busybooks/src/platform/native_menu_service.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
+import 'package:busybooks/src/app/busybooks_toast.dart';
+import 'package:busybooks/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,50 +10,60 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('recoverable native failure presents a working Flutter menu', (
-    tester,
-  ) async {
-    const channel = MethodChannel('busybooks/test/fallback');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          channel,
-          (_) async => throw PlatformException(code: 'presentation-failed'),
-        );
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null),
-    );
-    String? selected;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: BusyBooksHeaderPopupMenuButton<String>(
-            tooltip: 'Menu',
-            icon: Icons.menu,
-            nativeMenuService: const NativeMenuService(
-              channel: channel,
-              supportedPlatform: true,
-            ),
-            itemBuilder: (_) => [
-              BusyBooksPopupMenuItem(
-                value: 'disabled',
-                label: 'Loading',
-                enabled: false,
+  testWidgets(
+    'recoverable native failure reports feedback without a Flutter menu',
+    (tester) async {
+      const channel = MethodChannel('busybooks/test/fallback');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (_) async => throw PlatformException(code: 'presentation-failed'),
+          );
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      String? selected;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: BusyBooksToastOverlay(
+            child: Scaffold(
+              body: BusyBooksHeaderPopupMenuButton<String>(
+                tooltip: 'Menu',
+                icon: Icons.menu,
+                nativeMenuService: const NativeMenuService(
+                  channel: channel,
+                  supportedPlatform: true,
+                ),
+                itemBuilder: (_) => [
+                  BusyBooksPopupMenuItem(
+                    value: 'disabled',
+                    label: 'Loading',
+                    enabled: false,
+                  ),
+                  BusyBooksPopupMenuItem(value: 'open', label: 'Open Book'),
+                ],
+                onSelected: (value) => selected = value,
               ),
-              BusyBooksPopupMenuItem(value: 'open', label: 'Open Book'),
-            ],
-            onSelected: (value) => selected = value,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.tap(find.byTooltip('Menu'));
-    await tester.pumpAndSettle();
-    expect(find.text('Loading'), findsOneWidget);
-    await tester.tap(find.text('Open Book'));
-    await tester.pumpAndSettle();
-    expect(selected, 'open');
-  });
+      );
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Loading'), findsNothing);
+      expect(find.text('Open Book'), findsNothing);
+      expect(find.byType(MenuAnchor), findsNothing);
+      expect(find.byType(PopupMenuItem<String>), findsNothing);
+      expect(
+        find.text('The menu could not be opened. Please try again.'),
+        findsOneWidget,
+      );
+      expect(selected, isNull);
+    },
+  );
 
   test(
     'show serializes native menu presentation and returns its selection',
@@ -171,34 +183,31 @@ void main() {
     expect(call?.arguments, {'sessionId': session.id});
   });
 
-  test(
-    'missing native host reports unavailable for a themed fallback',
-    () async {
-      const channel = MethodChannel('busybooks/test/native-menu-missing');
+  test('missing native host reports unavailable', () async {
+    const channel = MethodChannel('busybooks/test/native-menu-missing');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          channel,
+          (_) async => throw MissingPluginException(),
+        );
+    addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            channel,
-            (_) async => throw MissingPluginException(),
-          );
-      addTearDown(() {
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(channel, null);
-      });
+          .setMockMethodCallHandler(channel, null);
+    });
 
-      final result =
-          await const NativeMenuService(
-            channel: channel,
-            supportedPlatform: true,
-          ).show(
-            session: NativeMenuSession(),
-            anchor: Rect.zero,
-            entries: const [NativeMenuEntry.command(label: 'Fallback')],
-          );
+    final result =
+        await const NativeMenuService(
+          channel: channel,
+          supportedPlatform: true,
+        ).show(
+          session: NativeMenuSession(),
+          anchor: Rect.zero,
+          entries: const [NativeMenuEntry.command(label: 'Fallback')],
+        );
 
-      expect(result.available, isFalse);
-      expect(result.selectedIndex, isNull);
-    },
-  );
+    expect(result.available, isFalse);
+    expect(result.selectedIndex, isNull);
+  });
   test(
     'disabled selected radio entries are valid; duplicate selections are not',
     () async {
@@ -243,7 +252,7 @@ void main() {
   );
 
   test(
-    'host presentation failure allows fallback; invalid contracts remain errors',
+    'host presentation failure is explicit; invalid contracts remain errors',
     () async {
       const channel = MethodChannel('busybooks/test/native-menu-failure');
       var code = 'presentation-failed';

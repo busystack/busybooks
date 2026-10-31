@@ -11,7 +11,6 @@ add_executable(${BINARY_NAME} WIN32
   "reader_host.cpp"
   "reading_fonts.cpp"
   "reading_font_channel.cpp"
-  "reader_popover.cpp"
   "native_menu_host.cpp"
   "main.cpp"
   "utils.cpp"

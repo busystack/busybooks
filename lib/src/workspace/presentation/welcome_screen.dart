@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 // Composition adapted from BusyMark Welcome: recent filesystem resources in
 // the full-height sidebar; independent create/open actions in grouped rows.
 import 'package:flutter/material.dart';
@@ -247,7 +248,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                   ),
                   if (data.loading) ...[
                     const SizedBox(height: BusyBooksSpacing.lg),
-                    const LinearProgressIndicator(),
+                    const YaruLinearProgressIndicator(),
                     BusyBooksActionRow(
                       title: l.busy,
                       subtitle: data.progress['name']?.toString(),

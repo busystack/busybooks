@@ -41,7 +41,7 @@ presented=False
 while child.poll() is None:
  p=Path(os.environ['SHUTDOWN_FIXTURE_COMMANDS'])
  if p.exists() and 'ctrl+g' in p.read_text() and not presented:
-  print('reader-popup stage=presented kind=goto',flush=True);presented=True
+  print('reader-panel stage=presented kind=goto',flush=True);presented=True
  time.sleep(.01)
 if os.environ.get('SHUTDOWN_FIXTURE_ABORT'):
  print('received signal SIGABRT')
@@ -91,7 +91,7 @@ else:
     def test_reader_surface_requires_its_presentation_acknowledgment(self):
         book = self.root / 'fixture.pdf'
         book.write_bytes(b'owned fixture')
-        result, outcome = self.run_probe('--book', str(book), '--reader-popover')
+        result, outcome = self.run_probe('--book', str(book), '--reader-controls')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(outcome['cleanShutdownPassed'])
         self.assertEqual(self.keys(), [

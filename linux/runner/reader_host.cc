@@ -1,9 +1,7 @@
 // Native book-content boundary. Flutter owns all application chrome and actions.
 #include "reader_host.h"
 #include "reader_surface.h"
-#include "reader_popover.h"
 #include "reading_font_channel.h"
-#include "../../native/reader_action_limits.h"
 #include <webkit2/webkit2.h>
 #include <cstring>
 #include <string>
@@ -11,7 +9,6 @@
 
 struct BusyBooksReaderHost {
   BusyBooksReaderSurface* surface;
-  ReaderPopover* popover = nullptr;
   GtkWidget* chrome = nullptr;
   WebKitWebView* web = nullptr;
   WebKitWebContext* context;
@@ -110,20 +107,6 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
       GdkRGBA rgba{((color>>16)&255)/255.0,((color>>8)&255)/255.0,(color&255)/255.0,1};
       webkit_web_view_set_background_color(h->web,&rgba);
     }
-  } else if (strcmp(name, "popoverResult") == 0) {
-    h->popover->Result(args);
-  } else if (strcmp(name, "capturePopover") == 0) {
-    h->popover->Capture(method);
-    return;
-  } else if (strcmp(name, "popover") == 0) {
-    h->popover->Show(method);
-    return;
-  } else if (strcmp(name, "dismissPopover") == 0) {
-    h->popover->Hide();
-    auto* restore = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
-        ? fl_value_lookup_string(args, "restoreFocus") : nullptr;
-    if (!restore || fl_value_get_type(restore) != FL_VALUE_TYPE_BOOL || fl_value_get_bool(restore))
-      gtk_widget_grab_focus(GTK_WIDGET(h->web));
   } else if (strcmp(name, "hasFocus") == 0) {
     auto* session = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
         ? fl_value_lookup_string(args, "session") : nullptr;
@@ -135,7 +118,7 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
     auto* focus = GTK_IS_WINDOW(window)
         ? gtk_window_get_focus(GTK_WINDOW(window)) : nullptr;
     const bool focused = h->session == fl_value_get_string(session) &&
-        !h->popover->IsRequested() && gtk_widget_get_mapped(widget) &&
+        gtk_widget_get_mapped(widget) &&
         GTK_IS_WINDOW(window) && gtk_window_is_active(GTK_WINDOW(window)) &&
         focus != nullptr && (focus == widget || gtk_widget_is_ancestor(focus, widget));
     g_autoptr(FlValue) value = fl_value_new_bool(focused);
@@ -148,7 +131,7 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
       fl_method_call_respond_error(method, "reader-focus", "Missing focus owner", nullptr, nullptr); return;
     }
     auto* window = gtk_widget_get_toplevel(h->chrome);
-    if (h->session == fl_value_get_string(session) && !h->popover->IsRequested() &&
+    if (h->session == fl_value_get_string(session) &&
         gtk_widget_get_mapped(h->chrome) && GTK_IS_WINDOW(window) &&
         gtk_window_is_active(GTK_WINDOW(window))) gtk_widget_grab_focus(h->chrome);
   } else if (strcmp(name, "focus") == 0) {
@@ -159,10 +142,9 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
     }
     auto* widget=GTK_WIDGET(h->web);
     auto* window=gtk_widget_get_toplevel(widget);
-    if(h->session == fl_value_get_string(session) && !h->popover->IsRequested() &&
+    if(h->session == fl_value_get_string(session) &&
         gtk_widget_get_mapped(widget)&&GTK_IS_WINDOW(window)&&gtk_window_is_active(GTK_WINDOW(window)))gtk_widget_grab_focus(widget);
   } else if (strcmp(name, "open") == 0) {
-    h->popover->Hide();
     auto* path_value = args && fl_value_get_type(args)==FL_VALUE_TYPE_MAP ? fl_value_lookup_string(args,"publicationPath") : nullptr;
     auto* cache_value = args && fl_value_get_type(args)==FL_VALUE_TYPE_MAP ? fl_value_lookup_string(args,"cacheDirectory") : nullptr;
     const char* path = path_value && fl_value_get_type(path_value)==FL_VALUE_TYPE_STRING ? fl_value_get_string(path_value) : nullptr;
@@ -179,11 +161,9 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
     webkit_web_view_load_uri(h->web,uri.c_str());
   } else if (strcmp(name,"bounds") == 0) {
     auto number=[args](const char* key){auto* v=fl_value_lookup_string(args,key);return v?static_cast<int>(fl_value_get_float(v)):0;};
-    h->popover->Hide();
     h->surface->SetBounds(number("x"),number("y"),number("width"),number("height"));
   } else if (strcmp(name,"visible") == 0) {
     const bool visible = fl_value_get_bool(args);
-    if (!visible) h->popover->Hide();
     h->surface->SetVisible(visible);
     // WebKit may retain GTK keyboard ownership after it is hidden for Notebook
     // or a Flutter dialog. Return it to the owning main view, without activating
@@ -203,7 +183,6 @@ static void call(FlMethodChannel*, FlMethodCall* method, gpointer data) {
     std::string script="window.busybooks?.dispatch("+std::string(json)+")";
     webkit_web_view_evaluate_javascript(h->web,script.c_str(),-1,nullptr,nullptr,nullptr,nullptr,nullptr);
   } else if (strcmp(name,"close") == 0) {
-    h->popover->Hide();
     h->surface->SetVisible(false);
     h->session.clear();
     webkit_web_view_load_uri(h->web,"about:blank"); h->publication.clear(); h->cache_directory.clear();
@@ -237,7 +216,6 @@ BusyBooksReaderHost* busybooks_reader_host_new(GtkWidget* overlay, FlView* view)
   g_signal_connect(h->web,"load-failed",G_CALLBACK(load_failed),h);
   g_signal_connect(h->web,"web-process-terminated",G_CALLBACK(process_terminated),h);
   h->fonts=busybooks_reading_font_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view)));
-  h->popover=new ReaderPopover(GTK_WIDGET(view), [h](const char* json) { emit(h, json, kMaxReaderPopoverActionBytes); });
   h->surface=new BusyBooksReaderSurface(GTK_OVERLAY(overlay),GTK_WIDGET(h->web));
   g_autoptr(FlStandardMethodCodec) codec=fl_standard_method_codec_new();
   h->channel=fl_method_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view)),"io.busystack.busybooks/reader",FL_METHOD_CODEC(codec));
@@ -251,7 +229,6 @@ void busybooks_reader_host_free(BusyBooksReaderHost* h) {
   g_signal_handlers_disconnect_by_data(h->web,h);
   g_signal_handlers_disconnect_by_data(webkit_web_view_get_user_content_manager(h->web),h);
   webkit_web_view_stop_loading(h->web);
-  delete h->popover;
   delete h->surface;
   fl_method_channel_set_method_call_handler(h->fonts,nullptr,nullptr,nullptr);
   g_clear_object(&h->fonts);

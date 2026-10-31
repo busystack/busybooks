@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show SemanticsRole;
@@ -1086,7 +1087,7 @@ class _ThumbnailPanelState extends _RetainedPanelState<_ThumbnailPanel> {
                           : const Center(
                               child: SizedBox.square(
                                 dimension: BusyBooksSizes.iconButton,
-                                child: CircularProgressIndicator(),
+                                child: YaruCircularProgressIndicator(),
                               ),
                             ),
                     ),

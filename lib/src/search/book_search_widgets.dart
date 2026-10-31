@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -465,7 +466,7 @@ class BookSearchSidebar extends ConsumerWidget {
                         : bookSearchScopeLabel(context, state.scope),
                   ),
           ),
-          if (state.loading) LinearProgressIndicator(value: state.progress),
+          if (state.loading) YaruLinearProgressIndicator(value: state.progress),
           if (state.error != null)
             BusyBooksBanner(
               title: state.results.isNotEmpty

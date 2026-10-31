@@ -36,7 +36,12 @@ Future<void> showError(BuildContext context, Object error) =>
             onPressed: () => Navigator.pop(c),
           ),
         ],
-        children: [SelectableText(error.toString())],
+        children: [
+          SelectableText(
+            contextMenuBuilder: busyBooksTextContextMenu,
+            error.toString(),
+          ),
+        ],
       ),
     );
 Future<void> runAppAction(
@@ -706,6 +711,7 @@ Future<void> resumeMove(
         children: [
           Text(c.l10n.moveRecoveryHelp),
           SelectableText(
+            contextMenuBuilder: busyBooksTextContextMenu,
             '${operation['source']} → ${operation['destination']}${operation['quarantine'] == null ? '' : '\n${operation['quarantine']}'}',
           ),
         ],
@@ -856,7 +862,10 @@ Future<void> unavailableFile(
                 ? c.l10n.damagedBookHelp
                 : c.l10n.locateBookHelp,
           ),
-          SelectableText(error.toString()),
+          SelectableText(
+            contextMenuBuilder: busyBooksTextContextMenu,
+            error.toString(),
+          ),
         ],
       ),
     );

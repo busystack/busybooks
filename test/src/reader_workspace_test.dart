@@ -1,10 +1,10 @@
+import 'package:yaru/yaru.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:archive/archive_io.dart';
 import 'package:busybooks/l10n/generated/app_localizations.dart';
 import 'package:busybooks/src/annotations/domain/annotation_filter.dart';
 import 'package:busybooks/src/app/app_router.dart';
@@ -32,7 +32,6 @@ import 'package:busybooks/src/book_workspace/application/book_presentation.dart'
 import 'package:busybooks/src/core/typography.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
 import 'package:busybooks/src/library/application/collection_view_controller.dart';
-import 'package:busybooks/src/library/data/record_validation.dart';
 import 'package:busybooks/src/library/domain/annotation_limits.dart';
 import 'package:busybooks/src/library/domain/book.dart';
 import 'package:busybooks/src/library/presentation/collection_screen.dart';
@@ -48,9 +47,8 @@ import 'package:busybooks/src/platform/speech_service.dart';
 import 'package:busybooks/src/reading/application/dictionary_service.dart';
 import 'package:busybooks/src/reading/application/narration_controller.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
-import 'package:busybooks/src/reading/domain/reader_action.dart';
 import 'package:busybooks/src/reading/domain/publication_outline.dart';
-import 'package:busybooks/src/reading/presentation/reader_popover.dart';
+import 'package:busybooks/src/reading/presentation/reader_panel.dart';
 import 'package:busybooks/src/reading/presentation/reader_screen.dart';
 import 'package:busybooks/src/reading/presentation/reader_sidebar.dart';
 import 'package:busybooks/src/search/book_search_session.dart';
@@ -77,20 +75,6 @@ Future<void> _until(bool Function() done) async {
   }
 }
 
-Future<void> _popupUpdate(WidgetTester tester, Map payload) async {
-  final reply = Completer<void>();
-  ServicesBinding.instance.channelBuffers.push(
-    readerPopoverChannel.name,
-    readerPopoverChannel.codec.encodeMethodCall(
-      MethodCall('update', {'locale': 'en', ...payload}),
-    ),
-    (_) => reply.complete(),
-  );
-  await tester.pump();
-  await reply.future;
-  await tester.pumpAndSettle();
-}
-
 Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() done, {
@@ -108,168 +92,6 @@ Future<void> _pumpUntil(
   }
   if (settle) {
     await tester.pumpAndSettle();
-  }
-}
-
-void _connectPopover(
-  _ReaderFixture f, {
-  List<Map>? delivered,
-  List<Map>? completed,
-  List<Map>? rejected,
-  List<Map>? rejectionReplies,
-  Completer<void>? rejectionEntered,
-  Completer<void>? rejectionProceed,
-  Set<String>? rejectActions,
-  Set<String>? loseAcknowledgement,
-  int actionByteLimit = maxReaderPopoverActionBytes,
-  int forwardedByteLimit = maxReaderPopoverActionBytes,
-  _PresentationGate? presentation,
-}) {
-  f.onNativeCall = (call) async {
-    if (call.method == 'popover' && presentation != null) {
-      return presentation.show((call.arguments as Map).cast<String, dynamic>());
-    }
-    if (call.method == 'dismissPopover') presentation?.hide();
-    if (call.method == 'capturePopover') {
-      final result = Completer<dynamic>();
-      ServicesBinding.instance.channelBuffers.push(
-        readerPopoverChannel.name,
-        readerPopoverChannel.codec.encodeMethodCall(
-          MethodCall('capture', call.arguments),
-        ),
-        (reply) {
-          try {
-            result.complete(readerPopoverChannel.codec.decodeEnvelope(reply!));
-          } catch (error, trace) {
-            result.completeError(error, trace);
-          }
-        },
-      );
-      return result.future;
-    }
-    if (call.method == 'popoverResult') {
-      ServicesBinding.instance.channelBuffers.push(
-        readerPopoverChannel.name,
-        readerPopoverChannel.codec.encodeMethodCall(
-          MethodCall('result', call.arguments),
-        ),
-        (_) {},
-      );
-    }
-  };
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(readerPopoverChannel, (call) async {
-        if (call.method == 'ready') presentation?.ready();
-        if (call.method == 'presented') {
-          presentation?.painted(call.arguments as Map);
-        }
-        if (call.method == 'failed') presentation?.fail(call.arguments as Map);
-        if (call.method == 'action') {
-          final event = (jsonDecode(call.arguments as String) as Map)
-              .cast<String, dynamic>();
-          // Native rejects before event_ is called. This is deliberately
-          // different from a repository failure or a lost acknowledgement.
-          if (utf8.encode(call.arguments as String).length > actionByteLimit ||
-              rejectActions?.contains(event['action']) == true) {
-            rejected?.add(event);
-            if (rejectionProceed != null &&
-                ['annotationNote', 'highlight'].contains(event['action'])) {
-              rejectionEntered?.complete();
-              await rejectionProceed.future;
-            }
-            rejectionReplies?.add(event);
-            throw PlatformException(
-              code: 'reader-action-size',
-              message: 'Reader action exceeds its UTF-8 byte limit',
-            );
-          }
-          // ReaderHost has a distinct publication-event bound; only its
-          // trusted popover callback opts in to the note delivery budget.
-          if (utf8.encode(call.arguments as String).length >
-              forwardedByteLimit) {
-            return null;
-          }
-          delivered?.add(event);
-          final forwarding = f.event('popoverAction', event);
-          if (loseAcknowledgement?.contains(event['action']) == true) {
-            unawaited(forwarding.then((_) => completed?.add(event)));
-            throw PlatformException(
-              code: 'reader-channel-interrupted',
-              message: 'Delivery outcome is unknown',
-            );
-          }
-          await forwarding;
-          completed?.add(event);
-        }
-        return null;
-      });
-}
-
-// Models the native ownership contract without opening windows or sockets.
-// A ready channel and a painted Flutter subtree are independent of native raster readiness.
-class _PresentationGate {
-  bool allowReady = true, channelReady = false;
-  Map<String, dynamic>? payload;
-  Completer<void>? pending;
-  Completer<void> frame = Completer<void>();
-  final visible = <Object?>[];
-  Map<String, dynamic> overrides = {};
-  Future<void> show(Map<String, dynamic> value) {
-    hide();
-    payload = value;
-    pending = Completer<void>();
-    if (channelReady && allowReady) _deliver();
-    return pending!.future;
-  }
-
-  void ready() {
-    channelReady = true;
-    if (allowReady && payload != null) _deliver();
-  }
-
-  void _deliver() {
-    ServicesBinding.instance.channelBuffers.push(
-      readerPopoverChannel.name,
-      readerPopoverChannel.codec.encodeMethodCall(
-        MethodCall('update', {...payload!, ...overrides}),
-      ),
-      (_) {},
-    );
-  }
-
-  bool matches(Map value) =>
-      payload != null &&
-      value['session'] == payload!['session'] &&
-      value['presentation'] == payload!['presentation'];
-  void painted(Map value) {
-    final owner = payload, wait = pending;
-    if (!matches(value)) return;
-    frame.future.then((_) {
-      if (!identical(owner, payload) || wait == null || wait.isCompleted) {
-        return;
-      }
-      visible.add(value['presentation']);
-      wait.complete();
-    });
-  }
-
-  void fail(Map value) {
-    if (!matches(value)) return;
-    final wait = pending;
-    pending = null;
-    payload = null;
-    if (wait != null && !wait.isCompleted) {
-      wait.completeError(PlatformException(code: 'popover-content'));
-    }
-  }
-
-  void hide() {
-    final wait = pending;
-    pending = null;
-    payload = null;
-    if (wait != null && !wait.isCompleted) {
-      wait.completeError(PlatformException(code: 'popover-cancelled'));
-    }
   }
 }
 
@@ -327,6 +149,7 @@ class _CachedSearchSnapshot extends BookSearchController {
 class _Speech extends SpeechService {
   final calls = <({String action, Map<String, dynamic> args})>[];
   Object? stopError;
+  Completer<List<String>>? voicesReply;
   @override
   Future<dynamic> call(
     String action, [
@@ -334,6 +157,7 @@ class _Speech extends SpeechService {
   ]) async {
     calls.add((action: action, args: args));
     if (action == 'stop' && stopError != null) throw stopError!;
+    if (action == 'voices' && voicesReply != null) return voicesReply!.future;
     return action == 'voices' ? ['Fixture Voice', 'Fixture Voice 2'] : null;
   }
 
@@ -411,6 +235,18 @@ class _ReaderFixture {
       ],
     );
     final test = _ReaderFixture(directory, store, container);
+    container.listen(readerControllerProvider.select((s) => s.panel), (
+      _,
+      panel,
+    ) {
+      if (panel?.kind == ReaderPanelKind.lookup) {
+        test.lookupUpdates.add({
+          'lookupTerm': panel!.term,
+          'lookup': panel.lookup,
+        });
+      }
+    });
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(readerChannel, (call) async {
           test.calls.add(call);
@@ -610,8 +446,26 @@ class _ReaderFixture {
   NotebookController get notes =>
       container.read(notebookControllerProvider.notifier);
   NotebookState get drafts => container.read(notebookControllerProvider);
-  Map get popup =>
-      calls.lastWhere((c) => c.method == 'popover').arguments as Map;
+  final lookupUpdates = <Map>[];
+  String? editedAnnotation;
+  ReaderSelectionTarget? editingTarget;
+  Map get panelSnapshot => {
+    'kind': state.panel?.kind == ReaderPanelKind.lookup ? 'lookup' : 'goto',
+    'presentation': state.panel?.presentation,
+    'lookupTerm': state.panel?.term,
+    'lookup': state.panel?.lookup,
+    'annotationId': editedAnnotation,
+    'session': reader.sessionId,
+    'note': editedAnnotation == null
+        ? null
+        : drafts.effectiveNote(
+            drafts.findAnnotation(
+              state.bookId!,
+              editedAnnotation!,
+              reader.annotations,
+            )!,
+          ),
+  };
   Future<ReaderSelectionMenuOwner> selectionMenuOwner(
     Map<String, dynamic> passage, {
     String type = 'selection',
@@ -624,39 +478,73 @@ class _ReaderFixture {
     return (await reader.prepareSelectionMenu(target, dismiss: () async {}))!;
   }
 
-  // These fixtures exercise the retained secondary channel's draft protocol.
-  // Automatic publication selection is tested through the primary native menu.
-  Future<void> openAnnotationPopover(
+  // Editors now belong to Notebook; no transient native transport owns text.
+  Future<void> openAnnotationNote(
     ReadingAnnotation annotation, {
     Object? rect,
   }) async {
-    if (annotation.bookId != state.bookId) return;
     final current = drafts.findAnnotation(
       annotation.bookId,
       annotation.id,
       reader.annotations,
     );
     if (current == null) return;
-    await reader.showPopover('selection', extra: {'annotationId': current.id});
+    editedAnnotation = current.id;
+    await reader.editAnnotation(current);
   }
 
-  Future<void> openSelectionPopover() async {
+  Future<void> openSelectionNote() async {
     await event('selection', {
       'anchor': {'page': 0, 'textOffset': 1, 'textLength': 3},
       'text': 'ABC',
       'reference': 'Page 1',
       'settled': false,
     });
-    await reader.showPopover('selection');
+    editedAnnotation = null;
+    editingTarget = reader.captureSelection(preserveWhitespace: true);
   }
 
-  Future<void> action(String action, [Map<String, dynamic> args = const {}]) =>
-      event('popoverAction', {
-        'presentation': popup['presentation'],
-        'action': action,
-        'request': calls.length + 1,
-        ...args,
-      });
+  Future<void> action(
+    String action, [
+    Map<String, dynamic> args = const {},
+  ]) async {
+    switch (action) {
+      case 'lookupRetry':
+        unawaited(reader.retryLookup(state.panel!));
+      case 'lookupFullEntry':
+        reader.openLookupEntry(state.panel!);
+      case 'dismiss':
+        await reader.dismissReaderControls();
+      case 'searchSelection':
+        await reader.searchSelection();
+      case 'noteDraft':
+      case 'highlight':
+      case 'annotationNote':
+        if (editedAnnotation == null) {
+          final owner = await reader.prepareSelectionMenu(
+            editingTarget!,
+            dismiss: () async {},
+          );
+          if (owner == null) return;
+          await reader.selectionMenuAction(
+            owner,
+            ReaderSelectionAction.addNote,
+          );
+          editedAnnotation = drafts.sources.keys.last;
+        }
+        final a = drafts.findAnnotation(
+          state.bookId!,
+          editedAnnotation!,
+          reader.annotations,
+        );
+        if (a == null) return;
+        notes.edit(a, args['note'] as String);
+        if (action != 'noteDraft') await notes.save(a.id);
+      default:
+        throw StateError('Unmigrated test action: $action');
+    }
+  }
+
   Future<void> verifyNote(String id, String note) async {
     final verification = ++_verification;
     final bookId = state.bookId!;
@@ -980,6 +868,38 @@ Future<void> _mainMenuSelect(
   await tester.pumpAndSettle();
 }
 
+Future<List<Map>> _chooseNativeMenu(
+  WidgetTester tester,
+  Finder trigger,
+  String? label, {
+  bool settle = true,
+}) async {
+  final previousPlatform = debugDefaultTargetPlatformOverride;
+  debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+  try {
+    var entries = <Map>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel(nativeMenuChannelName), (
+          call,
+        ) async {
+          if (call.method != 'show') return null;
+          entries = _nativeLeaves((call.arguments as Map)['entries'] as List);
+          return label == null
+              ? null
+              : entries.indexWhere((e) => e['label'] == label);
+        });
+    await tester.tap(trigger);
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+    }
+    return entries;
+  } finally {
+    debugDefaultTargetPlatformOverride = previousPlatform;
+  }
+}
+
 Future<void> _disposeHeaderApplication(
   WidgetTester tester,
   _ReaderFixture f,
@@ -1031,19 +951,13 @@ class _ControlledDictionary implements DictionaryService {
   );
 }
 
-List<Map> _lookupUpdates(_ReaderFixture f) => f.calls
-    .where(
-      (c) =>
-          c.method == 'popoverResult' && (c.arguments as Map)['lookup'] is Map,
-    )
-    .map((c) => c.arguments as Map)
-    .toList();
+List<Map> _lookupUpdates(_ReaderFixture f) => f.lookupUpdates;
 
 Future<void> _startLookup(_ReaderFixture f, String term) async {
   await f.event('selection', {
     'anchor': {'page': 0, 'textOffset': 0, 'textLength': term.length},
     'text': term,
-    'settled': true,
+    'settled': false,
   });
   final target = await f.reader.prepareLookup();
   expect(target, isNotNull);
@@ -1571,7 +1485,7 @@ void main() {
               !f.state.surfaceVisible,
         );
         f.onNativeCall = (call) async {
-          if (call.method == 'dismissPopover' && !entered.isCompleted) {
+          if (call.method == 'focusChrome' && !entered.isCompleted) {
             entered.complete();
             await proceed.future;
           }
@@ -2435,7 +2349,7 @@ void main() {
       () async {
         final f = await _ReaderFixture.create(fixture);
         try {
-          await f.openSelectionPopover();
+          await f.openSelectionNote();
           await f.action('searchSelection');
           await _until(() => f.dispatches.any((d) => d['action'] == 'search'));
           final old = f.dispatches.lastWhere(
@@ -2447,7 +2361,7 @@ void main() {
             'excerpt': 'ABC',
           });
           await f.event('searchDone', {'queryId': old});
-          await f.openSelectionPopover();
+          await f.openSelectionNote();
           await f.action('searchSelection');
           await _until(
             () =>
@@ -2580,9 +2494,10 @@ void main() {
           await _pumpUntil(
             tester,
             () => service.terms.length == (selectionAction ? 1 : 2),
+            settle: false,
           );
-          expect(f.popup['kind'], 'lookup');
-          expect(f.popup['lookupTerm'], 'ice cream');
+          expect(f.panelSnapshot['kind'], 'lookup');
+          expect(f.panelSnapshot['lookupTerm'], 'ice cream');
           final index = service.terms.length - 1;
           service.complete(index);
           await _pumpUntil(
@@ -2596,11 +2511,8 @@ void main() {
           await _readerAction(
             tester,
             () => selectionAction
-                ? f.event('popoverHidden', {
-                    'presentation': f.popup['presentation'],
-                    'keyboard': true,
-                  })
-                : f.reader.dismissPopover(),
+                ? f.reader.dismissReaderControls()
+                : f.reader.dismissReaderControls(),
           );
           await _pumpUntil(
             tester,
@@ -2667,7 +2579,7 @@ void main() {
     'outside dismissal',
     'Notebook',
     'book switch',
-    'different popover',
+    'different panel',
   ]) {
     test(
       'dictionary $transition invalidates pending replies without reopening or focusing',
@@ -2679,11 +2591,9 @@ void main() {
           await _until(() => service.terms.isNotEmpty);
           switch (transition) {
             case 'dismiss':
-              await f.reader.dismissPopover();
+              await f.reader.dismissReaderControls();
             case 'outside dismissal':
-              await f.event('popoverHidden', {
-                'presentation': f.popup['presentation'],
-              });
+              await f.reader.dismissReaderControls();
             case 'Notebook':
               await f.reader.suspend();
             case 'book switch':
@@ -2691,8 +2601,8 @@ void main() {
                   .read(workspaceControllerProvider.notifier)
                   .openPath(p.absolute('test/fixtures/mixed-pages.pdf'));
               await f.reader.open(next.books.single.id);
-            case 'different popover':
-              await f.reader.showPopover('speech');
+            case 'different panel':
+              await f.reader.showGoTo();
           }
           final calls = f.calls.length;
           service.complete(0);
@@ -2705,7 +2615,7 @@ void main() {
                     'popover',
                     'popoverResult',
                     'focus',
-                    'dismissPopover',
+                    'dismissReaderControls',
                   ].contains(c.method),
                 ),
             isEmpty,
@@ -2746,309 +2656,6 @@ void main() {
         expect(service.terms.toSet(), {'café au lait'});
         expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
       } finally {
-        await f.dispose();
-      }
-    },
-  );
-
-  for (final kind in ['selection', 'speech', 'goto']) {
-    test(
-      'native $kind dismissal releases current ownership and rejects stale hidden events',
-      () async {
-        final f = await _ReaderFixture.create('text.pdf');
-        final events = <Map>[];
-        final subscription = f.reader.events.stream.listen(events.add);
-        try {
-          await f.openSelectionPopover();
-          if (kind != 'selection') await f.reader.showPopover(kind);
-          final owner = f.popup['presentation'];
-          f.calls.clear();
-          await f.event('popoverHidden', {
-            'presentation': owner - 1,
-            'keyboard': true,
-          });
-          expect(f.calls.where((c) => c.method == 'capturePopover'), isEmpty);
-          await f.event('key', {'key': 'F9'});
-          expect(events.where((e) => e['type'] == 'key'), isEmpty);
-          await f.event('popoverHidden', {
-            'presentation': owner,
-            'keyboard': true,
-          });
-          final capture = f.calls.singleWhere(
-            (c) => c.method == 'capturePopover',
-          );
-          expect((capture.arguments as Map)['seal'], true);
-          expect((capture.arguments as Map)['presentation'], owner);
-          final dismiss = f.calls.singleWhere(
-            (c) => c.method == 'dismissPopover',
-          );
-          expect((dismiss.arguments as Map)['restoreFocus'], true);
-          expect(f.calls.indexOf(capture), lessThan(f.calls.indexOf(dismiss)));
-          await f.event('key', {'key': 'F9'});
-          await _until(() => events.any((e) => e['type'] == 'key'));
-          expect(events.where((e) => e['type'] == 'key').single['key'], 'F9');
-          expect(f.state.selection?['text'], 'ABC');
-          expect(f.dispatches.where((d) => d['action'] == 'goto'), isEmpty);
-          await f.reader.showPopover('speech');
-          f.calls.clear();
-          await f.event('popoverHidden', {
-            'presentation': owner,
-            'keyboard': true,
-          });
-          expect(f.calls.where((c) => c.method == 'capturePopover'), isEmpty);
-          await f.event('key', {'key': 'F9'});
-          expect(events.where((e) => e['type'] == 'key'), hasLength(1));
-        } finally {
-          await subscription.cancel();
-          await f.dispose();
-        }
-      },
-    );
-  }
-
-  test(
-    'native hidden capture failure retains protected creation until a sealed retry',
-    () async {
-      late AnnotationStoreGate gate;
-      final f = await _ReaderFixture.create(
-        'text.pdf',
-        wrapStore: (store) => gate = AnnotationStoreGate(store),
-      );
-      final events = <Map>[];
-      final subscription = f.reader.events.stream.listen(events.add);
-      try {
-        gate.failPut = true;
-        await f.openSelectionPopover();
-        final anchor = jsonEncode(f.state.selection!['anchor']);
-        await f.action('noteDraft', {
-          'note': 'Already protected failed creation',
-        });
-        await _until(() => f.drafts.drafts.values.any((d) => d.error != null));
-        final id = f.drafts.drafts.keys.single;
-        final presentation = f.popup['presentation'];
-        f.onNativeCall = (call) async {
-          if (call.method == 'capturePopover') {
-            throw PlatformException(code: 'capture-failed');
-          }
-          return null;
-        };
-        f.calls.clear();
-        await f.event('popoverHidden', {
-          'presentation': presentation,
-          'keyboard': true,
-        });
-        await _until(() => f.state.warning?.contains('capture-failed') == true);
-        expect(f.calls.where((c) => c.method == 'dismissPopover'), isEmpty);
-        expect(f.drafts.drafts[id]!.text, 'Already protected failed creation');
-        await f.event('key', {'key': 'F9'});
-        expect(events.where((e) => e['type'] == 'key'), isEmpty);
-        f.onNativeCall = (call) async {
-          if (call.method == 'capturePopover') {
-            return {
-              ...call.arguments as Map,
-              'revision': 4,
-              'note': 'Latest local text after native delivery failed',
-              'color': 'yellow',
-            };
-          }
-          return null;
-        };
-        await f.reader.dismissPopover(restoreFocus: false);
-        expect(f.drafts.drafts.keys, [id]);
-        expect(
-          f.drafts.drafts[id]!.text,
-          'Latest local text after native delivery failed',
-        );
-        expect(jsonEncode(f.drafts.sources[id]!.anchor), anchor);
-        expect(
-          (f.calls.lastWhere((c) => c.method == 'dismissPopover').arguments
-              as Map)['restoreFocus'],
-          false,
-        );
-        gate.failPut = false;
-        await f.notes.flush();
-        final saved =
-            (await f.store.call('annotations', f.state.bookId) as List).single
-                as Map;
-        expect(saved['id'], id);
-        expect(saved['note'], 'Latest local text after native delivery failed');
-        expect(jsonEncode(saved['anchor']), anchor);
-      } finally {
-        gate.failPut = false;
-        f.onNativeCall = null;
-        await subscription.cancel();
-        await f.dispose();
-      }
-    },
-  );
-
-  test(
-    'native keyboard dismissal cannot restore reader focus over a later Notebook handoff',
-    () async {
-      final f = await _ReaderFixture.create('text.pdf');
-      final entered = Completer<void>(), release = Completer<void>();
-      final events = <Map>[];
-      final subscription = f.reader.events.stream.listen(events.add);
-      Future<void>? hidden;
-      try {
-        await f.openSelectionPopover();
-        final presentation = f.popup['presentation'];
-        f.onNativeCall = (call) async {
-          if (call.method == 'capturePopover') {
-            if (!entered.isCompleted) entered.complete();
-            await release.future;
-          }
-          return null;
-        };
-        f.calls.clear();
-        hidden = f.event('popoverHidden', {
-          'presentation': presentation,
-          'keyboard': true,
-        });
-        await entered.future.timeout(const Duration(seconds: 5));
-        f.container.read(bookPresentationProvider.notifier)
-          ..enterBook(f.state.bookId!, BookView.split)
-          ..focusPane(f.state.bookId!, BookPane.notebook);
-        await f.reader.focusChrome();
-        f.nativeFocused = false;
-        release.complete();
-        await hidden;
-        final dismiss = f.calls.singleWhere(
-          (c) => c.method == 'dismissPopover',
-        );
-        expect((dismiss.arguments as Map)['restoreFocus'], false);
-        expect(events.where((e) => e['type'] == 'focusBook'), isEmpty);
-        expect(
-          f.container.read(bookPresentationProvider).lastPane,
-          BookPane.notebook,
-        );
-      } finally {
-        if (!release.isCompleted) release.complete();
-        await hidden;
-        f.onNativeCall = null;
-        await subscription.cancel();
-        await f.dispose();
-      }
-    },
-  );
-
-  for (final action in ['search', 'lookup']) {
-    test(
-      'selection $action handoff preserves a failed note draft and refuses failed capture',
-      () async {
-        late AnnotationStoreGate gate;
-        final f = await _ReaderFixture.create(
-          'text.pdf',
-          wrapStore: (s) => gate = AnnotationStoreGate(s),
-        );
-        try {
-          gate.failPut = true;
-          await f.openSelectionPopover();
-          await f.action('noteDraft', {'note': 'Keep this failed draft'});
-          await _until(
-            () => f.drafts.drafts.values.any((d) => d.error != null),
-          );
-          if (action == 'search') {
-            await f.reader.searchSelection();
-          } else {
-            expect(await f.reader.prepareLookup(), isNotNull);
-          }
-          expect(f.drafts.drafts.values.single.text, 'Keep this failed draft');
-          await f.openSelectionPopover();
-          f.onNativeCall = (call) async {
-            if (call.method == 'capturePopover') {
-              throw PlatformException(code: 'capture-failed');
-            }
-            return null;
-          };
-          final visible = f.search.active;
-          await expectLater(
-            action == 'search'
-                ? f.reader.searchSelection()
-                : f.reader.prepareLookup(),
-            throwsA(anything),
-          );
-          expect(f.search.active, visible);
-          expect(f.drafts.drafts.values.single.text, 'Keep this failed draft');
-          f.onNativeCall = null;
-          gate.failPut = false;
-          await f.notes.flush();
-        } finally {
-          gate.failPut = false;
-          f.onNativeCall = null;
-          await f.dispose();
-        }
-      },
-    );
-  }
-
-  testWidgets(
-    'lookup presentation retry resumes the original term after native failure',
-    (tester) async {
-      final service = _ControlledDictionary();
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf', dictionary: service);
-      });
-      try {
-        await _readerAction(tester, () async {
-          await f.openSelectionPopover();
-          final target = await f.reader.prepareLookup();
-          f.onNativeCall = (call) async {
-            if (call.method == 'popover') {
-              await f.event('popoverHidden', {
-                'presentation': (call.arguments as Map)['presentation'],
-              });
-              throw PlatformException(code: 'popover-timeout');
-            }
-            return null;
-          };
-          await f.reader.lookup(target!);
-        });
-        expect(f.state.popoverError, isNotNull);
-        expect(service.terms, isEmpty);
-        f.onNativeCall = null;
-        await _readerAction(tester, f.reader.retryPopover);
-        await _pumpUntil(tester, () => service.terms.isNotEmpty);
-        expect(service.terms, ['ABC']);
-        service.complete(0);
-        await _pumpUntil(
-          tester,
-          () => _lookupUpdates(f).last['lookup']['status'] == 'ready',
-        );
-      } finally {
-        f.onNativeCall = null;
-        await _readerAction(tester, f.dispose);
-      }
-    },
-  );
-
-  test(
-    'no-text selections and cancelled lookup presentations never send requests',
-    () async {
-      final service = _ControlledDictionary();
-      final f = await _ReaderFixture.create(
-        'image-only.pdf',
-        dictionary: service,
-      );
-      try {
-        await f.reader.searchSelection();
-        expect(f.search.active, isFalse);
-        expect(await f.reader.prepareLookup(), isNull);
-        expect(service.terms, isEmpty);
-        await f.openSelectionPopover();
-        final target = await f.reader.prepareLookup();
-        f.onNativeCall = (call) async {
-          if (call.method == 'popover') {
-            throw PlatformException(code: 'popover-cancelled');
-          }
-          return null;
-        };
-        await f.reader.lookup(target!);
-        expect(service.terms, isEmpty);
-        f.onNativeCall = null;
-      } finally {
-        f.onNativeCall = null;
         await f.dispose();
       }
     },
@@ -3171,45 +2778,6 @@ void main() {
   );
 
   test(
-    'appearance menu seals draft ownership and closes with route and geometry changes',
-    () async {
-      final f = await _ReaderFixture.create('text.pdf');
-      var dismissed = 0;
-      Future<void> dismiss() async {
-        dismissed++;
-      }
-
-      try {
-        await f.openSelectionPopover();
-        f.calls.clear();
-        final owner = await f.reader.prepareAppearanceMenu(dismiss: dismiss);
-        expect(owner, isNotNull);
-        expect(f.reader.ownsAppearanceMenu(owner!), true);
-        final capture = f.calls.singleWhere(
-          (c) => c.method == 'capturePopover',
-        );
-        final hide = f.calls.singleWhere((c) => c.method == 'dismissPopover');
-        expect((capture.arguments as Map)['seal'], true);
-        expect(f.calls.indexOf(capture), lessThan(f.calls.indexOf(hide)));
-        await f.reader.show(false);
-        expect(dismissed, 1);
-        expect(f.reader.ownsAppearanceMenu(owner), false);
-        await f.reader.show(true);
-        final resized = await f.reader.prepareAppearanceMenu(dismiss: dismiss);
-        expect(resized, isNotNull);
-        await f.reader.updateViewport(
-          const Rect.fromLTWH(0, 0, 720, 500),
-          bookId: f.state.bookId!,
-        );
-        expect(dismissed, 2);
-        expect(f.reader.ownsAppearanceMenu(resized!), false);
-      } finally {
-        await f.dispose();
-      }
-    },
-  );
-
-  test(
     'appearance menu excludes queued publication focus and shortcut input until dismissal',
     () async {
       final f = await _ReaderFixture.create('text.pdf');
@@ -3255,39 +2823,6 @@ void main() {
   );
 
   test(
-    'appearance menu refuses failed draft handoff and never dismisses its editor',
-    () async {
-      final f = await _ReaderFixture.create('text.pdf');
-      var dismissed = false;
-      try {
-        await f.openSelectionPopover();
-        final presentation = f.reader.presentationId;
-        f.calls.clear();
-        f.onNativeCall = (call) async {
-          if (call.method == 'capturePopover') {
-            throw PlatformException(code: 'capture-failed');
-          }
-          return null;
-        };
-        await expectLater(
-          f.reader.prepareAppearanceMenu(
-            dismiss: () async {
-              dismissed = true;
-            },
-          ),
-          throwsException,
-        );
-        expect(dismissed, false);
-        expect(f.reader.presentationId, presentation);
-        expect(f.calls.where((c) => c.method == 'dismissPopover'), isEmpty);
-      } finally {
-        f.onNativeCall = null;
-        await f.dispose();
-      }
-    },
-  );
-
-  test(
     'current page no-text status clears on text pages and never disables document search',
     () async {
       final f = await _ReaderFixture.create('text.pdf');
@@ -3320,12 +2855,12 @@ void main() {
       final service = _ControlledDictionary();
       final f = await _ReaderFixture.create('text.pdf', dictionary: service);
       try {
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         final target = await f.reader.prepareLookup();
-        await f.reader.showPopover('speech');
+        await f.reader.showGoTo();
         await f.reader.lookup(target!);
-        expect(f.popup['kind'], 'speech');
-        await f.openSelectionPopover();
+        expect(f.panelSnapshot['kind'], 'goto');
+        await f.openSelectionNote();
         final leaving = await f.reader.prepareLookup();
         await f.reader.suspend();
         await f.reader.lookup(leaving!);
@@ -3678,27 +3213,8 @@ void main() {
         await tester.pumpAndSettle();
         await _readerAction(
           tester,
-          () => f.openAnnotationPopover(f.reader.annotations.single),
+          () => f.openAnnotationNote(f.reader.annotations.single),
         );
-        f.onNativeCall = (call) async {
-          if (call.method == 'capturePopover') {
-            throw PlatformException(code: 'capture-failed');
-          }
-          return null;
-        };
-        await _mainMenuSelect(tester, 'Notebook');
-        await _closeActionError(tester);
-        expect(
-          f.container
-              .read(appRouterProvider)
-              .routeInformationProvider
-              .value
-              .uri
-              .path,
-          '/read/$id',
-        );
-        expect(f.drafts.drafts.values.single.text, 'Protected B');
-        f.onNativeCall = null;
         await _mainMenuSelect(tester, 'Notebook');
         await _pumpUntil(
           tester,
@@ -3737,80 +3253,6 @@ void main() {
       }
     },
   );
-  for (final platform in [TargetPlatform.linux, TargetPlatform.windows]) {
-    testWidgets(
-      'view modes real Flutter fallback keeps icons, checks and keyboard dismissal on $platform',
-      (tester) async {
-        late _ReaderFixture f;
-        await _readerAction(tester, () async {
-          f = await _ReaderFixture.create(
-            'text.pdf',
-            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
-          );
-        });
-        try {
-          await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
-          debugDefaultTargetPlatformOverride = platform;
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-              .setMockMethodCallHandler(
-                const MethodChannel(nativeMenuChannelName),
-                (call) async {
-                  if (call.method == 'show') {
-                    throw PlatformException(code: 'unavailable');
-                  }
-                  return null;
-                },
-              );
-          await tester.tap(find.byTooltip('View'));
-          await _pumpUntil(
-            tester,
-            () => find.text('Notebook').evaluate().isNotEmpty,
-          );
-          expect(find.byIcon(BusyBooksGlyphs.notebookView), findsOneWidget);
-          expect(find.byIcon(BusyBooksGlyphs.splitView), findsOneWidget);
-          expect(find.byIcon(BusyBooksGlyphs.previewView), findsWidgets);
-          expect(find.byIcon(BusyBooksGlyphs.annotations), findsNothing);
-          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-          await tester.pumpAndSettle();
-          expect(
-            find.widgetWithText(PopupMenuItem<BookView>, 'Notebook'),
-            findsNothing,
-          );
-          expect(FocusManager.instance.primaryFocus?.context?.mounted, true);
-          await _readerAction(
-            tester,
-            () =>
-                f.searchController.open(category: BookSearchCategory.bookText),
-          );
-          await tester.tap(find.byTooltip('Main Menu'));
-          await tester.pumpAndSettle();
-          final view = find.widgetWithText(SubmenuButton, 'View');
-          await _pumpUntil(tester, () => view.evaluate().isNotEmpty);
-          expect(view, findsOneWidget);
-          await tester.tap(view);
-          await tester.pumpAndSettle();
-          final notebook = find.widgetWithText(MenuItemButton, 'Notebook');
-          expect(notebook, findsOneWidget);
-          expect(
-            find.descendant(
-              of: notebook,
-              matching: find.byIcon(BusyBooksGlyphs.notebookView),
-            ),
-            findsOneWidget,
-          );
-          await tester.tap(notebook);
-          await _pumpUntil(
-            tester,
-            () => find.byType(NotebookContent).evaluate().isNotEmpty,
-          );
-          expect(tester.takeException(), isNull);
-        } finally {
-          debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-          await _disposeHeaderApplication(tester, f);
-        }
-      },
-    );
-  }
   testWidgets(
     'view modes Notebook native header catalog changes and missing resources use its dedicated fallback',
     (tester) async {
@@ -4119,68 +3561,6 @@ void main() {
   );
 
   testWidgets(
-    'right header shared fallback menu supports keyboard selection, Escape and focus return',
-    (tester) async {
-      final window = WindowControlService(nativeWindow: _HeaderWindow());
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf', windowControls: window);
-      });
-      try {
-        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
-        tester.view.physicalSize = const Size(540, 850);
-        await tester.pumpAndSettle();
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(
-              const MethodChannel(nativeMenuChannelName),
-              (c) async {
-                if (c.method == 'show') {
-                  throw PlatformException(code: 'unavailable');
-                }
-                return null;
-              },
-            );
-        await tester.tap(find.byTooltip('Main Menu'));
-        await tester.pumpAndSettle();
-        expect(
-          find.widgetWithText(MenuItemButton, 'Full Screen'),
-          findsOneWidget,
-        );
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        await tester.pumpAndSettle();
-        expect(
-          find.widgetWithText(MenuItemButton, 'Full Screen'),
-          findsNothing,
-        );
-        await tester.tap(find.byTooltip('Main Menu'));
-        await tester.pumpAndSettle();
-        String? focused() {
-          final item = FocusManager.instance.primaryFocus?.context
-              ?.findAncestorWidgetOfExactType<MenuItemButton>();
-          return item?.child is Text ? (item!.child as Text).data : null;
-        }
-
-        for (var i = 0; i < 45 && focused() != 'Full Screen'; i++) {
-          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-          await tester.pumpAndSettle();
-        }
-        expect(focused(), 'Full Screen');
-        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-        await tester.pumpAndSettle();
-        expect(window.isFullScreen, true);
-        expect(
-          find.widgetWithText(MenuItemButton, 'Full Screen'),
-          findsNothing,
-        );
-        expect(FocusManager.instance.primaryFocus?.context?.mounted, true);
-        expect(tester.takeException(), isNull);
-      } finally {
-        await _disposeHeaderApplication(tester, f);
-      }
-    },
-  );
-
-  testWidgets(
     'right header fallback, grouped checks and external Full Screen state are truthful',
     (tester) async {
       final native = _HeaderWindow();
@@ -4436,17 +3816,14 @@ void main() {
               return null;
             });
         await tester.tap(find.byTooltip('Main Menu'));
-        await _pumpUntil(
-          tester,
-          () => find
-              .widgetWithText(MenuItemButton, 'Full Screen')
-              .evaluate()
-              .isNotEmpty,
+        await tester.pump();
+        expect(find.byType(MenuItemButton), findsNothing);
+        expect(find.byType(PopupMenuItem<String>), findsNothing);
+        expect(
+          find.text('The menu could not be opened. Please try again.'),
+          findsOneWidget,
         );
-        expect(find.text('Error'), findsNothing);
         expect(f.state.error, isNull);
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        await tester.pumpAndSettle();
         await _mainMenuSelect(tester, null);
         expect(tester.takeException(), isNull);
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -4528,33 +3905,9 @@ void main() {
         expect(gate.calls.length, before);
         await _readerAction(
           tester,
-          () => f.openAnnotationPopover(f.reader.annotations.single),
+          () => f.openAnnotationNote(f.reader.annotations.single),
         );
-        f.onNativeCall = (call) async {
-          if (call.method == 'capturePopover') {
-            throw PlatformException(code: 'capture-failed');
-          }
-          return null;
-        };
         choose = 'Notebook';
-        await tester.tap(find.byTooltip('View'));
-        await _pumpUntil(
-          tester,
-          () => find.text('Error').evaluate().isNotEmpty,
-        );
-        expect(
-          f.container
-              .read(appRouterProvider)
-              .routeInformationProvider
-              .value
-              .uri
-              .path,
-          startsWith('/read/'),
-        );
-        expect(f.state.ready, true);
-        expect(f.notes.state.drafts.values.single.text, 'Protected B');
-        await _closeActionError(tester);
-        f.onNativeCall = null;
         await tester.tap(find.byTooltip('View'));
         await _pumpUntil(
           tester,
@@ -4582,9 +3935,9 @@ void main() {
         );
       });
       final entered = Completer<void>(), proceed = Completer<void>();
-      await _readerAction(tester, f.openSelectionPopover);
+      await _readerAction(tester, f.openSelectionNote);
       f.onNativeCall = (call) async {
-        if (call.method == 'capturePopover') {
+        if (call.method == 'focusChrome') {
           if (!entered.isCompleted) entered.complete();
           await proceed.future;
         }
@@ -4792,7 +4145,7 @@ void main() {
           await _pumpUntil(
             tester,
             () =>
-                find.byType(CircularProgressIndicator).evaluate().isEmpty &&
+                find.byType(YaruCircularProgressIndicator).evaluate().isEmpty &&
                 (!f.search.active ||
                     f.search.category == BookSearchCategory.bookText ||
                     !f.search.loading),
@@ -4884,11 +4237,13 @@ void main() {
           final trigger = tester.getRect(_headerButton(label));
           f.calls.clear();
           await tester.tap(_headerButton(label));
-          await _pumpUntil(
-            tester,
-            () => find.text('Page color').evaluate().isNotEmpty,
+          await _pumpUntil(tester, () => requests.isNotEmpty);
+          expect(find.byType(MenuAnchor), findsNothing);
+          expect(
+            find.text('The menu could not be opened. Please try again.'),
+            findsOneWidget,
           );
-          expect(f.state.popoverError, isNull);
+          expect(f.state.error, isNull);
           expect(f.state.ready, true);
           expect(f.state.error, isNull);
           expect(f.state.location, location);
@@ -5244,20 +4599,13 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        await tester.tap(
+        final entries = await _chooseNativeMenu(
+          tester,
           find.byKey(const ValueKey('reader-sidebar-view-menu')),
+          null,
         );
-        await tester.pumpAndSettle();
         expect(
-          tester
-              .widget<BusyBooksPopupMenuItem<BookSidebarPanel>>(
-                find.byWidgetPredicate(
-                  (w) =>
-                      w is BusyBooksPopupMenuItem<BookSidebarPanel> &&
-                      w.menuValue == BookSidebarPanel.outline,
-                ),
-              )
-              .shortcut,
+          entries.singleWhere((e) => e['label'] == 'Outline')['shortcut'],
           const BusyBooksKeyBinding(
             LogicalKeyboardKey.f8,
             control: true,
@@ -5265,8 +4613,6 @@ void main() {
             alt: true,
           ).label,
         );
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox());
@@ -5541,7 +4887,7 @@ void main() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Saved A');
         highlight = f.reader.annotations.single;
         await f.checkedEvent('location', {
@@ -5591,17 +4937,16 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.textContaining('Protected B'), findsOneWidget);
         final row = find.byKey(ValueKey('annotation-row-${highlight.id}'));
-        await tester.tap(
+        gate.fail = false;
+        gate.failDelete = true;
+        await _chooseNativeMenu(
+          tester,
           find.descendant(
             of: row,
             matching: find.byType(BusyBooksHeaderPopupMenuButton<String>),
           ),
+          'Delete',
         );
-        await tester.pumpAndSettle();
-        gate.fail = false;
-        gate.failDelete = true;
-        await tester.tap(find.text('Delete'));
-        await tester.pumpAndSettle();
         await tester.tap(
           find
               .descendant(
@@ -5638,65 +4983,6 @@ void main() {
         gate.fail = false;
         gate.failDelete = false;
         await tester.pumpWidget(const SizedBox());
-        await _readerAction(tester, f.dispose);
-      }
-    },
-  );
-  testWidgets(
-    'sidebar switching captures rejected local note input before native dismissal',
-    (tester) async {
-      late _ReaderFixture f;
-      late ReadingAnnotation annotation;
-      final delivered = <Map>[], rejected = <Map>[];
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-        await f.openSelectionPopover();
-        await f.reader.annotation('highlight', note: 'Saved A');
-        annotation = f.reader.annotations.single;
-        await f.openAnnotationPopover(annotation);
-      });
-      _connectPopover(
-        f,
-        delivered: delivered,
-        rejected: rejected,
-        rejectActions: {'noteDraft'},
-      );
-      try {
-        await tester.pumpWidget(const ReaderPopoverApp());
-        await _popupUpdate(tester, f.popup);
-        await tester.enterText(find.byType(TextField), 'Accepted local B');
-        await _pumpUntil(tester, () => rejected.isNotEmpty);
-        expect(f.drafts.drafts[annotation.id], isNull);
-        await _readerAction(
-          tester,
-          () => f.sidebarController.selectPanel(BookSidebarPanel.marks),
-        );
-        expect(f.drafts.effectiveNote(annotation), 'Accepted local B');
-        expect(f.sidebar.panel.preference, 'annotations');
-        await _readerAction(tester, f.notes.flush);
-        expect(
-          (await tester.runAsync(
-                    () => f.store.call('annotations', f.state.bookId),
-                  )
-                  as List)
-              .single['note'],
-          'Accepted local B',
-        );
-        await _readerAction(
-          tester,
-          () => f.openAnnotationPopover(f.reader.annotations.single),
-        );
-        await _popupUpdate(tester, f.popup);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Accepted local B',
-        );
-        expect(tester.takeException(), isNull);
-      } finally {
-        f.onNativeCall = null;
-        await tester.pumpWidget(const SizedBox());
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(readerPopoverChannel, null);
         await _readerAction(tester, f.dispose);
       }
     },
@@ -5749,14 +5035,14 @@ void main() {
           maxScrolls: 30,
         );
         await tester.pumpAndSettle();
-        await tester.tap(
+        await _chooseNativeMenu(
+          tester,
           find.descendant(
             of: row,
             matching: find.byType(BusyBooksHeaderPopupMenuButton<String>),
           ),
+          'Edit Note',
         );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Edit Note'));
         await _pumpUntil(
           tester,
           () => find.byType(NotebookContent).evaluate().isNotEmpty,
@@ -5993,13 +5279,12 @@ void main() {
         });
         final menu = find.byKey(const ValueKey('reader-sidebar-view-menu'));
         expect(menu, findsOneWidget);
-        await tester.tap(menu);
-        await tester.pumpAndSettle();
-        expect(find.text('Outline'), findsOneWidget);
-        expect(find.text('Thumbnails'), findsOneWidget);
-        expect(find.text('Books'), findsNothing);
-        await tester.tap(find.text('Outline'));
-        await tester.pumpAndSettle();
+        final entries = await _chooseNativeMenu(tester, menu, 'Outline');
+        expect(
+          entries.map((e) => e['label']),
+          containsAll(['Outline', 'Thumbnails']),
+        );
+        expect(entries.any((e) => e['label'] == 'Books'), isFalse);
         expect((f.sidebar.open || f.search.active), isTrue);
         expect(tester.takeException(), isNull);
       } finally {
@@ -6311,19 +5596,18 @@ void main() {
           for (final width in [1200.0, 1000.0]) {
             tester.view.physicalSize = Size(width, 850);
             await tester.pumpAndSettle();
-            final bounds = tester.getRect(location);
             await tester.tap(location);
             await _pumpUntil(
               tester,
-              () =>
-                  f.calls.where((c) => c.method == 'popover').isNotEmpty &&
-                  f.popup['x'] == bounds.left,
+              () => find.byType(ReaderInformationPanel).evaluate().isNotEmpty,
             );
-            expect(f.popup['kind'], 'goto');
-            expect(f.popup['x'], closeTo(bounds.left, .01));
-            expect(f.popup['y'], closeTo(bounds.top, .01));
-            expect(f.popup['location'], anchor);
-            await _readerAction(tester, f.reader.dismissPopover);
+            expect(f.state.panel!.kind, ReaderPanelKind.goTo);
+            expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
+            expect(
+              tester.getRect(find.byType(ReaderInformationPanel)).top,
+              greaterThan(tester.getRect(location).bottom),
+            );
+            await _readerAction(tester, f.reader.dismissReaderControls);
             expect(f.state.location, anchor);
           }
           await _readerAction(
@@ -6525,308 +5809,6 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         await _readerAction(tester, f.dispose);
       }
-    },
-  );
-  testWidgets(
-    'Go To native contract waits for payload paint and raster readiness and ignores replaced frames',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 420);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-        await f.event('metadata', {
-          'pages': 3,
-          'labels': ['i', 'ii', '1'],
-          'fixed': true,
-        });
-      });
-      final gate = _PresentationGate()..allowReady = false;
-      _connectPopover(f, presentation: gate);
-      await tester.pumpWidget(const ReaderPopoverApp());
-      var finished = false;
-      final opening = f.reader.showPopover('goto').then((_) => finished = true);
-      await _pumpUntil(tester, () => gate.payload != null);
-      expect(finished, isFalse);
-      expect(find.byType(TextField), findsNothing);
-      gate.allowReady = true;
-      gate.ready();
-      await tester.pumpAndSettle();
-      expect(find.text('Go'), findsOneWidget);
-      expect(find.byType(TextField), findsOneWidget);
-      expect(finished, isFalse);
-      expect(gate.visible, isEmpty);
-      gate.frame.complete();
-      await _pumpUntil(tester, () => finished);
-      await opening;
-      expect(gate.visible, [f.popup['presentation']]);
-      final old = Map<String, dynamic>.from(f.popup);
-      gate.frame = Completer<void>();
-      var replaced = false;
-      final next = f.reader
-          .showPopover(
-            'speech',
-            extra: const {
-              'voices': [''],
-              'voice': '',
-              'speed': 1,
-            },
-          )
-          .then((_) => replaced = true);
-      await _pumpUntil(tester, () => gate.payload?['kind'] == 'speech');
-      gate.painted(old);
-      expect(replaced, isFalse);
-      gate.frame.complete();
-      await _pumpUntil(tester, () => replaced);
-      await next;
-      expect(find.text('Voice and Speed'), findsOneWidget);
-      await _readerAction(tester, f.reader.dismissPopover);
-      expect(f.state.popoverError, isNull);
-      await tester.pumpWidget(const SizedBox());
-      await _readerAction(tester, f.dispose);
-    },
-  );
-  testWidgets(
-    'Go To reports a child build failure to the primary and retries without a fatal book error',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 420);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-        await f.event('metadata', {
-          'pages': 3,
-          'labels': ['i', 'ii', '1'],
-          'fixed': true,
-        });
-      });
-      final gate = _PresentationGate()..overrides = {'toc': 7};
-      _connectPopover(f, presentation: gate);
-      await tester.pumpWidget(const ReaderPopoverApp());
-      var done = false;
-      final request = f.reader.showPopover('goto').then((_) => done = true);
-      await _pumpUntil(tester, () => done);
-      await request;
-      expect(tester.takeException(), isNotNull);
-      expect(f.state.popoverError, isNotNull);
-      expect(f.state.ready, isTrue);
-      expect(f.state.error, isNull);
-      expect(gate.visible, isEmpty);
-      gate.overrides = {};
-      gate.frame.complete();
-      await _readerAction(tester, f.reader.retryPopover, widgetClock: true);
-      expect(f.state.popoverError, isNull);
-      expect(find.text('Go'), findsOneWidget);
-      await _readerAction(tester, f.reader.dismissPopover, widgetClock: true);
-      await tester.pumpWidget(const SizedBox());
-      await _readerAction(tester, f.dispose);
-    },
-  );
-  testWidgets(
-    'Go To keeps the form on navigation failure and closes only on a successful correlated result',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 420);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-        await f.event('metadata', {
-          'pages': 3,
-          'labels': ['i', 'ii', '1'],
-          'fixed': true,
-        });
-      });
-      final gate = _PresentationGate();
-      gate.frame.complete();
-      _connectPopover(f, presentation: gate);
-      await tester.pumpWidget(const ReaderPopoverApp());
-      await _readerAction(
-        tester,
-        () => f.reader.showPopover('goto'),
-        widgetClock: true,
-      );
-      var fail = true;
-      f.onDispatch = (command) async {
-        if (command['action'] == 'goto') {
-          await f.checkedEvent('navigationResult', {
-            'request': command['request'],
-            if (fail) 'message': 'Injected page failure',
-          });
-        }
-      };
-      final prior = f.popup['presentation'];
-      await tester.enterText(find.byType(TextField), '1');
-      await tester.tap(find.text('Go'));
-      await _pumpUntil(
-        tester,
-        () =>
-            find.textContaining('Injected page failure').evaluate().isNotEmpty,
-      );
-      expect(f.popup['presentation'], prior);
-      expect(gate.payload, isNotNull);
-      fail = false;
-      await tester.tap(find.text('Go'));
-      await _pumpUntil(tester, () => gate.payload == null);
-      expect(f.state.error, isNull);
-      await _readerAction(tester, f.reader.dismissPopover, widgetClock: true);
-      await tester.pumpWidget(const SizedBox());
-      await _readerAction(tester, f.dispose);
-    },
-  );
-  testWidgets(
-    'Go To cancellation before ready and a late stale frame cannot reveal a replaced presentation',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 420);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-      });
-      final gate = _PresentationGate()..allowReady = false;
-      _connectPopover(f, presentation: gate);
-      await tester.pumpWidget(const ReaderPopoverApp());
-      var done = false;
-      final opening = f.reader.showPopover('goto').then((_) => done = true);
-      await _pumpUntil(tester, () => gate.payload != null);
-      final old = Map<String, dynamic>.from(gate.payload!);
-      await _readerAction(tester, f.reader.dismissPopover, widgetClock: true);
-      await _pumpUntil(tester, () => done);
-      await opening;
-      gate.allowReady = true;
-      gate.ready();
-      gate.painted(old);
-      gate.frame.complete();
-      await tester.pumpAndSettle();
-      expect(gate.visible, isEmpty);
-      expect(f.state.popoverError, isNull);
-      await _readerAction(
-        tester,
-        () => f.reader.showPopover('goto'),
-        widgetClock: true,
-      );
-      expect(gate.visible, [f.popup['presentation']]);
-      expect(f.popup['presentation'], isNot(old['presentation']));
-      await _readerAction(tester, f.reader.dismissPopover, widgetClock: true);
-      await tester.pumpWidget(const SizedBox());
-      await _readerAction(tester, f.dispose);
-    },
-  );
-  testWidgets(
-    'Go To presentation timeout retains a primary retry and rejects the late frame',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 420);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-      });
-      final gate = _PresentationGate();
-      _connectPopover(f, presentation: gate);
-      await tester.pumpWidget(const ReaderPopoverApp());
-      var done = false;
-      final opening = f.reader.showPopover('goto').then((_) => done = true);
-      await _pumpUntil(tester, () => gate.payload != null);
-      final old = Map<String, dynamic>.from(gate.payload!);
-      await tester.pump(const Duration(seconds: 18));
-      await _pumpUntil(tester, () => done);
-      await opening;
-      expect(f.state.popoverError, isNotNull);
-      expect(f.state.ready, isTrue);
-      gate.painted(old);
-      gate.frame.complete();
-      await tester.pumpAndSettle();
-      expect(gate.visible, isEmpty);
-      await _readerAction(tester, f.reader.retryPopover, widgetClock: true);
-      expect(f.state.popoverError, isNull);
-      expect(gate.visible, [f.popup['presentation']]);
-      await _readerAction(tester, f.reader.dismissPopover, widgetClock: true);
-      await tester.pumpWidget(const SizedBox());
-      await _readerAction(tester, f.dispose);
-    },
-  );
-  testWidgets(
-    'Go To retry waits for error-banner geometry before asking the native host to present',
-    (tester) async {
-      tester.view.physicalSize = const Size(1100, 850);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-      });
-      Completer<void>? pending;
-      var first = true, cancelledByBounds = false;
-      f.onNativeCall = (call) async {
-        if (call.method == 'popover') {
-          if (first) {
-            first = false;
-            throw PlatformException(code: 'popover-unavailable');
-          }
-          pending = Completer<void>();
-          return pending!.future;
-        }
-        // Matches both production reader hosts: geometry updates dismiss controls.
-        if (call.method == 'bounds' &&
-            pending != null &&
-            !pending!.isCompleted) {
-          cancelledByBounds = true;
-          pending!.completeError(PlatformException(code: 'popover-cancelled'));
-        }
-        return;
-      };
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: f.container,
-          child: MaterialApp(
-            theme: buildBusyBooksTheme(
-              brightness: Brightness.light,
-              accentColor: const Color(0xff3584e4),
-            ),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: BookWorkspaceScreen(
-              view: BookView.reading,
-              id: f.state.bookId!,
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await _readerAction(
-        tester,
-        () => f.reader.showPopover('goto'),
-        widgetClock: true,
-      );
-      expect(f.state.popoverError, isNotNull);
-      expect(find.text('Retry'), findsOneWidget);
-      await tester.tap(find.text('Retry'));
-      await _pumpUntil(tester, () => pending != null);
-      await tester.pumpAndSettle();
-      expect(
-        cancelledByBounds,
-        isFalse,
-        reason: 'Banner removal must settle before the new native request',
-      );
-      final calls = f.calls.map((c) => c.method).toList();
-      expect(
-        calls.lastIndexOf('bounds'),
-        lessThan(calls.lastIndexOf('popover')),
-      );
-      pending!.complete();
-      await _readerAction(tester, f.reader.dismissPopover, widgetClock: true);
-      await tester.pumpWidget(const SizedBox());
-      await _readerAction(tester, f.dispose);
     },
   );
   test(
@@ -7125,8 +6107,6 @@ void main() {
             } finally {
               await tester.pumpWidget(const SizedBox.shrink());
               f.onNativeCall = null;
-              TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-                  .setMockMethodCallHandler(readerPopoverChannel, null);
               if (!disposed) {
                 await _readerAction(tester, f.dispose);
               } else {
@@ -7175,1486 +6155,6 @@ void main() {
             [saved],
           );
           expect(saved.note, 'Ordinary short private note');
-        } finally {
-          await f.dispose();
-        }
-      },
-    );
-  }
-
-  test(
-    'note transport bounds include UTF-8, JSON escaping and envelope bytes',
-    () {
-      final native = File('native/reader_action_limits.h').readAsStringSync();
-      expect(native, contains('6 * 1000000 + 65536'));
-      for (final host in [
-        'linux/runner/reader_popover.cc',
-        'windows/runner/reader_popover.cpp',
-      ]) {
-        expect(
-          File(host).readAsStringSync(),
-          matches(RegExp(r'>\s*kMaxReaderPopoverActionBytes')),
-        );
-      }
-      for (final host in [
-        'linux/runner/reader_host.cc',
-        'windows/runner/reader_host.cpp',
-      ]) {
-        expect(
-          File(host).readAsStringSync(),
-          contains('kMaxReaderPopoverActionBytes'),
-        );
-      }
-      for (final note in [
-        'A' * maxAnnotationTextLength,
-        '漢' * maxAnnotationTextLength,
-        '\u0001' * maxAnnotationTextLength,
-      ]) {
-        expect(validAnnotationText(note), isTrue);
-        expect(
-          () => validateAnnotation(
-            {
-              'id': 'annotation-bounded',
-              'bookId': '1' * 64,
-              'annotationKind': 'highlight',
-              'anchor': {'page': 0},
-              'text': '',
-              'note': note,
-              'reference': 'Page 1',
-              'color': 'yellow',
-              'created': 0,
-            },
-            {'id': '1' * 64, 'format': 'pdf'},
-          ),
-          returnsNormally,
-        );
-        final encoded = jsonEncode({
-          'type': 'popoverAction',
-          'session': '123456789',
-          'presentation': 123,
-          'request': 456,
-          'action': 'annotationNote',
-          'note': note,
-          'color': 'yellow',
-        });
-        expect(validReaderPopoverAction(encoded), isTrue);
-        final padded =
-            encoded +
-            ' ' * (maxReaderPopoverActionBytes - utf8.encode(encoded).length);
-        expect(validReaderPopoverAction(padded), isTrue);
-        expect(validReaderPopoverAction('$padded '), isFalse);
-      }
-      expect(
-        validReaderPopoverAction('漢' * (maxReaderPopoverActionBytes ~/ 3 + 1)),
-        isFalse,
-      );
-      expect(validAnnotationText('A' * (maxAnnotationTextLength + 1)), isFalse);
-      expect(validAnnotationText('valid\u0000invalid'), isFalse);
-    },
-  );
-
-  for (final kind in ['existing', 'creation']) {
-    for (final encoding in ['ASCII', 'multibyte', 'escaped']) {
-      testWidgets(
-        '$kind full $encoding note crosses the native bridge and round trips',
-        (tester) async {
-          tester.view.physicalSize = const Size(460, 650);
-          tester.view.devicePixelRatio = 1;
-          addTearDown(tester.view.resetPhysicalSize);
-          addTearDown(tester.view.resetDevicePixelRatio);
-          final note = _transportNote(encoding);
-          late _ReaderFixture f;
-          final delivered = <Map>[], completed = <Map>[], rejected = <Map>[];
-          await _readerAction(tester, () async {
-            f = await _ReaderFixture.create('text.pdf');
-            await f.openSelectionPopover();
-            if (kind == 'existing') {
-              await f.reader.annotation('highlight', note: 'Baseline');
-              // The full supported note is authored in the shared Notebook
-              // lifecycle before Reading is asked to display or save it.
-              final a = f.reader.annotations.single;
-              f.notes.edit(a, note);
-              await f.notes.save(a.id);
-              await f.openAnnotationPopover(f.reader.annotations.single);
-            }
-          });
-          _connectPopover(
-            f,
-            delivered: delivered,
-            completed: completed,
-            rejected: rejected,
-          );
-          try {
-            await tester.pumpWidget(const ReaderPopoverApp());
-            await _popupUpdate(tester, f.popup);
-            if (kind == 'creation') {
-              await tester.tap(find.text('Add Note'));
-              await tester.pumpAndSettle();
-              await tester.enterText(find.byType(TextField), note);
-              await _pumpUntil(tester, () => completed.isNotEmpty);
-            }
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              note,
-            );
-            // Beyond-contract input is refused by the actual editor, leaving
-            // the previous revision intact with explicit feedback.
-            final priorEvents = delivered.length;
-            tester
-                .state<EditableTextState>(find.byType(EditableText))
-                .updateEditingValue(
-                  TextEditingValue(text: 'Z' * (maxAnnotationTextLength + 1)),
-                );
-            await tester.pumpAndSettle();
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              note,
-            );
-            expect(delivered.length, priorEvents);
-            expect(
-              find.textContaining('This change was not accepted'),
-              findsOneWidget,
-            );
-            tester
-                .state<EditableTextState>(find.byType(EditableText))
-                .updateEditingValue(
-                  const TextEditingValue(text: 'invalid\u0000note'),
-                );
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              note,
-            );
-            await tester.tap(find.text('Save'));
-            await _pumpUntil(
-              tester,
-              () =>
-                  completed.length == delivered.length &&
-                  delivered.any(
-                    (e) =>
-                        e['action'] ==
-                        (kind == 'existing' ? 'annotationNote' : 'highlight'),
-                  ),
-            );
-            expect(rejected, isEmpty);
-            final id = f.reader.annotations.single.id;
-            await _readerAction(tester, f.notes.flush);
-            await _readerAction(tester, () => f.verifyNote(id, note));
-            await _readerAction(
-              tester,
-              () => f.openAnnotationPopover(f.reader.annotations.single),
-            );
-            await _popupUpdate(tester, f.popup);
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              note,
-            );
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).readOnly,
-              isFalse,
-            );
-            expect(tester.takeException(), isNull);
-          } finally {
-            f.onNativeCall = null;
-            await tester.pumpWidget(const SizedBox.shrink());
-            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-                .setMockMethodCallHandler(readerPopoverChannel, null);
-            await _readerAction(tester, f.dispose);
-          }
-        },
-      );
-    }
-  }
-
-  testWidgets(
-    'rejected local input is captured before replacement, flush and close; failed handoff preserves the editor',
-    (tester) async {
-      tester.view.physicalSize = const Size(460, 650);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      final rejected = <Map>[];
-      final reject = {'noteDraft'};
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create('text.pdf');
-        await f.openSelectionPopover();
-        await f.reader.annotation('highlight', note: 'Saved baseline');
-        await f.openAnnotationPopover(f.reader.annotations.single);
-      });
-      _connectPopover(f, rejectActions: reject, rejected: rejected);
-      final native = f.onNativeCall!;
-      bool failCapture = true;
-      final captureEntered = Completer<void>(),
-          captureProceed = Completer<void>();
-      bool pauseCapture = true;
-      f.onNativeCall = (call) async {
-        if (call.method == 'capturePopover' && failCapture) {
-          throw PlatformException(
-            code: 'reader-draft-unavailable',
-            message: 'Note handoff failed; retry',
-          );
-        }
-        final captured = await native(call);
-        if (call.method == 'capturePopover' && pauseCapture) {
-          captureEntered.complete();
-          await captureProceed.future;
-        }
-        return captured;
-      };
-      try {
-        await tester.pumpWidget(const ReaderPopoverApp());
-        await _popupUpdate(tester, f.popup);
-        await tester.enterText(
-          find.byType(TextField),
-          'Retained after rejection',
-        );
-        await _pumpUntil(tester, () => rejected.isNotEmpty);
-        final owner = f.popup['presentation'];
-        final bookId = f.state.bookId;
-        final hidden = f.calls
-            .where((c) => c.method == 'visible' && c.arguments == false)
-            .length;
-        final handoffErrors = <String, Object>{};
-        await _readerAction(tester, () async {
-          // Observe failures in the driven operation itself. Widget pumping in
-          // _readerAction must not overlap expectLater's own test-API guard.
-          for (final operation in <String, Future<void> Function()>{
-            'replacement': () => f.reader.showPopover('speech'),
-            'flush': f.reader.flush,
-            'close': f.reader.close,
-          }.entries) {
-            try {
-              await operation.value();
-            } catch (error) {
-              handoffErrors[operation.key] = error;
-            }
-          }
-          final other = await f.container
-              .read(workspaceControllerProvider.notifier)
-              .openPath(p.absolute('test/fixtures/image-only.pdf'));
-          await f.reader.open(other.books.single.id);
-        });
-        expect(handoffErrors.keys, ['replacement', 'flush', 'close']);
-        for (final error in handoffErrors.values) {
-          expect(error.toString(), contains('Note handoff failed'));
-        }
-        expect(f.state.bookId, bookId);
-        expect(f.state.ready, isTrue);
-        expect(f.state.error, isNull);
-        expect(f.state.warning, contains('Note handoff failed'));
-        expect(
-          f.calls.where((c) => c.method == 'visible' && c.arguments == false),
-          hasLength(hidden),
-        );
-        await _readerAction(
-          tester,
-          () => f.container
-              .read(workspaceControllerProvider.notifier)
-              .loadBook(bookId!),
-        );
-        expect(f.popup['presentation'], owner);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Retained after rejection',
-        );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isFalse,
-        );
-        expect(f.drafts.drafts, isEmpty);
-        expect(find.textContaining('Note handoff failed'), findsWidgets);
-        failCapture = false;
-        var replaced = false;
-        await tester.runAsync(() async {
-          unawaited(
-            f
-                .openAnnotationPopover(f.reader.annotations.single)
-                .then((_) => replaced = true),
-          );
-        });
-        await _pumpUntil(tester, () => captureEntered.isCompleted);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isTrue,
-        );
-        tester
-            .state<EditableTextState>(find.byType(EditableText))
-            .updateEditingValue(
-              const TextEditingValue(text: 'Refused during sealed handoff'),
-            );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Retained after rejection',
-        );
-        captureProceed.complete();
-        pauseCapture = false;
-        await _pumpUntil(tester, () => replaced);
-        await _popupUpdate(tester, f.popup);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Retained after rejection',
-        );
-        await _readerAction(tester, f.notes.flush);
-        await _readerAction(
-          tester,
-          () => f.verifyNote(
-            f.reader.annotations.single.id,
-            'Retained after rejection',
-          ),
-        );
-        await _readerAction(
-          tester,
-          () => f.openAnnotationPopover(f.reader.annotations.single),
-        );
-        await _popupUpdate(tester, f.popup);
-        await tester.enterText(find.byType(TextField), 'Flush captures latest');
-        await _pumpUntil(tester, () => rejected.length == 2);
-        await _readerAction(tester, f.reader.flush);
-        await _readerAction(tester, f.notes.flush);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isFalse,
-        );
-        await _readerAction(
-          tester,
-          () => f.verifyNote(
-            f.reader.annotations.single.id,
-            'Flush captures latest',
-          ),
-        );
-        expect(tester.takeException(), isNull);
-      } finally {
-        if (!captureProceed.isCompleted) captureProceed.complete();
-        f.onNativeCall = null;
-        await tester.pumpWidget(const SizedBox.shrink());
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(readerPopoverChannel, null);
-        await _readerAction(tester, f.dispose);
-      }
-    },
-  );
-
-  testWidgets(
-    'uncertain native delivery keeps Save sealed until the real primary result',
-    (tester) async {
-      tester.view.physicalSize = const Size(460, 650);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      late AnnotationStoreGate gate;
-      final entered = Completer<void>(), proceed = Completer<void>();
-      final delivered = <Map>[], completed = <Map>[];
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create(
-          'text.pdf',
-          wrapStore: (s) => gate = AnnotationStoreGate(s),
-        );
-        await f.openSelectionPopover();
-        await f.reader.annotation('highlight', note: 'Baseline');
-        await f.openAnnotationPopover(f.reader.annotations.single);
-        gate.entered = entered;
-        gate.proceed = proceed;
-      });
-      _connectPopover(
-        f,
-        delivered: delivered,
-        completed: completed,
-        loseAcknowledgement: {'annotationNote'},
-      );
-      try {
-        await tester.pumpWidget(const ReaderPopoverApp());
-        await _popupUpdate(tester, f.popup);
-        await tester.enterText(find.byType(TextField), 'Actually forwarded');
-        await _pumpUntil(tester, () => completed.isNotEmpty);
-        await tester.tap(find.text('Save'));
-        await _pumpUntil(tester, () => entered.isCompleted);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isTrue,
-        );
-        expect(find.textContaining('Saving is still pending'), findsOneWidget);
-        await tester.pump(const Duration(seconds: 16));
-        await tester.tap(find.text('Saving note…'));
-        tester
-            .state<EditableTextState>(find.byType(EditableText))
-            .updateEditingValue(
-              const TextEditingValue(text: 'Must not be accepted'),
-            );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Actually forwarded',
-        );
-        proceed.complete();
-        await _pumpUntil(tester, () => completed.length == delivered.length);
-        expect(
-          delivered.where((e) => e['action'] == 'annotationNote'),
-          hasLength(1),
-        );
-        await _readerAction(
-          tester,
-          () => f.verifyNote(
-            f.reader.annotations.single.id,
-            'Actually forwarded',
-          ),
-        );
-        expect(tester.takeException(), isNull);
-      } finally {
-        if (!proceed.isCompleted) proceed.complete();
-        f.onNativeCall = null;
-        await tester.pumpWidget(const SizedBox.shrink());
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(readerPopoverChannel, null);
-        await _readerAction(tester, f.dispose);
-      }
-    },
-  );
-
-  for (final kind in ['existing', 'creation']) {
-    for (final timedOut in [false, true]) {
-      testWidgets(
-        'native rejection ${timedOut ? 'after timeout ' : ''}releases $kind Save and transfers retained text before dismissal',
-        (tester) async {
-          tester.view.physicalSize = const Size(460, 650);
-          tester.view.devicePixelRatio = 1;
-          addTearDown(tester.view.resetPhysicalSize);
-          addTearDown(tester.view.resetDevicePixelRatio);
-          late _ReaderFixture f;
-          final delivered = <Map>[], completed = <Map>[], rejected = <Map>[];
-          final replies = <Map>[];
-          final entered = Completer<void>(), proceed = Completer<void>();
-          final text = 'A' * 70000;
-          await _readerAction(tester, () async {
-            f = await _ReaderFixture.create('text.pdf');
-            await f.openSelectionPopover();
-            if (kind == 'existing') {
-              await f.reader.annotation('highlight', note: 'Saved baseline');
-              await f.openAnnotationPopover(f.reader.annotations.single);
-            }
-          });
-          _connectPopover(
-            f,
-            delivered: delivered,
-            completed: completed,
-            rejected: rejected,
-            rejectionReplies: replies,
-            rejectionEntered: timedOut ? entered : null,
-            rejectionProceed: timedOut ? proceed : null,
-            // Reproduce the reviewed hosts' actual byte budget, without ever
-            // calling the primary handler for rejected actions. Normal bridge
-            // cases above exercise both current hosts' shared larger budget.
-            actionByteLimit: 65536,
-          );
-          try {
-            await tester.pumpWidget(const ReaderPopoverApp());
-            await _popupUpdate(tester, f.popup);
-            if (kind == 'creation') {
-              await tester.tap(find.text('Add Note'));
-              await tester.pumpAndSettle();
-            }
-            await tester.enterText(find.byType(TextField), text);
-            await _pumpUntil(tester, () => rejected.isNotEmpty);
-            expect(delivered, isEmpty);
-            expect(f.drafts.drafts, isEmpty);
-            await tester.tap(find.text('Save'));
-            await _pumpUntil(tester, () => rejected.length == 2);
-            if (timedOut) {
-              expect(entered.isCompleted, isTrue);
-              await tester.pump(const Duration(seconds: 16));
-              await tester.pumpAndSettle();
-              expect(
-                tester.widget<TextField>(find.byType(TextField)).readOnly,
-                isTrue,
-              );
-              expect(
-                find.textContaining('Saving is still pending'),
-                findsOneWidget,
-              );
-              expect(delivered, isEmpty);
-              expect(f.drafts.drafts, isEmpty);
-              proceed.complete();
-            }
-            await _pumpUntil(tester, () => replies.length == 2);
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              text,
-            );
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).readOnly,
-              isFalse,
-            );
-            expect(
-              find.textContaining('Saving is still pending'),
-              findsNothing,
-            );
-            expect(find.textContaining('Reader action exceeds'), findsWidgets);
-            final bookId = f.state.bookId!;
-            if (kind == 'existing') {
-              await _readerAction(tester, () async {
-                await f.container
-                    .read(workspaceControllerProvider.notifier)
-                    .openPath(p.absolute('test/fixtures/image-only.pdf'));
-              });
-              expect(f.reader.annotations.single.bookId, bookId);
-            }
-            if (kind == 'existing') {
-              await tester.tap(find.text('Close'));
-            } else {
-              await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-            }
-            await _pumpUntil(
-              tester,
-              () =>
-                  completed.length == delivered.length && delivered.isNotEmpty,
-            );
-            await _readerAction(tester, f.notes.flush);
-            await _readerAction(
-              tester,
-              () => f.container
-                  .read(workspaceControllerProvider.notifier)
-                  .loadBook(bookId),
-            );
-            final id = f.reader.annotations.single.id;
-            expect(f.dispatchFailures, 0);
-            final painted =
-                f.dispatches.lastWhere(
-                      (c) => c['action'] == 'annotations',
-                    )['value']
-                    as List;
-            expect(painted.single['id'], id);
-            expect((painted.single as Map).containsKey('note'), isFalse);
-            await _readerAction(tester, () => f.verifyNote(id, text));
-            await _readerAction(
-              tester,
-              () => f.openAnnotationPopover(f.reader.annotations.single),
-            );
-            await _popupUpdate(tester, f.popup);
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              text,
-            );
-            expect(tester.takeException(), isNull);
-          } finally {
-            if (!proceed.isCompleted) proceed.complete();
-            f.onNativeCall = null;
-            await tester.pumpWidget(const SizedBox.shrink());
-            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-                .setMockMethodCallHandler(readerPopoverChannel, null);
-            await _readerAction(tester, f.dispose);
-          }
-        },
-      );
-    }
-    TestWidgetsFlutterBinding.ensureInitialized();
-  }
-
-  for (final kind in ['existing', 'creation']) {
-    testWidgets('$kind popover Save cannot close over later accepted input', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(460, 600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      late AnnotationStoreGate gate;
-      final entered = Completer<void>(), proceed = Completer<void>();
-      final delivered = <Map>[], completed = <Map>[];
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create(
-          'text.pdf',
-          wrapStore: (s) => gate = AnnotationStoreGate(s),
-        );
-        await f.openSelectionPopover();
-        if (kind == 'existing') {
-          await f.reader.annotation('highlight', note: 'Persisted baseline');
-          await f.openAnnotationPopover(f.reader.annotations.single);
-          gate.entered = entered;
-          gate.proceed = proceed;
-        } else {
-          gate.putEntered = entered;
-          gate.putProceed = proceed;
-        }
-      });
-      _connectPopover(f, delivered: delivered, completed: completed);
-      try {
-        await tester.pumpWidget(const ReaderPopoverApp());
-        await _popupUpdate(tester, f.popup);
-        if (kind == 'creation') {
-          await tester.tap(find.text('Add Note'));
-          await tester.pumpAndSettle();
-        }
-        await tester.enterText(find.byType(TextField), 'Submission A');
-        await _pumpUntil(
-          tester,
-          () => f.drafts.drafts.values.any((d) => d.text == 'Submission A'),
-        );
-        final id = f.drafts.sources.keys.single;
-        await tester.tap(find.text('Save'));
-        final saveAction = kind == 'existing' ? 'annotationNote' : 'highlight';
-        await _pumpUntil(
-          tester,
-          () =>
-              entered.isCompleted &&
-              delivered.any((e) => e['action'] == saveAction),
-        );
-        expect(proceed.isCompleted, isFalse);
-        expect(completed.where((e) => e['action'] == saveAction), isEmpty);
-        final field = tester.widget<TextField>(find.byType(TextField));
-        if (field.readOnly) {
-          tester
-              .state<EditableTextState>(find.byType(EditableText))
-              .updateEditingValue(
-                const TextEditingValue(
-                  text: 'Accepted B',
-                  selection: TextSelection.collapsed(offset: 10),
-                ),
-              );
-        } else {
-          await tester.enterText(find.byType(TextField), 'Accepted B');
-        }
-        await tester.pump();
-        final accepted = field.controller!.text == 'Accepted B';
-        if (accepted) {
-          expect(
-            delivered.where(
-              (e) => e['action'] == 'noteDraft' && e['note'] == 'Accepted B',
-            ),
-            hasLength(1),
-          );
-          expect(
-            completed.where(
-              (e) => e['action'] == 'noteDraft' && e['note'] == 'Accepted B',
-            ),
-            isEmpty,
-          );
-        } else {
-          expect(field.readOnly, isTrue);
-          expect(field.controller!.text, 'Submission A');
-          expect(delivered.where((e) => e['note'] == 'Accepted B'), isEmpty);
-        }
-        expect(proceed.isCompleted, isFalse);
-        proceed.complete();
-        await _pumpUntil(tester, () => completed.length == delivered.length);
-        // A successful reply must not reopen the closing presentation to input.
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isTrue,
-        );
-        final closedText = tester
-            .widget<TextField>(find.byType(TextField))
-            .controller!
-            .text;
-        tester
-            .state<EditableTextState>(find.byType(EditableText))
-            .updateEditingValue(
-              const TextEditingValue(
-                text: 'Late input after acknowledgement',
-                selection: TextSelection.collapsed(offset: 0),
-              ),
-            );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          closedText,
-        );
-        final expected = accepted ? 'Accepted B' : 'Submission A';
-        await _readerAction(tester, () async {
-          await f.notes.flush();
-          await f.verifyNote(id, expected);
-        });
-        if (kind == 'creation') {
-          expect(gate.calls.where((c) => c == 'putAnnotation'), hasLength(1));
-        }
-        await _readerAction(
-          tester,
-          () => f.openAnnotationPopover(f.reader.annotations.single),
-        );
-        await _popupUpdate(tester, f.popup);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          expected,
-        );
-        await tester.pumpWidget(const SizedBox.shrink());
-        f.onNativeCall = null;
-        await _readerAction(tester, f.reader.suspend);
-        f.notes.view(f.state.bookId!, selected: id);
-        tester.view.physicalSize = const Size(1100, 900);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: f.container,
-            child: MaterialApp(
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: BookWorkspaceScreen(
-                view: BookView.notebook,
-                id: f.state.bookId!,
-              ),
-            ),
-          ),
-        );
-        await _pumpUntil(
-          tester,
-          () =>
-              !f.container.read(workspaceControllerProvider).loading &&
-              find.byType(TextField).evaluate().isNotEmpty,
-        );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          expected,
-        );
-        expect(tester.takeException(), isNull);
-      } finally {
-        if (!proceed.isCompleted) proceed.complete();
-        f.onNativeCall = null;
-        await tester.pumpWidget(const SizedBox.shrink());
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(readerPopoverChannel, null);
-        await _readerAction(tester, f.dispose);
-      }
-    });
-  }
-
-  for (final kind in ['existing', 'creation']) {
-    for (final timedOut in [false, true]) {
-      testWidgets(
-        '$kind failed Save ${timedOut ? 'after timeout ' : ''}unlocks the editor for a protected retry',
-        (tester) async {
-          tester.view.physicalSize = const Size(460, 600);
-          tester.view.devicePixelRatio = 1;
-          addTearDown(tester.view.resetPhysicalSize);
-          addTearDown(tester.view.resetDevicePixelRatio);
-          late _ReaderFixture f;
-          late AnnotationStoreGate gate;
-          final entered = Completer<void>(), proceed = Completer<void>();
-          final delivered = <Map>[], completed = <Map>[];
-          await _readerAction(tester, () async {
-            f = await _ReaderFixture.create(
-              'text.pdf',
-              wrapStore: (s) => gate = AnnotationStoreGate(s),
-            );
-            await f.openSelectionPopover();
-            if (kind == 'existing') {
-              await f.reader.annotation('highlight', note: 'Original baseline');
-              await f.openAnnotationPopover(f.reader.annotations.single);
-              gate.entered = entered;
-              gate.proceed = proceed;
-              gate.failAfterProceed = true;
-            } else {
-              gate.putEntered = entered;
-              gate.putProceed = proceed;
-              gate.failPut = true;
-            }
-          });
-          _connectPopover(f, delivered: delivered, completed: completed);
-          try {
-            await tester.pumpWidget(const ReaderPopoverApp());
-            await _popupUpdate(tester, f.popup);
-            if (kind == 'creation') {
-              await tester.tap(find.text('Add Note'));
-              await tester.pumpAndSettle();
-            }
-            await tester.enterText(
-              find.byType(TextField),
-              'Protected submission',
-            );
-            await _pumpUntil(tester, () => f.drafts.drafts.isNotEmpty);
-            final id = f.drafts.sources.keys.single;
-            await tester.tap(find.text('Save'));
-            await _pumpUntil(
-              tester,
-              () =>
-                  entered.isCompleted &&
-                  delivered.any(
-                    (e) =>
-                        e['action'] ==
-                        (kind == 'existing' ? 'annotationNote' : 'highlight'),
-                  ),
-            );
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).readOnly,
-              isTrue,
-            );
-            expect(find.text('Saving note…'), findsOneWidget);
-            if (timedOut) {
-              await tester.pump(const Duration(seconds: 16));
-              await tester.pumpAndSettle();
-              expect(
-                find.textContaining('Saving is still pending'),
-                findsOneWidget,
-              );
-              expect(
-                tester.widget<TextField>(find.byType(TextField)).readOnly,
-                isTrue,
-              );
-            }
-            proceed.complete();
-            await _pumpUntil(
-              tester,
-              () => completed.length == delivered.length,
-            );
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).readOnly,
-              isFalse,
-            );
-            expect(
-              find.textContaining('Saving is still pending'),
-              findsNothing,
-            );
-            expect(f.drafts.drafts[id]!.text, 'Protected submission');
-            expect(f.drafts.drafts[id]!.error, isNotNull);
-            if (kind == 'existing') {
-              expect(f.drafts.drafts[id]!.baseline, 'Original baseline');
-            }
-            await _readerAction(
-              tester,
-              () => f.openAnnotationPopover(f.drafts.sources[id]!),
-            );
-            await _popupUpdate(tester, f.popup);
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              'Protected submission',
-            );
-            gate.failAfterProceed = false;
-            gate.failPut = false;
-            await tester.enterText(
-              find.byType(TextField),
-              'Retried latest\ntext',
-            );
-            await tester.tap(find.text('Save'));
-            await _pumpUntil(
-              tester,
-              () =>
-                  completed.length == delivered.length &&
-                  f.drafts.drafts.isEmpty,
-            );
-            await _readerAction(
-              tester,
-              () => f.verifyNote(id, 'Retried latest\ntext'),
-            );
-            await _readerAction(
-              tester,
-              () => f.openAnnotationPopover(f.reader.annotations.single),
-            );
-            await _popupUpdate(tester, f.popup);
-            expect(
-              tester.widget<TextField>(find.byType(TextField)).controller!.text,
-              'Retried latest\ntext',
-            );
-            expect(tester.takeException(), isNull);
-          } finally {
-            gate.failAfterProceed = false;
-            gate.failPut = false;
-            if (!proceed.isCompleted) proceed.complete();
-            f.onNativeCall = null;
-            await tester.pumpWidget(const SizedBox.shrink());
-            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-                .setMockMethodCallHandler(readerPopoverChannel, null);
-            await _readerAction(tester, f.dispose);
-          }
-        },
-      );
-    }
-  }
-
-  testWidgets(
-    'Save locks before the next frame and repeated Save/Close/Escape settle once',
-    (tester) async {
-      tester.view.physicalSize = const Size(460, 600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      late AnnotationStoreGate gate;
-      final entered = Completer<void>(), proceed = Completer<void>();
-      final delivered = <Map>[], completed = <Map>[];
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create(
-          'text.pdf',
-          wrapStore: (s) => gate = AnnotationStoreGate(s),
-        );
-        await f.openSelectionPopover();
-        await f.reader.annotation('highlight', note: 'Saved baseline');
-        await f.openAnnotationPopover(f.reader.annotations.single);
-        gate.entered = entered;
-        gate.proceed = proceed;
-      });
-      _connectPopover(f, delivered: delivered, completed: completed);
-      try {
-        await tester.pumpWidget(const ReaderPopoverApp());
-        await _popupUpdate(tester, f.popup);
-        await tester.enterText(
-          find.byType(TextField),
-          'Submission before transition',
-        );
-        await _pumpUntil(tester, () => f.drafts.drafts.isNotEmpty);
-        final id = f.drafts.sources.keys.single;
-        await tester.tap(find.text('Save'));
-        // No frame has rebuilt the old TextField as read-only yet.
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isFalse,
-        );
-        tester
-            .state<EditableTextState>(find.byType(EditableText))
-            .updateEditingValue(
-              const TextEditingValue(
-                text: 'Input between frames',
-                selection: TextSelection.collapsed(offset: 20),
-              ),
-            );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Submission before transition',
-        );
-        await tester.tap(find.text('Save'));
-        await _pumpUntil(tester, () => entered.isCompleted);
-        expect(
-          delivered.where((e) => e['action'] == 'annotationNote'),
-          hasLength(1),
-        );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isTrue,
-        );
-        final dismissals = f.calls
-            .where((c) => c.method == 'dismissPopover')
-            .length;
-        await tester.tap(find.text('Close'));
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        await tester.pump();
-        expect(proceed.isCompleted, isFalse);
-        expect(delivered.where((e) => e['action'] == 'dismiss'), hasLength(2));
-        expect(completed.where((e) => e['action'] == 'dismiss'), isEmpty);
-        proceed.complete();
-        await _pumpUntil(tester, () => completed.length == delivered.length);
-        expect(
-          f.calls.where((c) => c.method == 'dismissPopover').length,
-          dismissals + 1,
-        );
-        await _readerAction(
-          tester,
-          () => f.verifyNote(id, 'Submission before transition'),
-        );
-        expect(tester.takeException(), isNull);
-      } finally {
-        if (!proceed.isCompleted) proceed.complete();
-        f.onNativeCall = null;
-        await tester.pumpWidget(const SizedBox.shrink());
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(readerPopoverChannel, null);
-        await _readerAction(tester, f.dispose);
-      }
-    },
-  );
-
-  testWidgets(
-    'a timed-out Save stays read-only until acknowledgement and cannot dismiss a replacement',
-    (tester) async {
-      tester.view.physicalSize = const Size(460, 650);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      late _ReaderFixture f;
-      late AnnotationStoreGate gate;
-      final entered = Completer<void>(), proceed = Completer<void>();
-      final delivered = <Map>[], completed = <Map>[];
-      await _readerAction(tester, () async {
-        f = await _ReaderFixture.create(
-          'text.pdf',
-          wrapStore: (s) => gate = AnnotationStoreGate(s),
-        );
-        await f.openSelectionPopover();
-        await f.reader.annotation('highlight', note: 'Replacement baseline');
-        await f.reader.annotation('highlight', note: 'Original baseline');
-        await f.openAnnotationPopover(f.reader.annotations.last);
-        gate.entered = entered;
-        gate.proceed = proceed;
-      });
-      _connectPopover(f, delivered: delivered, completed: completed);
-      try {
-        await tester.pumpWidget(const ReaderPopoverApp());
-        await _popupUpdate(tester, f.popup);
-        await tester.enterText(find.byType(TextField), 'Delayed original');
-        await _pumpUntil(tester, () => f.drafts.drafts.isNotEmpty);
-        await tester.tap(find.text('Save'));
-        await _pumpUntil(tester, () => entered.isCompleted);
-        await tester.pump(const Duration(seconds: 16));
-        await tester.pumpAndSettle();
-        expect(find.textContaining('Saving is still pending'), findsOneWidget);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isTrue,
-        );
-        tester
-            .state<EditableTextState>(find.byType(EditableText))
-            .updateEditingValue(
-              const TextEditingValue(
-                text: 'Not accepted after timeout',
-                selection: TextSelection.collapsed(offset: 0),
-              ),
-            );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Delayed original',
-        );
-        expect(
-          completed.where((e) => e['action'] == 'annotationNote'),
-          isEmpty,
-        );
-        final staleChanged = tester
-            .widget<BusyBooksGroupedTextEntry>(
-              find.byType(BusyBooksGroupedTextEntry),
-            )
-            .onChanged!;
-        await _readerAction(
-          tester,
-          () => f.openAnnotationPopover(f.reader.annotations.first),
-        );
-        await _popupUpdate(tester, f.popup);
-        final replacement = Map.of(f.popup);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).readOnly,
-          isFalse,
-        );
-        expect(find.textContaining('Saving is still pending'), findsNothing);
-        await tester.enterText(find.byType(TextField), 'Replacement latest');
-        await tester.pump();
-        final deliveriesBeforeStaleInput = delivered.length;
-        final currentDraft = Map.of(delivered.last);
-        expect(currentDraft['action'], 'noteDraft');
-        expect(currentDraft['presentation'], replacement['presentation']);
-        expect(currentDraft['note'], 'Replacement latest');
-        // The retired field must reject an already queued callback before it
-        // reaches the channel, retaining the replacement owner's latest draft.
-        staleChanged('Obsolete old input');
-        await tester.pump();
-        expect(delivered, hasLength(deliveriesBeforeStaleInput));
-        expect(delivered.last, currentDraft);
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Replacement latest',
-        );
-        final dismissals = f.calls
-            .where((c) => c.method == 'dismissPopover')
-            .length;
-        proceed.complete();
-        await _pumpUntil(tester, () => completed.length == delivered.length);
-        expect(
-          f.calls.where((c) => c.method == 'dismissPopover').length,
-          dismissals,
-        );
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller!.text,
-          'Replacement latest',
-        );
-        await _readerAction(tester, f.notes.flush);
-        await _readerAction(tester, () async {
-          final records =
-              await f.store.call('annotations', f.state.bookId) as List;
-          expect(
-            records.map((a) => a['note']),
-            unorderedEquals(['Delayed original', 'Replacement latest']),
-          );
-        });
-        await tester.tap(find.text('Save'));
-        await _pumpUntil(tester, () => completed.length == delivered.length);
-        expect(
-          f.calls.where((c) => c.method == 'dismissPopover').length,
-          dismissals + 1,
-        );
-        expect(tester.takeException(), isNull);
-      } finally {
-        if (!proceed.isCompleted) proceed.complete();
-        f.onNativeCall = null;
-        await tester.pumpWidget(const SizedBox.shrink());
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(readerPopoverChannel, null);
-        await _readerAction(tester, f.dispose);
-      }
-    },
-  );
-
-  test(
-    'first insertion failure protects the captured passage through dismissal, views, retry and backup',
-    () async {
-      late AnnotationStoreGate gate;
-      final f = await _ReaderFixture.create(
-        'text.pdf',
-        wrapStore: (s) => gate = AnnotationStoreGate(s),
-      );
-      try {
-        gate.failPut = true;
-        gate.putEntered = Completer<void>();
-        await f.openSelectionPopover();
-        await f.action('noteDraft', {
-          'note': 'New protected\npassage note',
-          'color': 'pink',
-        });
-        await gate.putEntered!.future;
-        await _until(() => f.drafts.drafts.values.any((d) => d.error != null));
-        final source = f.drafts.sources.values.single;
-        final id = source.id;
-        expect(source.bookId, f.state.bookId);
-        expect(source.kind, 'highlight');
-        expect(source.anchor, {'page': 0, 'textOffset': 1, 'textLength': 3});
-        expect(source.text, 'ABC');
-        expect(source.reference, 'Page 1');
-        expect(source.color, 'pink');
-        await f.action('dismiss');
-        await f.reader.suspend();
-        expect(f.drafts.drafts[id]!.text, 'New protected\npassage note');
-        await expectLater(f.notes.flush(), throwsA(isA<FileSystemException>()));
-        await expectLater(
-          f.reader.close(),
-          throwsA(isA<FileSystemException>()),
-        );
-        expect(f.drafts.drafts[id]!.text, 'New protected\npassage note');
-        await f.reader.open(source.bookId);
-        await f.reader.show(true);
-        await f.openAnnotationPopover(source);
-        expect(f.popup['note'], 'New protected\npassage note');
-        expect(f.popup['noteError'], isNotNull);
-        gate.failPut = false;
-        await f.notes.flush();
-        await f.verifyNote(id, 'New protected\npassage note');
-        await f.reader.close();
-        await f.reader.open(source.bookId);
-        expect(f.reader.annotations.single.note, 'New protected\npassage note');
-      } finally {
-        gate.failPut = false;
-        await f.dispose();
-      }
-    },
-  );
-
-  for (final origin in ['Notebook', 'Reading']) {
-    test(
-      'failed $origin edit reopens Reading with the effective protected draft',
-      () async {
-        late AnnotationStoreGate gate;
-        final f = await _ReaderFixture.create(
-          'text.pdf',
-          wrapStore: (s) => gate = AnnotationStoreGate(s),
-        );
-        try {
-          await f.openSelectionPopover();
-          await f.reader.annotation('highlight', note: 'Saved A');
-          final a = f.reader.annotations.single;
-          gate.fail = true;
-          if (origin == 'Notebook') {
-            await f.reader.suspend();
-            f.notes.edit(a, 'Protected B');
-            await expectLater(
-              f.notes.save(a.id),
-              throwsA(isA<FileSystemException>()),
-            );
-            await f.reader.open(a.bookId);
-            await f.reader.show(true);
-          } else {
-            await f.openAnnotationPopover(a);
-            await f.action('noteDraft', {'note': 'Protected B'});
-            await f.action('annotationNote', {'note': 'Protected B'});
-            await f.action('dismiss');
-          }
-          await f.openAnnotationPopover(a);
-          expect(f.popup['note'], 'Protected B');
-          expect(f.popup['noteError'], isNotNull);
-          expect(f.drafts.drafts[a.id]!.baseline, 'Saved A');
-          gate.fail = false;
-          await f.action('annotationNote', {'note': f.popup['note']});
-          await f.notes.flush();
-          await f.verifyNote(a.id, 'Protected B');
-        } finally {
-          gate.fail = false;
-          await f.dispose();
-        }
-      },
-    );
-  }
-
-  for (final origin in ['Notebook', 'Reading']) {
-    testWidgets(
-      'the actual reopened Reading popover displays a failed $origin draft',
-      (tester) async {
-        tester.view.physicalSize = const Size(460, 600);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        late _ReaderFixture f;
-        late AnnotationStoreGate gate;
-        await _readerAction(tester, () async {
-          f = await _ReaderFixture.create(
-            'text.pdf',
-            wrapStore: (s) => gate = AnnotationStoreGate(s),
-          );
-          await f.openSelectionPopover();
-          await f.reader.annotation('highlight', note: 'Saved A');
-          final a = f.reader.annotations.single;
-          gate.fail = true;
-          if (origin == 'Notebook') {
-            f.notes.edit(a, 'Protected B');
-            await expectLater(
-              f.notes.save(a.id),
-              throwsA(isA<FileSystemException>()),
-            );
-          } else {
-            await f.openAnnotationPopover(a);
-            await f.action('noteDraft', {'note': 'Protected B'});
-            await f.action('annotationNote', {'note': 'Protected B'});
-            await f.action('dismiss');
-          }
-          await f.openAnnotationPopover(a);
-        });
-        try {
-          _connectPopover(f);
-          await tester.pumpWidget(const ReaderPopoverApp());
-          await _popupUpdate(tester, f.popup);
-          expect(
-            tester.widget<TextField>(find.byType(TextField)).controller!.text,
-            'Protected B',
-          );
-          expect(find.textContaining('Your draft is retained'), findsOneWidget);
-          expect(f.drafts.drafts.values.single.baseline, 'Saved A');
-          await tester.enterText(find.byType(TextField), 'Newer C');
-          await _pumpUntil(
-            tester,
-            () => f.drafts.drafts.values.single.text == 'Newer C',
-          );
-          await _popupUpdate(tester, {...f.popup, 'note': 'Saved A'});
-          expect(
-            tester.widget<TextField>(find.byType(TextField)).controller!.text,
-            'Newer C',
-          );
-          gate.fail = false;
-          await tester.tap(find.text('Save'));
-          await _pumpUntil(tester, () => f.drafts.drafts.isEmpty);
-          await _readerAction(
-            tester,
-            () => f.verifyNote(f.reader.annotations.single.id, 'Newer C'),
-          );
-          await _readerAction(
-            tester,
-            () => f.openAnnotationPopover(f.reader.annotations.single),
-          );
-          await _popupUpdate(tester, f.popup);
-          expect(
-            tester.widget<TextField>(find.byType(TextField)).controller!.text,
-            'Newer C',
-          );
-        } finally {
-          await tester.pumpWidget(const SizedBox.shrink());
-          f.onNativeCall = null;
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-              .setMockMethodCallHandler(readerPopoverChannel, null);
-          gate.fail = false;
-          await _readerAction(tester, f.dispose);
-        }
-      },
-    );
-  }
-
-  for (final dismissal in ['Close', 'Escape']) {
-    testWidgets(
-      'a failed first insertion survives real popover $dismissal/reopen and missing-original Notebook',
-      (tester) async {
-        tester.view.physicalSize = const Size(460, 600);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        late AnnotationStoreGate gate;
-        late _ReaderFixture f;
-        await _readerAction(tester, () async {
-          f = await _ReaderFixture.create(
-            'text.pdf',
-            ownedOriginal: true,
-            wrapStore: (s) => gate = AnnotationStoreGate(s),
-          );
-          gate.failPut = true;
-          await f.openSelectionPopover();
-        });
-        _connectPopover(f);
-        try {
-          await tester.pumpWidget(const ReaderPopoverApp());
-          await _popupUpdate(tester, f.popup);
-          await tester.tap(find.text('Add Note'));
-          await tester.pumpAndSettle();
-          await tester.enterText(find.byType(TextField), 'Captured\nnew note');
-          await _pumpUntil(
-            tester,
-            () => f.drafts.drafts.values.any((d) => d.error != null),
-          );
-          expect(find.textContaining('Your draft is retained'), findsOneWidget);
-          final source = f.drafts.sources.values.single;
-          final beforeDismiss = f.calls
-              .where((c) => c.method == 'dismissPopover')
-              .length;
-          if (dismissal == 'Close') {
-            await tester.tap(find.text('Close'));
-          } else {
-            await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-          }
-          await _pumpUntil(
-            tester,
-            () =>
-                f.calls.where((c) => c.method == 'dismissPopover').length >
-                beforeDismiss,
-          );
-          await tester.pumpWidget(const SizedBox.shrink());
-          await _readerAction(tester, f.openSelectionPopover);
-          expect(f.popup['annotationId'], source.id);
-          await tester.pumpWidget(const ReaderPopoverApp());
-          await _popupUpdate(tester, f.popup);
-          expect(
-            tester.widget<TextField>(find.byType(TextField)).controller!.text,
-            'Captured\nnew note',
-          );
-          expect(find.textContaining('Your draft is retained'), findsOneWidget);
-          await tester.pumpWidget(const SizedBox.shrink());
-          f.onNativeCall = null;
-          await _readerAction(tester, () async {
-            await f.reader.suspend();
-            await File(f.reader.book!.path).delete();
-            await f.container
-                .read(workspaceControllerProvider.notifier)
-                .loadBook(source.bookId, activate: true);
-          });
-          tester.view.physicalSize = const Size(1100, 900);
-          f.notes.view(source.bookId, selected: source.id);
-          await tester.pumpWidget(
-            UncontrolledProviderScope(
-              container: f.container,
-              child: MaterialApp(
-                localizationsDelegates: AppLocalizations.localizationsDelegates,
-                supportedLocales: AppLocalizations.supportedLocales,
-                home: BookWorkspaceScreen(
-                  view: BookView.notebook,
-                  id: source.bookId,
-                ),
-              ),
-            ),
-          );
-          await _pumpUntil(
-            tester,
-            () => find.byType(TextField).evaluate().isNotEmpty,
-          );
-          expect(find.text('ABC'), findsOneWidget);
-          expect(
-            find.textContaining('original book is unavailable'),
-            findsOneWidget,
-          );
-          expect(
-            tester.widget<TextField>(find.byType(TextField)).controller!.text,
-            'Captured\nnew note',
-          );
-          gate.failPut = false;
-          await tester.tap(find.text('Retry'));
-          await _pumpUntil(tester, () => f.drafts.drafts.isEmpty);
-          await _readerAction(
-            tester,
-            () => f.verifyNote(source.id, 'Captured\nnew note'),
-          );
-          expect(tester.takeException(), isNull);
-        } finally {
-          f.onNativeCall = null;
-          await tester.pumpWidget(const SizedBox.shrink());
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-              .setMockMethodCallHandler(readerPopoverChannel, null);
-          gate.failPut = false;
-          await _readerAction(tester, f.dispose);
-        }
-      },
-    );
-  }
-
-  for (final path in ['toolbar', 'popover']) {
-    test(
-      '$path deletion resolves a failed Notebook draft across view changes',
-      () async {
-        late AnnotationStoreGate gate;
-        final f = await _ReaderFixture.create(
-          'text.pdf',
-          wrapStore: (store) => gate = AnnotationStoreGate(store),
-        );
-        try {
-          await f.event('location', {
-            'anchor': {'page': 0},
-            'reference': 'Page 1',
-            'progress': 0,
-          });
-          await f.reader.annotation('bookmark');
-          final item = f.reader.annotations.single;
-          final notebook = f.container.read(
-            notebookControllerProvider.notifier,
-          );
-          await f.reader.suspend();
-          notebook.edit(item, 'Failed Notebook edit');
-          gate.fail = true;
-          await expectLater(
-            notebook.save(item.id),
-            throwsA(isA<FileSystemException>()),
-          );
-          await f.reader.open(item.bookId);
-          await f.reader.show(true);
-          gate.fail = false;
-          if (path == 'toolbar') {
-            await f.reader.annotation('bookmark');
-          } else {
-            await f.openAnnotationPopover(item);
-            final popup =
-                f.calls.lastWhere((c) => c.method == 'popover').arguments
-                    as Map;
-            await f.event('popoverAction', {
-              'presentation': popup['presentation'],
-              'action': 'deleteAnnotation',
-            });
-          }
-          await notebook.flush();
-          expect(f.reader.annotations, isEmpty);
-          expect(
-            f.container.read(workspaceControllerProvider).annotations,
-            isEmpty,
-          );
-          expect(await f.store.call('annotations', item.bookId), isEmpty);
-          final markdown = p.join(f.directory.path, 'notes.md');
-          await f.store.call('exportMarkdown', {
-            'id': item.bookId,
-            'path': markdown,
-          });
-          expect(
-            await File(markdown).readAsString(),
-            isNot(contains('Failed Notebook edit')),
-          );
-          final backup = p.join(f.directory.path, 'reading.busybooks');
-          await f.store.call('backup', {'path': backup, 'preferences': {}});
-          final manifest =
-              jsonDecode(
-                    utf8.decode(
-                      ZipDecoder()
-                          .decodeBytes(await File(backup).readAsBytes())
-                          .files
-                          .single
-                          .content,
-                    ),
-                  )
-                  as Map;
-          expect(
-            (manifest['records'] as List).where(
-              (r) => r['kind'] == 'annotation',
-            ),
-            isEmpty,
-          );
-          final reopened = await ReadingDataStore.open(
-            p.join(f.directory.path, 'restored'),
-          );
-          try {
-            await reopened.call('restore', backup);
-            expect(await reopened.call('annotations', item.bookId), isEmpty);
-          } finally {
-            await reopened.close();
-          }
-          await f.reader.close();
-          await f.reader.open(item.bookId);
-          expect(f.reader.annotations, isEmpty);
         } finally {
           await f.dispose();
         }
@@ -8848,10 +6348,10 @@ void main() {
       try {
         f.calls.clear();
         expect(await f.reader.prepareChromeChange(), true);
-        final dismissal = f.calls.singleWhere(
-          (call) => call.method == 'dismissPopover',
+        expect(
+          f.calls.where((call) => call.method == 'dismissReaderControls'),
+          isEmpty,
         );
-        expect((dismissal.arguments as Map)['restoreFocus'], false);
         expect(
           f.calls.singleWhere((call) => call.method == 'focusChrome').arguments,
           {'session': f.reader.sessionId},
@@ -8883,7 +6383,7 @@ void main() {
     () async {
       final f = await _ReaderFixture.create('text.pdf');
       try {
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Baseline');
         final a = f.reader.annotations.single;
         final note = '\u0001' * maxAnnotationTextLength;
@@ -8907,7 +6407,7 @@ void main() {
       try {
         gate.putEntered = Completer<void>();
         gate.putProceed = Completer<void>();
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.action('noteDraft', {'note': 'First revision'});
         await gate.putEntered!.future;
         final id = f.drafts.sources.values.single.id;
@@ -8929,85 +6429,66 @@ void main() {
     },
   );
 
-  testWidgets(
+  test(
     'late creation failure retains the newest revision for its inactive book and ignores the old presentation',
-    (tester) async {
-      await _readerAction(
-        tester,
-        () async {
-          late AnnotationStoreGate gate;
-          final f = await _ReaderFixture.create(
-            'text.pdf',
-            wrapStore: (s) => gate = AnnotationStoreGate(s),
-          );
-          try {
-            final second =
-                (await f.container
-                        .read(workspaceControllerProvider.notifier)
-                        .openPath(p.absolute('test/fixtures/reflowable.epub')))
-                    .books
-                    .single;
-            gate.failPut = true;
-            gate.putEntered = Completer<void>();
-            gate.putProceed = Completer<void>();
-            await f.openSelectionPopover();
-            final old = Map.of(f.popup);
-            await f.action('noteDraft', {'note': 'First text'});
-            await gate.putEntered!.future;
-            final source = f.drafts.sources.values.single;
-            await f.action('noteDraft', {'note': 'Latest protected text'});
-            final switching = f.reader.open(second.id);
-            gate.putProceed!.complete();
-            await switching;
-            await f.event('ready');
-            await f.event('opened');
-            expectSync(
-              f.drafts.drafts.values.any((d) => d.error != null),
-              isTrue,
-            );
-            expectSync(f.state.bookId, second.id);
-            expectSync(
-              f.drafts.drafts[source.id]!.text,
-              'Latest protected text',
-            );
-            await f.event('popoverAction', {
-              'session': old['session'],
-              'presentation': old['presentation'],
-              'action': 'noteDraft',
-              'note': 'Obsolete text',
-            });
-            expectSync(
-              f.drafts.drafts[source.id]!.text,
-              'Latest protected text',
-            );
-            gate.failPut = false;
-            await f.notes.flush();
-            expectSync(
-              (await f.store.call('annotations', source.bookId) as List)
-                  .single['note'],
-              'Latest protected text',
-            );
-            expectSync(await f.store.call('annotations', second.id), isEmpty);
-            expectSync(f.reader.annotations, isEmpty);
-            expectSync(
-              gate.calls.where((c) => c == 'putAnnotation'),
-              hasLength(2),
-            );
-            await f.reader.open(source.bookId);
-            await f.event('ready');
-            await f.event('opened');
-            await f.verifyNote(source.id, 'Latest protected text');
-          } finally {
-            gate.failPut = false;
-            if (gate.putProceed?.isCompleted == false) {
-              gate.putProceed!.complete();
-            }
-            await f.dispose();
-          }
-        },
-        settle: false,
-        widgetClock: true,
+    () async {
+      late AnnotationStoreGate gate;
+      final f = await _ReaderFixture.create(
+        'text.pdf',
+        wrapStore: (s) => gate = AnnotationStoreGate(s),
       );
+      try {
+        final second =
+            (await f.container
+                    .read(workspaceControllerProvider.notifier)
+                    .openPath(p.absolute('test/fixtures/reflowable.epub')))
+                .books
+                .single;
+        gate.failPut = true;
+        gate.putEntered = Completer<void>();
+        gate.putProceed = Completer<void>();
+        await f.openSelectionNote();
+        final old = Map.of(f.panelSnapshot);
+        await f.action('noteDraft', {'note': 'First text'});
+        await gate.putEntered!.future;
+        final source = f.drafts.sources.values.single;
+        await f.action('noteDraft', {'note': 'Latest protected text'});
+        final switching = f.reader.open(second.id);
+        gate.putProceed!.complete();
+        await switching;
+        await f.event('ready');
+        await f.event('opened');
+        expectSync(f.drafts.drafts.values.any((d) => d.error != null), isTrue);
+        expectSync(f.state.bookId, second.id);
+        expectSync(f.drafts.drafts[source.id]!.text, 'Latest protected text');
+        await f.event('popoverAction', {
+          'session': old['session'],
+          'presentation': old['presentation'],
+          'action': 'noteDraft',
+          'note': 'Obsolete text',
+        });
+        expectSync(f.drafts.drafts[source.id]!.text, 'Latest protected text');
+        gate.failPut = false;
+        await f.notes.flush();
+        expectSync(
+          (await f.store.call('annotations', source.bookId) as List)
+              .single['note'],
+          'Latest protected text',
+        );
+        expectSync(await f.store.call('annotations', second.id), isEmpty);
+        expectSync(f.reader.annotations, isEmpty);
+        expectSync(gate.calls.where((c) => c == 'putAnnotation'), hasLength(2));
+        await f.reader.open(source.bookId);
+        await f.event('ready');
+        await f.event('opened');
+        await f.verifyNote(source.id, 'Latest protected text');
+      } finally {
+        gate.failPut = false;
+        if (gate.putProceed?.isCompleted == false) {
+          gate.putProceed!.complete();
+        }
+        await f.dispose();
+      }
     },
   );
 
@@ -9028,7 +6509,7 @@ void main() {
           final other = f.reader.annotations.single;
           gate.putEntered = Completer<void>();
           gate.putProceed = Completer<void>();
-          await f.openSelectionPopover();
+          await f.openSelectionNote();
           await f.action('noteDraft', {'note': 'Pending creation'});
           await gate.putEntered!.future;
           final source = f.drafts.sources.values.single;
@@ -9101,7 +6582,7 @@ void main() {
       );
       try {
         gate.failPut = true;
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.action('noteDraft', {'note': 'Never inserted'});
         await _until(() => f.drafts.drafts.values.any((d) => d.error != null));
         final id = f.drafts.sources.keys.single;
@@ -9131,7 +6612,7 @@ void main() {
         wrapStore: (s) => gate = AnnotationStoreGate(s),
       );
       try {
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Saved A');
         final a = f.reader.annotations.single;
         gate.entered = Completer<void>();
@@ -9139,16 +6620,16 @@ void main() {
         f.notes.edit(a, 'Older B');
         final saving = f.notes.save(a.id);
         await gate.entered!.future;
-        await f.openAnnotationPopover(a);
-        expect(f.popup['note'], 'Older B');
+        await f.openAnnotationNote(a);
+        expect(f.panelSnapshot['note'], 'Older B');
         await f.action('noteDraft', {'note': 'Newer C'});
         gate.proceed!.complete();
         await saving;
         expect(f.drafts.drafts[a.id]!.text, 'Newer C');
         await f.notes.flush();
         await f.verifyNote(a.id, 'Newer C');
-        await f.openAnnotationPopover(a);
-        final obsolete = Map.of(f.popup);
+        await f.openAnnotationNote(a);
+        final obsolete = Map.of(f.panelSnapshot);
         await f.container
             .read(workspaceControllerProvider.notifier)
             .deleteAnnotation(a.id);
@@ -9158,7 +6639,7 @@ void main() {
         await f.notes.flush();
         expect(f.drafts.drafts, isEmpty);
         expect(await f.store.call('annotations', a.bookId), isEmpty);
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.event('popoverAction', {
           'presentation': obsolete['presentation'],
           'action': 'noteDraft',
@@ -9346,48 +6827,6 @@ void main() {
         f.reader.search('');
         expect(f.state.searchStatus, 'idle');
         expect(f.state.matches, isEmpty);
-      } finally {
-        await f.dispose();
-      }
-    },
-  );
-  test(
-    'popover draft autosave and final Save retain one annotation and the latest color',
-    () async {
-      final f = await _ReaderFixture.create('reflowable.epub');
-      try {
-        await f.event('selection', {
-          'anchor': {'cfi': 'epubcfi(/6/2!/4/2/1:6)', 'index': 0},
-          'text': 'Quotation',
-          'reference': 'Chapter 1',
-          'settled': true,
-        });
-        await f.reader.showPopover('selection');
-        final popup =
-            f.calls.lastWhere((c) => c.method == 'popover').arguments as Map;
-        await f.event('popoverAction', {
-          'presentation': popup['presentation'],
-          'action': 'noteDraft',
-          'note': 'Draft',
-        });
-        await f.container.read(notebookControllerProvider.notifier).flush();
-        await f.event('popoverAction', {
-          'presentation': popup['presentation'],
-          'action': 'highlightColor',
-          'color': 'blue',
-        });
-        await f.event('popoverAction', {
-          'presentation': popup['presentation'],
-          'action': 'highlight',
-          'note': 'Final multiline\nnote',
-          'color': 'blue',
-        });
-        final annotations = f.container
-            .read(workspaceControllerProvider)
-            .annotations;
-        expect(annotations, hasLength(1));
-        expect(annotations.single.note, 'Final multiline\nnote');
-        expect(annotations.single.color, 'blue');
       } finally {
         await f.dispose();
       }
@@ -9777,7 +7216,7 @@ void main() {
               .single['annotationKind'],
           'region',
         );
-        await f.openAnnotationPopover(f.reader.annotations.single);
+        await f.openAnnotationNote(f.reader.annotations.single);
         await f.action('annotationNote', {'note': 'Edited region note'});
         expect(
           (await f.store.call('annotations', book.id) as List).single['note'],
@@ -9816,14 +7255,18 @@ void main() {
         await tester.pumpWidget(_sidebarApplication(f));
         await tester.pumpAndSettle();
         expect(find.byTooltip('Search'), findsNothing);
-        await tester.tap(
+        final entries = await _chooseNativeMenu(
+          tester,
           find.byKey(const ValueKey('reader-sidebar-view-menu')),
+          'Thumbnails',
+          settle: false,
         );
-        await tester.pumpAndSettle();
-        expect(find.text('Search Results'), findsNothing);
-        expect(find.text('Thumbnails'), findsOneWidget);
-        expect(find.text('Marks'), findsOneWidget);
-        await tester.tap(find.text('Thumbnails'));
+        expect(
+          entries.map((e) => e['label']),
+          containsAll(['Outline', 'Thumbnails', 'Marks']),
+        );
+        expect(entries.any((e) => e['label'] == 'Search Results'), isFalse);
+
         await _pumpUntil(
           tester,
           () => f.dispatches.any(
@@ -10007,7 +7450,7 @@ void _professionalWorkspaceTests() {
           'text.pdf',
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Private note');
       });
       try {
@@ -10062,7 +7505,7 @@ void _professionalWorkspaceTests() {
           'text.pdf',
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Private note');
         f.notes.revealAnnotation(
           f.state.bookId!,
@@ -10219,7 +7662,7 @@ void _professionalWorkspaceTests() {
           speech: _Speech(),
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation(
           'highlight',
           note: 'Shared private note\nSecond line',
@@ -10545,7 +7988,7 @@ void _professionalWorkspaceTests() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           searchController: _CachedSearchSnapshot.new,
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Deleted search needle');
       });
       try {
@@ -10617,7 +8060,7 @@ void _professionalWorkspaceTests() {
                 nativeWindow: _HeaderWindow(),
               ),
             );
-            await f.openSelectionPopover();
+            await f.openSelectionNote();
             await f.event('location', {
               'anchor': {'page': 0},
             });
@@ -10708,7 +8151,7 @@ void _professionalWorkspaceTests() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           wrapStore: (store) => gate = AnnotationStoreGate(store),
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Saved note');
         pending = f.reader.annotations.single.copy({
           'id': 'annotation-unsaved-search',
@@ -10986,7 +8429,7 @@ void _professionalWorkspaceTests() {
     () async {
       final f = await _ReaderFixture.create('text.pdf');
       try {
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation(
           'highlight',
           note: 'A needle in the notebook',
@@ -11067,7 +8510,7 @@ void _professionalWorkspaceTests() {
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
           wrapStore: (s) => gate = AnnotationStoreGate(s),
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: 'Saved baseline');
         f.notes.revealAnnotation(
           f.state.bookId!,
@@ -11135,7 +8578,7 @@ void _professionalWorkspaceTests() {
           'text.pdf',
           windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
         );
-        await f.openSelectionPopover();
+        await f.openSelectionNote();
         await f.reader.annotation('highlight', note: note);
       });
       try {
@@ -11272,9 +8715,18 @@ void _professionalWorkspaceTests() {
           find.byKey(const ValueKey('settings-page-selector')),
           findsOneWidget,
         );
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+              const MethodChannel(nativeMenuChannelName),
+              (call) async {
+                if (call.method != 'show') return null;
+                final entries = _nativeLeaves(
+                  (call.arguments as Map)['entries'] as List,
+                );
+                return entries.indexWhere((e) => e['label'] == 'Data');
+              },
+            );
         await tester.tap(find.byKey(const ValueKey('settings-page-selector')));
-        await _pumpUntil(tester, () => find.text('Data').evaluate().isNotEmpty);
-        await tester.tap(find.text('Data'));
         await tester.pumpAndSettle();
         expect(find.text('Back Up Reading Data'), findsOneWidget);
         expect(find.text('Restore Backup'), findsOneWidget);
@@ -12128,7 +9580,7 @@ void _nativeSelectionTests() {
       }
     },
   );
-  for (final route in ['read', 'split', 'fallback', 'existing']) {
+  for (final route in ['read', 'split', 'failure', 'existing']) {
     testWidgets(
       'native selection menu on $route uses the primary host and opens the Notebook editor',
       (tester) async {
@@ -12159,12 +9611,13 @@ void _nativeSelectionTests() {
             TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
         final chosen = Completer<int?>();
         Map? request;
+        var failMenu = route == 'failure';
         messenger.setMockMethodCallHandler(
           const MethodChannel(nativeMenuChannelName),
           (call) async {
             if (call.method == 'show') {
               request = call.arguments as Map;
-              if (route == 'fallback') {
+              if (failMenu) {
                 throw PlatformException(code: 'unavailable');
               }
               return chosen.future;
@@ -12232,19 +9685,35 @@ void _nativeSelectionTests() {
             () => f.event('selection', {'anchor': null, 'text': ''}),
             settle: false,
           );
-          if (route == 'fallback') {
-            final item = find.widgetWithText(MenuItemButton, 'Add Note');
-            await _pumpUntil(tester, () => item.evaluate().isNotEmpty);
-            await tester.tap(item);
-          } else {
-            chosen.complete(
-              entries.indexWhere(
-                (e) =>
-                    e['label'] ==
-                    (route == 'existing' ? 'Edit Note' : 'Add Note'),
-              ),
+          if (failMenu) {
+            await tester.pumpAndSettle();
+            expect(find.byType(MenuItemButton), findsNothing);
+            expect(find.byType(NotebookContent), findsNothing);
+            expect(
+              find.text('The menu could not be opened. Please try again.'),
+              findsOneWidget,
             );
+            failMenu = false;
+            request = null;
+            await _readerAction(
+              tester,
+              () => f.event('selection', {
+                'anchor': {'page': 0, 'textOffset': 0, 'textLength': 7},
+                'text': 'library',
+                'reference': 'Page 1',
+                'settled': true,
+              }),
+              settle: false,
+            );
+            await _pumpUntil(tester, () => request != null, settle: false);
           }
+          chosen.complete(
+            entries.indexWhere(
+              (e) =>
+                  e['label'] ==
+                  (route == 'existing' ? 'Edit Note' : 'Add Note'),
+            ),
+          );
           await _pumpUntil(
             tester,
             () =>
@@ -12287,5 +9756,554 @@ void _nativeSelectionTests() {
         }
       },
     );
+  }
+  for (final view in [BookView.reading, BookView.split]) {
+    testWidgets(
+      'primary Go To header and command preserve navigation in ${view.name}',
+      (tester) async {
+        late _ReaderFixture f;
+        await _readerAction(tester, () async {
+          f = await _ReaderFixture.create(
+            'text.pdf',
+            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          );
+          await f.event('metadata', {
+            'pages': 3,
+            'labels': ['i', '5', 'ii'],
+          });
+          await f.event('location', {
+            'anchor': {'page': 0},
+            'progress': 0,
+          });
+        });
+        f.onDispatch = (command) async {
+          if (command['action'] == 'goto' && command['request'] is int) {
+            scheduleMicrotask(() async {
+              await f.event('location', {
+                'anchor': command['anchor'],
+                'progress': .5,
+              });
+              await f.event('navigationResult', {
+                'request': command['request'],
+              });
+            });
+          }
+        };
+        try {
+          await _mountHeaderApplication(
+            tester,
+            f,
+            '/${view == BookView.split ? 'split' : 'read'}/${f.state.bookId}',
+          );
+          await tester.tap(find.byKey(const ValueKey('reader-location')));
+          await _pumpUntil(
+            tester,
+            () => find.byType(ReaderInformationPanel).evaluate().isNotEmpty,
+          );
+          expect(find.byType(MaterialApp), findsOneWidget);
+          expect(find.byType(ReaderInformationPanel), findsOneWidget);
+          expect(f.state.panel!.kind, ReaderPanelKind.goTo);
+          final entry = find.descendant(
+            of: find.byType(ReaderInformationPanel),
+            matching: find.byType(TextField),
+          );
+          expect(
+            tester
+                .widget<EditableText>(
+                  find.descendant(
+                    of: entry,
+                    matching: find.byType(EditableText),
+                  ),
+                )
+                .focusNode
+                .hasFocus,
+            isTrue,
+          );
+          await tester.enterText(entry, '0');
+          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+          await tester.pump();
+          expect(
+            find.text(AppLocalizations.of(tester.element(entry)).invalidPage),
+            findsOneWidget,
+          );
+          expect(f.state.panel, isNotNull);
+          await tester.enterText(entry, '3');
+          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+          await _pumpUntil(tester, () => f.state.panel == null);
+          expect(f.state.location['anchor'], {'page': 2});
+          await _readerAction(tester, () async {
+            await _appCommands(tester).execute(BusyBooksCommandIds.goTo);
+          });
+          expect(find.byType(ReaderInformationPanel), findsOneWidget);
+          await tester.enterText(entry, '=5');
+          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+          await _pumpUntil(tester, () => f.state.panel == null);
+          expect(f.state.location['anchor'], {'page': 1});
+          await _readerAction(tester, f.reader.flush);
+          final saved = await tester.runAsync(
+            () => f.store.call('book', f.state.bookId),
+          );
+          expect((saved as Map)['anchor'], {'page': 1});
+          tester.view.physicalSize = const Size(640, 560);
+          tester.platformDispatcher.textScaleFactorTestValue = 1.75;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await tester.pumpAndSettle();
+          await _readerAction(tester, () async {
+            await _appCommands(tester).execute(BusyBooksCommandIds.goTo);
+          });
+          expect(find.byType(ReaderInformationPanel), findsOneWidget);
+          expect(
+            tester.getSize(find.byType(ReaderInformationPanel)).height,
+            lessThan(560),
+          );
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+          expect(f.state.panel, isNull);
+          expect(
+            f.calls.where(
+              (c) => [
+                'popover',
+                'capturePopover',
+                'popoverResult',
+              ].contains(c.method),
+            ),
+            isEmpty,
+          );
+          expect(tester.takeException(), isNull);
+        } finally {
+          await _disposeHeaderApplication(tester, f);
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'primary Go To retains failed navigation and rejects obsolete completion',
+    (tester) async {
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+        await f.event('metadata', {
+          'pages': 3,
+          'labels': ['i', '1', '2'],
+        });
+        await f.event('location', {
+          'anchor': {'page': 0},
+        });
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+        await _readerAction(tester, f.reader.showGoTo);
+        final first = f.state.panel!;
+        final entry = find.descendant(
+          of: find.byType(ReaderInformationPanel),
+          matching: find.byType(TextField),
+        );
+        await tester.enterText(entry, '2');
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await _pumpUntil(
+          tester,
+          () => f.dispatches.any(
+            (d) => d['action'] == 'goto' && d['request'] != null,
+          ),
+        );
+        final request = f.dispatches.lastWhere(
+          (d) => d['action'] == 'goto',
+        )['request'];
+        await _readerAction(
+          tester,
+          () => f.event('navigationResult', {
+            'request': request,
+            'message': 'Controlled navigation failure',
+          }),
+        );
+        await tester.pumpAndSettle();
+        expect(f.state.panel, first);
+        expect(tester.widget<TextField>(entry).controller!.text, '2');
+        expect(
+          find.text(
+            AppLocalizations.of(tester.element(entry)).navigationInterrupted,
+          ),
+          findsOneWidget,
+        );
+        await _readerAction(tester, f.reader.dismissReaderControls);
+        await _readerAction(tester, f.reader.showGoTo);
+        final replacement = f.state.panel!;
+        await _readerAction(
+          tester,
+          () => f.event('navigationResult', {'request': request}),
+        );
+        expect(f.state.panel, replacement);
+        await _readerAction(
+          tester,
+          () => f.reader.navigateFromPanel(first, {'page': 2}),
+        );
+        expect(f.dispatches.where((d) => d['action'] == 'goto'), hasLength(1));
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  for (final fixture in ['reflowable.epub', 'formats/comic-deflated.cbz']) {
+    testWidgets(
+      'primary Go To keeps progress, chapter and comic destinations for $fixture',
+      (tester) async {
+        late _ReaderFixture f;
+        await _readerAction(tester, () async {
+          f = await _ReaderFixture.create(
+            fixture,
+            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          );
+          await f.event('metadata', {
+            'pages': 7,
+            'labels': [],
+            'toc': [
+              {
+                'id': 'chapter1',
+                'label': 'Chapter One',
+                'href': 'chapter.xhtml',
+                'depth': 0,
+              },
+            ],
+          });
+          Map<String, dynamic> comicAnchor = {'page': 0};
+          if (fixture.endsWith('.cbz')) {
+            final descriptor =
+                await f.store.call('prepare', {
+                      'id': f.state.bookId,
+                      'path': f.reader.book!.path,
+                    })
+                    as Map;
+            final index =
+                jsonDecode(
+                      await File(
+                        '${descriptor['cacheDirectory']}.json',
+                      ).readAsString(),
+                    )
+                    as Map;
+            comicAnchor = {
+              'kind': 'comic',
+              'version': 1,
+              'format': 'cbz',
+              'page': 0,
+              'pageId': index['pages'][0]['file'],
+            };
+          }
+          await f.event('location', {
+            'anchor': fixture.endsWith('.cbz')
+                ? comicAnchor
+                : {'cfi': 'epubcfi(/6/2!/4/2/1:6)', 'index': 0},
+            'progress': .25,
+          });
+        });
+        f.onDispatch = (command) async {
+          if (command['action'] == 'goto' && command['request'] != null) {
+            scheduleMicrotask(
+              () =>
+                  f.event('navigationResult', {'request': command['request']}),
+            );
+          }
+        };
+        try {
+          await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+          await _readerAction(tester, f.reader.showGoTo);
+          if (fixture.endsWith('.cbz')) {
+            await tester.tap(find.text('Last page'));
+            await _pumpUntil(tester, () => f.state.panel == null);
+            expect(
+              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
+              {'page': 6},
+            );
+            await _readerAction(tester, f.reader.showGoTo);
+            await tester.tap(find.text('First page'));
+            await _pumpUntil(tester, () => f.state.panel == null);
+            expect(
+              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
+              {'page': 0},
+            );
+          } else {
+            final entry = find.descendant(
+              of: find.byType(ReaderInformationPanel),
+              matching: find.byType(TextField),
+            );
+            await tester.enterText(entry, '42');
+            await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+            await _pumpUntil(tester, () => f.state.panel == null);
+            expect(
+              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
+              {'fraction': .42},
+            );
+            await _readerAction(tester, f.reader.showGoTo);
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+                .setMockMethodCallHandler(
+                  const MethodChannel(nativeMenuChannelName),
+                  (call) async => call.method == 'show' ? 0 : null,
+                );
+            await tester.tap(find.text('1. Chapter One'));
+            await _pumpUntil(tester, () => f.state.panel == null);
+            expect(
+              f.dispatches.lastWhere((d) => d['action'] == 'goto')['anchor'],
+              {'href': 'chapter.xhtml'},
+            );
+          }
+          expect(tester.takeException(), isNull);
+        } finally {
+          await _disposeHeaderApplication(tester, f);
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'primary lookup shows loading errors retry full entry and Escape',
+    (tester) async {
+      final dictionary = _ControlledDictionary();
+      late _ReaderFixture f;
+      await _readerAction(tester, () async {
+        f = await _ReaderFixture.create(
+          'text.pdf',
+          dictionary: dictionary,
+          windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+        );
+      });
+      try {
+        await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+        await _readerAction(
+          tester,
+          () => _startLookup(f, 'ice cream'),
+          settle: false,
+        );
+        await _pumpUntil(
+          tester,
+          () => dictionary.terms.isNotEmpty,
+          settle: false,
+        );
+        await tester.pump();
+        expect(find.text('ice cream'), findsOneWidget);
+        final l = AppLocalizations.of(
+          tester.element(find.byType(ReaderInformationPanel)),
+        );
+        expect(find.text(l.lookupLoading), findsOneWidget);
+        dictionary.complete(0, status: DictionaryStatus.offline);
+        await _pumpUntil(
+          tester,
+          () => f.state.panel?.lookup['status'] == 'offline',
+        );
+        expect(find.text(l.lookupOffline), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('lookup-retry')));
+        await _pumpUntil(
+          tester,
+          () => dictionary.terms.length == 2,
+          settle: false,
+        );
+        dictionary.complete(1);
+        await _pumpUntil(
+          tester,
+          () => f.state.panel?.lookup['status'] == 'ready',
+        );
+        expect(find.text('1. A controlled definition.'), findsOneWidget);
+        expect(find.byKey(const ValueKey('lookup-full-entry')), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(f.state.panel, isNull);
+        expect(find.byType(ReaderInformationPanel), findsNothing);
+        expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
+      } finally {
+        await _disposeHeaderApplication(tester, f);
+      }
+    },
+  );
+
+  for (final platform in [TargetPlatform.linux, TargetPlatform.windows]) {
+    testWidgets(
+      'speech options use native checked submenus on $platform and retain settings',
+      (tester) async {
+        final speech = _Speech();
+        late _ReaderFixture f;
+        await _readerAction(tester, () async {
+          f = await _ReaderFixture.create(
+            'text.pdf',
+            speech: speech,
+            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          );
+          await f.container.read(appSettingsControllerProvider.notifier).update(
+            {'speed': 1.1},
+          );
+          await f.container
+              .read(narrationControllerProvider.notifier)
+              .start(
+                passage: {
+                  'text': 'Speech sample',
+                  'anchor': {'page': 0},
+                },
+              );
+        });
+        Map? payload;
+        String selection = 'Fixture Voice 2';
+        try {
+          await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+          debugDefaultTargetPlatformOverride = platform;
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(
+                const MethodChannel(nativeMenuChannelName),
+                (call) async {
+                  if (call.method != 'show') return true;
+                  payload = call.arguments as Map;
+                  return _nativeLeaves(
+                    payload!['entries'] as List,
+                  ).indexWhere((e) => e['label'] == selection);
+                },
+              );
+          await tester.tap(find.byTooltip('Voice and Speed'));
+          await _pumpUntil(
+            tester,
+            () =>
+                f.container.read(appSettingsControllerProvider).data['voice'] ==
+                'Fixture Voice 2',
+          );
+          expect((payload!['entries'] as List).map((e) => e['label']), [
+            'Voice',
+            'Speed',
+          ]);
+          expect(
+            _nativeLeaves(
+              payload!['entries'] as List,
+            ).singleWhere((e) => e['label'] == '1.1×')['selected'],
+            isTrue,
+          );
+          expect(
+            _nativeLeaves(
+              payload!['entries'] as List,
+            ).singleWhere((e) => e['label'] == 'System')['selected'],
+            isTrue,
+          );
+          selection = '1.5×';
+          await tester.tap(find.byTooltip('Voice and Speed'));
+          await _pumpUntil(
+            tester,
+            () =>
+                f.container.read(appSettingsControllerProvider).data['speed'] ==
+                1.5,
+          );
+          expect(
+            _nativeLeaves(
+              payload!['entries'] as List,
+            ).singleWhere((e) => e['label'] == 'Fixture Voice 2')['selected'],
+            isTrue,
+          );
+          expect(f.state.panel, isNull);
+          expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
+          expect(speech.calls.where((e) => e.action == 'voices'), isNotEmpty);
+          expect(tester.takeException(), isNull);
+        } finally {
+          debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+          await _disposeHeaderApplication(tester, f);
+        }
+      },
+    );
+  }
+
+  for (final pending in ['enumeration', 'choice']) {
+    for (final transition in ['hidden', 'replacement']) {
+      testWidgets('speech options reject late $pending after $transition', (
+        tester,
+      ) async {
+        final speech = _Speech();
+        late _ReaderFixture f;
+        await _readerAction(tester, () async {
+          f = await _ReaderFixture.create(
+            'text.pdf',
+            speech: speech,
+            windowControls: WindowControlService(nativeWindow: _HeaderWindow()),
+          );
+          await f.container
+              .read(narrationControllerProvider.notifier)
+              .start(
+                passage: {
+                  'text': 'Speech sample',
+                  'anchor': {'page': 0},
+                },
+              );
+        });
+        final choice = Completer<int?>();
+        List<Map>? rows;
+        var shows = 0;
+        try {
+          await _mountHeaderApplication(tester, f, '/read/${f.state.bookId}');
+          final previousVoices = speech.calls
+              .where((c) => c.action == 'voices')
+              .length;
+          if (pending == 'enumeration') {
+            speech.voicesReply = Completer<List<String>>();
+          }
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(
+                const MethodChannel(nativeMenuChannelName),
+                (call) async {
+                  if (call.method != 'show') return true;
+                  shows++;
+                  rows = _nativeLeaves(
+                    (call.arguments as Map)['entries'] as List,
+                  );
+                  return choice.future;
+                },
+              );
+          await tester.tap(find.byTooltip('Voice and Speed'));
+          await _pumpUntil(
+            tester,
+            () => pending == 'enumeration'
+                ? speech.calls.where((c) => c.action == 'voices').length >
+                      previousVoices
+                : rows != null,
+          );
+          await _readerAction(tester, () async {
+            if (transition == 'hidden') {
+              await f.reader.show(false);
+            } else {
+              final next = await f.container
+                  .read(workspaceControllerProvider.notifier)
+                  .openPath(p.absolute('test/fixtures/mixed-pages.pdf'));
+              f.container
+                  .read(appRouterProvider)
+                  .go('/read/${next.books.single.id}');
+            }
+          }, settle: false);
+          if (transition == 'replacement') {
+            await _pumpUntil(
+              tester,
+              () => f.calls.where((c) => c.method == 'open').length == 2,
+              settle: false,
+            );
+            await _readerAction(tester, f.finishColdOpen);
+          }
+          final afterRetirement = f.calls.length;
+          speech.voicesReply?.complete(['Late voice']);
+          choice.complete(
+            rows?.indexWhere((e) => e['label'] == 'Fixture Voice 2'),
+          );
+          await tester.pumpAndSettle();
+          expect(shows, pending == 'enumeration' ? 0 : 1);
+          expect(
+            f.container.read(appSettingsControllerProvider).data['voice'],
+            '',
+          );
+          expect(
+            f.calls.skip(afterRetirement).where((c) => c.method == 'focus'),
+            isEmpty,
+          );
+          expect(f.calls.where((c) => c.method == 'popover'), isEmpty);
+        } finally {
+          if (speech.voicesReply case final reply? when !reply.isCompleted) {
+            reply.complete([]);
+          }
+          if (!choice.isCompleted) choice.complete();
+          await _disposeHeaderApplication(tester, f);
+        }
+      });
+    }
   }
 }

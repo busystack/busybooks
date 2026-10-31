@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -285,7 +286,7 @@ class _CollectionScreenState extends ConsumerState<_CollectionWorkspace> {
                   ),
                 ),
                 if (data.loading) ...[
-                  const LinearProgressIndicator(),
+                  const YaruLinearProgressIndicator(),
                   BusyBooksActionRow(
                     title: l.busy,
                     subtitle: data.progress['name']?.toString(),

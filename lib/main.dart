@@ -6,7 +6,6 @@ import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
 import 'package:yaru/yaru.dart';
 import 'src/app/app_settings.dart';
-import 'src/reading/presentation/reader_popover.dart';
 import 'src/app/busybooks_app.dart';
 import 'src/app/startup_path.dart';
 import 'src/app/startup_failure.dart';
@@ -23,10 +22,6 @@ import 'src/platform/linux_gtk_settings_notifications.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (args.length == 1 && args.single == '--busybooks-reader-popover') {
-    runApp(const ProviderScope(child: ReaderPopoverApp()));
-    return;
-  }
   try {
     await _bootstrap(args);
   } catch (error, stack) {

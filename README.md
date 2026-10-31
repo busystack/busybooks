@@ -115,7 +115,7 @@ reading-data database. See [storage.md](docs/development/storage.md).
 ## Development documentation
 
 - [BusyMark revision and reuse map](docs/development/reference.md)
-- [Reading workspace controls and native popovers](docs/development/reading-workspace.md)
+- [Reading workspace controls and native lifecycle](docs/development/reading-workspace.md)
 - [Shared typography and local fonts](docs/development/typography.md)
 - [Reader engines and content boundary](docs/development/readers.md)
 - [Books, database collections, backup and recovery](docs/development/storage.md)

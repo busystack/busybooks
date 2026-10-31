@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,8 @@ import '../../workspace/workspace_controller.dart';
 import '../application/narration_controller.dart';
 import '../application/reader_controller.dart';
 import 'selection_menu.dart';
+import 'reader_panel.dart';
+import 'speech_menu.dart';
 
 class ReadingContent extends ConsumerStatefulWidget {
   const ReadingContent({
@@ -186,140 +189,147 @@ class _ReadingContentState extends ConsumerState<ReadingContent> {
       (e) =>
           e.value.error != null && notebook.sources[e.key]?.bookId == widget.id,
     );
-    return Column(
-      children: [
-        if (noteFailure)
-          BusyBooksBanner(
-            title: l.noteSaveFailed,
-            actionLabel: l.notebook,
-            onAction: () => openNotebook(context, ref, widget.id),
-          ),
-        if (state.popoverError != null)
-          BusyBooksBanner(
-            title: state.popoverError!,
-            actionLabel: l.retry,
-            onAction: _reader.retryPopover,
-          ),
-        if (state.warning != null)
-          BusyBooksBanner(
-            title: '${l.saveWarning}\n${state.warning}',
-            actionLabel: l.retry,
-            onAction: () async {
-              try {
-                await _reader.flush();
-              } catch (_) {
-                /* The warning retains the pending save. */
-              }
-              if (mounted) _surface.currentState?.refreshViewport();
-            },
-          ),
-        if (state.error != null)
-          BusyBooksBanner(
-            title: '${l.bookError}\n${state.error}',
-            actionLabel: l.retry,
-            onAction: () async {
-              try {
-                await _reader.retry(widget.id);
-              } catch (e) {
-                if (context.mounted) {
-                  BusyBooksToastOverlay.show(
-                    context,
-                    message: '${l.bookError}: $e',
-                  );
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        children: [
+          if (noteFailure)
+            BusyBooksBanner(
+              title: l.noteSaveFailed,
+              actionLabel: l.notebook,
+              onAction: () => openNotebook(context, ref, widget.id),
+            ),
+          if (state.warning != null)
+            BusyBooksBanner(
+              title: '${l.saveWarning}\n${state.warning}',
+              actionLabel: l.retry,
+              onAction: () async {
+                try {
+                  await _reader.flush();
+                } catch (_) {
+                  /* The warning retains the pending save. */
                 }
-              }
-            },
-          ),
-        Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: _NativeReaderSurface(
-                  key: _surface,
-                  bookId: widget.id,
-                  active:
-                      widget.visible &&
-                      state.bookId == widget.id &&
-                      state.error == null,
-                ),
+                if (mounted) _surface.currentState?.refreshViewport();
+              },
+            ),
+          if (state.error != null)
+            BusyBooksBanner(
+              title: '${l.bookError}\n${state.error}',
+              actionLabel: l.retry,
+              onAction: () async {
+                try {
+                  await _reader.retry(widget.id);
+                } catch (e) {
+                  if (context.mounted) {
+                    BusyBooksToastOverlay.show(
+                      context,
+                      message: '${l.bookError}: $e',
+                    );
+                  }
+                }
+              },
+            ),
+          if (state.panel case final panel? when panel.bookId == widget.id)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight * .55,
               ),
-              if (state.error != null)
+              child: ReaderInformationPanel(
+                key: ValueKey((panel.session, panel.presentation)),
+                panel: panel,
+              ),
+            ),
+          Expanded(
+            child: Stack(
+              children: [
                 Positioned.fill(
-                  child: Center(
-                    child: book == null
-                        ? Text(l.bookError)
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              BusyBooksPushButton.standard(
-                                onPressed: () =>
-                                    openNotebook(context, ref, book.id),
-                                child: Text(l.notebook),
-                              ),
-                              if ([
-                                'missing',
-                                'changed',
-                                'denied',
-                              ].contains(state.errorCode))
-                                BusyBooksPushButton.standard(
-                                  onPressed: () =>
-                                      locateBook(context, ref, book.id),
-                                  child: Text(l.locateBook),
-                                ),
-                            ],
-                          ),
+                  child: _NativeReaderSurface(
+                    key: _surface,
+                    bookId: widget.id,
+                    active:
+                        widget.visible &&
+                        state.bookId == widget.id &&
+                        state.error == null,
                   ),
                 ),
-              if (state.error == null &&
-                  (!state.ready || state.bookId != widget.id))
-                Positioned.fill(
-                  child: ColoredBox(
-                    color: BusyBooksSurfaceColors.of(context).view,
+                if (state.error != null)
+                  Positioned.fill(
                     child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: BusyBooksSpacing.lg),
-                          if (workspace.loading)
-                            SizedBox(
-                              width: 300,
-                              child: LinearProgressIndicator(
-                                value:
-                                    (workspace.progress['total'] as int? ?? 0) >
-                                        0
-                                    ? (workspace.progress['done'] as int) /
-                                          (workspace.progress['total'] as int)
-                                    : null,
-                              ),
+                      child: book == null
+                          ? Text(l.bookError)
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                BusyBooksPushButton.standard(
+                                  onPressed: () =>
+                                      openNotebook(context, ref, book.id),
+                                  child: Text(l.notebook),
+                                ),
+                                if ([
+                                  'missing',
+                                  'changed',
+                                  'denied',
+                                ].contains(state.errorCode))
+                                  BusyBooksPushButton.standard(
+                                    onPressed: () =>
+                                        locateBook(context, ref, book.id),
+                                    child: Text(l.locateBook),
+                                  ),
+                              ],
                             ),
-                          Text(
-                            state.phase == 'initializing'
-                                ? l.initializingReader
-                                : state.phase == 'opening'
-                                ? l.openingPassage
-                                : l.loadingBook,
-                          ),
-                          BusyBooksPushButton.standard(
-                            child: Text(l.cancel),
-                            onPressed: () async {
-                              ref.read(readingDataStoreProvider).cancel();
-                              await _reader.suspend();
-                              if (context.mounted) {
-                                await returnToWorkspace(context, ref);
-                              }
-                            },
-                          ),
-                        ],
+                    ),
+                  ),
+                if (state.error == null &&
+                    (!state.ready || state.bookId != widget.id))
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: BusyBooksSurfaceColors.of(context).view,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const YaruCircularProgressIndicator(),
+                            const SizedBox(height: BusyBooksSpacing.lg),
+                            if (workspace.loading)
+                              SizedBox(
+                                width: 300,
+                                child: YaruLinearProgressIndicator(
+                                  value:
+                                      (workspace.progress['total'] as int? ??
+                                              0) >
+                                          0
+                                      ? (workspace.progress['done'] as int) /
+                                            (workspace.progress['total'] as int)
+                                      : null,
+                                ),
+                              ),
+                            Text(
+                              state.phase == 'initializing'
+                                  ? l.initializingReader
+                                  : state.phase == 'opening'
+                                  ? l.openingPassage
+                                  : l.loadingBook,
+                            ),
+                            BusyBooksPushButton.standard(
+                              child: Text(l.cancel),
+                              onPressed: () async {
+                                ref.read(readingDataStoreProvider).cancel();
+                                await _reader.suspend();
+                                if (context.mounted) {
+                                  await returnToWorkspace(context, ref);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const _PlaybackBar(),
-      ],
+          const _PlaybackBar(),
+        ],
+      ),
     );
   }
 }
@@ -368,10 +378,12 @@ class _PlaybackBar extends ConsumerWidget {
                 ),
               ),
             ),
-            BusyBooksHeaderIconButton(
-              tooltip: l.speechOptions,
-              icon: BusyBooksGlyphs.settings,
-              onPressed: controller.options,
+            Builder(
+              builder: (anchorContext) => BusyBooksHeaderIconButton(
+                tooltip: l.speechOptions,
+                icon: BusyBooksGlyphs.settings,
+                onPressed: () => showSpeechOptionsMenu(anchorContext, ref),
+              ),
             ),
             BusyBooksHeaderIconButton(
               tooltip: l.stop,

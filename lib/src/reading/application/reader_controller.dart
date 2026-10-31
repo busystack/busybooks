@@ -16,7 +16,6 @@ import '../../core/typography.dart';
 import '../../library/data/file_identity.dart';
 import '../../library/data/record_validation.dart'
     show validateAnchor, annotationColors;
-import '../../library/domain/annotation_limits.dart';
 import '../../library/domain/book.dart';
 import '../../notebook/application/notebook_controller.dart';
 import '../../workspace/workspace_controller.dart';
@@ -24,7 +23,6 @@ import '../../workspace/workspace_model.dart';
 import '../domain/annotation_transfer.dart';
 import '../domain/page_preview.dart';
 import '../domain/publication_outline.dart';
-import '../domain/reader_action.dart';
 import '../domain/reader_bridge.dart';
 import '../domain/reading_navigation.dart';
 import '../fonts/reading_font_service.dart';
@@ -35,13 +33,6 @@ const readerChannel = MethodChannel('io.busystack.busybooks/reader');
 final readerStartupTimeoutProvider = Provider<Duration>(
   (_) => const Duration(seconds: 45),
 );
-
-class _NoteDeliveryFailure implements Exception {
-  const _NoteDeliveryFailure(this.cause);
-  final Object cause;
-  @override
-  String toString() => cause.toString();
-}
 
 /// One passage activation, claimed by exactly one publication opening. The
 /// source validator remains live until dispatch, including across route handoff.
@@ -74,7 +65,7 @@ class ReaderJumpRequest {
   }
 }
 
-/// Captured before a native selection can collapse or its popover can close.
+/// Captured before a native selection can collapse or its menu can close.
 class ReaderSelectionTarget {
   const ReaderSelectionTarget(
     this.bookId,
@@ -107,7 +98,7 @@ enum ReaderSelectionAction {
 class ReaderSelectionMenuOwner {
   ReaderSelectionMenuOwner._(this.target, this._focusRevision);
   final ReaderSelectionTarget target;
-  int _focusRevision;
+  final int _focusRevision;
 }
 
 /// Ownership of one primary-window appearance menu, after draft handoff.
@@ -121,6 +112,24 @@ class ReaderAppearanceMenuOwner {
   final int presentation;
 }
 
+enum ReaderPanelKind { goTo, lookup }
+
+/// Primary-window controls retain the reader session and presentation owner.
+class ReaderPanel {
+  const ReaderPanel({
+    required this.kind,
+    required this.bookId,
+    required this.session,
+    required this.presentation,
+    this.term = '',
+    this.lookup = const {'status': 'loading'},
+  });
+  final ReaderPanelKind kind;
+  final String bookId, session, term;
+  final int presentation;
+  final Map<String, dynamic> lookup;
+}
+
 class ReaderState {
   const ReaderState({
     this.bookId,
@@ -128,7 +137,7 @@ class ReaderState {
     this.surfaceVisible = false,
     this.error,
     this.warning,
-    this.popoverError,
+    this.panel,
     this.errorCode,
     this.phase = 'idle',
     this.selection,
@@ -154,7 +163,8 @@ class ReaderState {
     this.thumbnailErrors = const {},
     this.thumbnailPending = const {},
   });
-  final String? bookId, error, warning, errorCode, popoverError;
+  final String? bookId, error, warning, errorCode;
+  final ReaderPanel? panel;
   final String phase;
   final bool ready, searching, fixed, surfaceVisible;
   final TypographyCapabilities typography;
@@ -187,8 +197,8 @@ class ReaderState {
     String? errorCode,
     String? phase,
     bool clearWarning = false,
-    String? popoverError,
-    bool clearPopoverError = false,
+    ReaderPanel? panel,
+    bool clearPanel = false,
     Map<String, dynamic>? selection,
     bool clearSelection = false,
     Map<String, dynamic>? location,
@@ -218,7 +228,7 @@ class ReaderState {
     surfaceVisible: surfaceVisible ?? this.surfaceVisible,
     error: error ?? this.error,
     warning: clearWarning ? null : warning ?? this.warning,
-    popoverError: clearPopoverError ? null : popoverError ?? this.popoverError,
+    panel: clearPanel ? null : panel ?? this.panel,
     errorCode: errorCode ?? this.errorCode,
     phase: phase ?? this.phase,
     selection: clearSelection ? null : selection ?? this.selection,
@@ -262,14 +272,12 @@ class ReaderController extends Notifier<ReaderState> {
   Rect _viewport = Rect.zero;
   Rect get viewport => _viewport;
   Map<String, dynamic> _chrome = {};
-  Map<String, dynamic>? _popoverSelection;
-  String? _annotationId;
-  bool _popoverActive = false;
-  bool _popoverNativeOwner = false;
-  String? _popoverKind;
+  bool get _panelActive => state.panel != null;
+  FocusNode? _panelReturnFocus;
+  int _panelRequest = 0;
   int _selectionRevision = 0;
   Map<String, dynamic>? _selectionIntent;
-  ReaderSelectionMenuOwner? _selectionMenuOwner, _selectionMenuFallback;
+  ReaderSelectionMenuOwner? _selectionMenuOwner;
   Future<void> Function()? _selectionMenuDismiss;
   DictionaryRequest? _lookupRequest;
   DictionaryResult? _lookupResult;
@@ -288,11 +296,7 @@ class ReaderController extends Notifier<ReaderState> {
     if (!state.ready || !_routeVisible || _suspended || state.bookId == null) {
       return null;
     }
-    final passage =
-        _selectionMenuOwner?.target.passage ??
-        (_popoverActive && _popoverKind == 'selection'
-            ? _popoverSelection
-            : state.selection);
+    final passage = _selectionMenuOwner?.target.passage ?? state.selection;
     final rawText = passage?['text'] as String? ?? '';
     final text = preserveWhitespace ? rawText : rawText.trim();
     if (text.isEmpty) return null;
@@ -325,7 +329,7 @@ class ReaderController extends Notifier<ReaderState> {
       return;
     }
     if (!_ownsSelection(target)) return;
-    await dismissPopover(restoreFocus: false);
+    await dismissReaderControls(restoreFocus: false);
     if (!_ownsSelection(target, presentation: target.presentation + 1)) {
       return;
     }
@@ -347,7 +351,7 @@ class ReaderController extends Notifier<ReaderState> {
   }) async {
     final target = selection ?? captureSelection();
     if (target == null || !_ownsSelection(target)) return null;
-    await dismissPopover(restoreFocus: false);
+    await dismissReaderControls(restoreFocus: false);
     if (!_ownsSelection(target, presentation: target.presentation + 1)) {
       return null;
     }
@@ -365,21 +369,14 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> lookup(ReaderSelectionTarget target) async {
     if (!_ownsSelection(target)) return;
-    await showPopover(
-      'lookup',
-      anchor: target.rect,
-      extra: {
-        'lookupTerm': target.text,
-        'lookup': {'status': 'loading'},
-      },
-    );
+    await _showReaderPanel(ReaderPanelKind.lookup, term: target.text);
     if (target.selectionRevision != null &&
             target.selectionRevision != _selectionRevision ||
         target.session != _session ||
         target.bookId != state.bookId ||
         target.presentation + 1 != _presentation ||
-        !_popoverActive ||
-        _popoverKind != 'lookup' ||
+        !_panelActive ||
+        state.panel?.kind != ReaderPanelKind.lookup ||
         !_routeVisible ||
         !state.ready) {
       return;
@@ -390,7 +387,11 @@ class ReaderController extends Notifier<ReaderState> {
 
   Future<void> _runLookup() async {
     final term = _lookupTerm;
-    if (term == null || !_popoverActive || _popoverKind != 'lookup') return;
+    if (term == null ||
+        !_panelActive ||
+        state.panel?.kind != ReaderPanelKind.lookup) {
+      return;
+    }
     _lookupRequest?.cancel();
     final revision = ++_lookupRevision,
         session = _session,
@@ -403,19 +404,24 @@ class ReaderController extends Notifier<ReaderState> {
         presentation == _presentation &&
         bookId == state.bookId &&
         _lookupTerm == term &&
-        _popoverActive &&
-        _popoverKind == 'lookup' &&
+        _panelActive &&
+        state.panel?.kind == ReaderPanelKind.lookup &&
         _routeVisible &&
         !_suspended &&
         state.ready;
     Future<void> update(Map<String, dynamic> value) async {
       if (!current()) return;
-      await readerChannel.invokeMethod<void>('popoverResult', {
-        'session': session,
-        'presentation': presentation,
-        'lookupTerm': term,
-        'lookup': value,
-      });
+      final panel = state.panel!;
+      state = state.copy(
+        panel: ReaderPanel(
+          kind: panel.kind,
+          bookId: panel.bookId,
+          session: panel.session,
+          presentation: panel.presentation,
+          term: term,
+          lookup: value,
+        ),
+      );
     }
 
     try {
@@ -552,10 +558,12 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> setWorkspaceVisible(bool value) {
     if (!value) {
       _focusRevision++;
-      if (_selectionMenuFallback == null) {
-        unawaited(_dismissSelectionMenu());
+      _panelRequest++;
+      if (_panelActive) {
+        unawaited(_dismissReaderControls(restoreFocus: false));
       } else {
-        _selectionMenuFallback!._focusRevision = _focusRevision;
+        unawaited(_dismissSelectionMenu());
+        unawaited(_dismissAppearanceMenu());
       }
       _workspaceVisible = false;
       return invalidateViewport();
@@ -609,9 +617,8 @@ class ReaderController extends Notifier<ReaderState> {
     _viewportSettled = settled;
     try {
       if ((_appearanceMenuOwner != null || _selectionMenuOwner != null) &&
-              rect != _viewport ||
-          _popoverActive && _popoverNativeOwner) {
-        await dismissPopover(restoreFocus: false);
+          rect != _viewport) {
+        await dismissReaderControls(restoreFocus: false);
         if (!current()) return false;
       }
       // Hide before submitting a changed allocation. The source focus intent
@@ -633,9 +640,7 @@ class ReaderController extends Notifier<ReaderState> {
       return current();
     } catch (error) {
       if (current()) {
-        if (error is! _NoteDeliveryFailure) {
-          state = state.copy(warning: error.toString());
-        }
+        state = state.copy(warning: error.toString());
         events.add({'type': 'feedback', 'message': error.toString()});
       }
       return false;
@@ -658,7 +663,7 @@ class ReaderController extends Notifier<ReaderState> {
     _invalidateAppearanceWork();
     if (state.ready) await send('cancelAppearance');
     await _eventTail;
-    await dismissPopover();
+    await dismissReaderControls();
     if (session != _session) return;
     await cancelSearch();
     // PDF navigation/layout may need a rendered frame to settle. Capture and
@@ -685,7 +690,6 @@ class ReaderController extends Notifier<ReaderState> {
     if (!state.ready) {
       _invalidateLayoutVisibility();
       _session = 'suspended:${++_generation}';
-      _failedPopover = null;
       await readerChannel.invokeMethod<void>('close');
     }
     try {
@@ -705,7 +709,7 @@ class ReaderController extends Notifier<ReaderState> {
       : 'reading';
   Future<void> addNote() async {
     if (regionNotes) {
-      await dismissPopover();
+      await dismissReaderControls();
       await send('beginRegion');
     } else {
       final target = captureSelection(preserveWhitespace: true);
@@ -798,35 +802,22 @@ class ReaderController extends Notifier<ReaderState> {
     readerChannel.setMethodCallHandler((call) async {
       if (call.method == 'event' && call.arguments is String) {
         final text = call.arguments as String;
-        if (text.length > maxReaderPopoverActionBytes) {
-          throw PlatformException(code: 'reader-action-size');
+        if (text.length > readerBridgeFrameBytes ||
+            utf8.encode(text).length > readerBridgeFrameBytes) {
+          throw PlatformException(code: 'reader-bridge-size');
         }
         var msg = (jsonDecode(text) as Map).cast<String, dynamic>();
         if (msg['session'] != _session) return;
-        if (msg['type'] == 'popoverAction') {
-          if (!validReaderPopoverAction(text)) {
-            await readerChannel.invokeMethod<void>('popoverResult', {
-              'request': msg['request'],
-              'error': 'Reader action exceeds its UTF-8 byte limit',
-            });
-            return;
-          }
-        } else {
-          try {
-            if (text.length > readerBridgeFrameBytes ||
-                utf8.encode(text).length > readerBridgeFrameBytes) {
-              throw const FormatException('Reader bridge frame limit exceeded');
-            }
-            final assembled = _bridgeAssembler.accept(msg);
-            if (assembled == null) return;
-            msg = assembled;
-          } catch (error) {
-            msg = {
-              'type': 'bridgeError',
-              'session': _session,
-              'message': error.toString(),
-            };
-          }
+        try {
+          final assembled = _bridgeAssembler.accept(msg);
+          if (assembled == null) return;
+          msg = assembled;
+        } catch (error) {
+          msg = {
+            'type': 'bridgeError',
+            'session': _session,
+            'message': error.toString(),
+          };
         }
         // A geometry handoff may be waiting inside an inbound selection event.
         // Its renderer drain acknowledgement must not queue behind that event.
@@ -875,12 +866,6 @@ class ReaderController extends Notifier<ReaderState> {
             state = state.copy(warning: error.toString());
           }
         });
-        // Go To settles through popoverResult. Acknowledge its delivery now so
-        // the same inbound channel can deliver the correlated renderer result;
-        // the existing action tail still serializes all mutations/dismissals.
-        if (msg['type'] == 'popoverAction' && msg['action'] == 'goto') {
-          return;
-        }
         await operation;
       }
     });
@@ -913,26 +898,6 @@ class ReaderController extends Notifier<ReaderState> {
       if (state.ready && !_suspended) {
         unawaited(syncAnnotations().catchError((Object _) {}));
       }
-    });
-    ref.listen(notebookControllerProvider, (before, after) {
-      final id = _annotationId;
-      if (id == null || !_routeVisible || _suspended) return;
-      final draft = after.drafts[id];
-      if (identical(before?.drafts[id], draft)) return;
-      // Status travels through the existing native result bridge. It neither
-      // reopens the popover nor resets its actively edited text field.
-      unawaited(
-        readerChannel
-            .invokeMethod<void>('popoverResult', {
-              'session': _session,
-              'presentation': _presentation,
-              'notePending': draft != null,
-              'noteError': draft?.error,
-              'noteRevision':
-                  draft?.revision ?? before?.drafts[id]?.revision ?? 0,
-            })
-            .catchError((Object _) {}),
-      );
     });
     return const ReaderState();
   }
@@ -993,16 +958,12 @@ class ReaderController extends Notifier<ReaderState> {
     _claimPendingJump(id, revision);
     bool ownedOpening() =>
         ref.mounted && revision == _openRevision && (isCurrent?.call() ?? true);
-    final replacing = state.bookId != id || !state.ready;
     try {
       await _dismissSelectionMenu();
       await _dismissAppearanceMenu();
       if (!ownedOpening()) return;
-      // Capture while the old session still owns the book and passage. The
-      // preparing phase below intentionally invalidates old native callbacks.
-      await _capturePopoverDraft(seal: replacing);
+      await dismissReaderControls(restoreFocus: false);
       if (!ownedOpening()) return;
-      if (replacing) _popoverActive = false;
     } catch (error) {
       if (_pendingJump?._openingRevision == revision) _pendingJump?.cancel();
       if (ownedOpening()) {
@@ -1019,7 +980,6 @@ class ReaderController extends Notifier<ReaderState> {
       _invalidateLayoutVisibility();
       _session = 'preparing:${++_generation}';
       _selectionIntent = null;
-      _failedPopover = null;
       state = ReaderState(bookId: id, phase: 'verifying');
     }
     final path = current.path.isNotEmpty
@@ -1075,9 +1035,7 @@ class ReaderController extends Notifier<ReaderState> {
 
       _thumbnailWindow = {};
       _thumbnailRevision++;
-      _popoverSelection = null;
-      _annotationId = null;
-      _popoverActive = false;
+      state = state.copy(clearPanel: true);
       _presentation++;
       state = ReaderState(bookId: id, phase: 'initializing');
       _sourcePath = path;
@@ -1109,13 +1067,6 @@ class ReaderController extends Notifier<ReaderState> {
       // A native initialization result can arrive after another open/close.
       // Its error belongs to the superseded surface, not the current book.
       if (!ownedOpening()) return;
-      if (error is _NoteDeliveryFailure) {
-        // Opening another book must not tear down the only owner of input
-        // whose handoff failed. Keep the old session/passage and show recovery.
-        state = state.copy(warning: error.toString());
-        events.add({'type': 'feedback', 'message': error.toString()});
-        return;
-      }
       _startupTimer?.cancel();
       _fileCheck?.cancel();
       _filePoll?.cancel();
@@ -1124,7 +1075,6 @@ class ReaderController extends Notifier<ReaderState> {
       _sourcePath = null;
       _invalidateLayoutVisibility();
       _session = 'closed:${++_generation}';
-      _failedPopover = null;
       await readerChannel.invokeMethod<void>('close');
       if (!ownedOpening()) return;
       state = ReaderState(
@@ -1247,7 +1197,6 @@ class ReaderController extends Notifier<ReaderState> {
       _invalidateAppearanceWork();
       _invalidateLayoutVisibility();
       _session = 'closed:${++_generation}';
-      _failedPopover = null;
       _filePoll?.cancel();
       _filePoll = null;
       await _fileWatch?.cancel();
@@ -1294,27 +1243,6 @@ class ReaderController extends Notifier<ReaderState> {
       case 'focusChrome':
         if (!await _acceptNativeContentFocus()) return;
         event = {...event, 'focusRevision': _focusRevision};
-      case 'popoverHidden':
-        if (event['presentation'] == _presentation &&
-            _popoverKind == 'lookup') {
-          final presenting = _lookupTerm == null;
-          _invalidateLookup();
-          _popoverActive = false;
-          _popoverKind = null;
-          // A native failure can hide the frame before its presentation reply.
-          // Keep that reply's owner valid for the existing Retry feedback.
-          if (!presenting) _presentation++;
-          if (event['keyboard'] == true && _routeVisible && !_suspended) {
-            _restoreLookupFocus(_session, _presentation);
-          }
-        } else if (event['presentation'] == _presentation &&
-            _popoverActive &&
-            _popoverNativeOwner) {
-          // GTK can close its frame before the child handles Escape. Its
-          // retained editor still owns input: seal/capture through the normal
-          // handoff before releasing the logical popup and accepting keys.
-          await dismissPopover(restoreFocus: event['keyboard'] == true);
-        }
       case 'ready':
         if (_suspended ||
             state.phase != 'initializing' ||
@@ -1417,46 +1345,6 @@ class ReaderController extends Notifier<ReaderState> {
             },
           );
         }
-      case 'popoverAction':
-        var noteReceived = false;
-        try {
-          if (_popoverActive && event['presentation'] == _presentation) {
-            if ([
-                  'noteDraft',
-                  'annotationNote',
-                  'highlight',
-                ].contains(event['action']) &&
-                event['note'] is String) {
-              noteReceived = _receiveNoteDraft(event);
-              if (!noteReceived &&
-                  _annotationId != null &&
-                  event['presentation'] == _presentation &&
-                  ['annotationNote', 'highlight'].contains(event['action'])) {
-                throw StateError(_labels.noteItemUnavailable);
-              }
-            }
-            if (_popoverActive && event['presentation'] == _presentation) {
-              await _popoverAction(event);
-            }
-          }
-          // Acknowledge ignored presentations too, so a queued Close/Escape
-          // can settle without changing the current book or editor.
-          if (event['request'] is int) {
-            await readerChannel.invokeMethod<void>('popoverResult', {
-              'request': event['request'],
-              'ok': true,
-              'noteReceived': noteReceived,
-            });
-          }
-        } catch (error) {
-          if (event['request'] is int) {
-            await readerChannel.invokeMethod<void>('popoverResult', {
-              'request': event['request'],
-              'error': error.toString(),
-              'noteReceived': noteReceived,
-            });
-          }
-        }
       case 'annotation':
         final a = annotations
             .where(
@@ -1486,7 +1374,13 @@ class ReaderController extends Notifier<ReaderState> {
           selection: event['anchor'] is Map ? event : null,
           clearSelection: event['anchor'] is! Map,
         );
-        if (replaced) await _dismissSelectionMenu();
+        if (replaced) {
+          if (state.panel?.kind == ReaderPanelKind.lookup) {
+            await dismissReaderControls(restoreFocus: false);
+          } else {
+            await _dismissSelectionMenu();
+          }
+        }
         if (event['anchor'] is Map && event['settled'] == true) {
           requestSelectionMenu();
         }
@@ -1759,7 +1653,7 @@ class ReaderController extends Notifier<ReaderState> {
           revision == _focusRevision &&
           presentation == _presentation &&
           state.bookId == id &&
-          !_popoverActive &&
+          !_panelActive &&
           _appearanceMenuOwner == null &&
           _selectionMenuOwner == null &&
           ref.read(bookPresentationProvider).lastPane == BookPane.reading &&
@@ -1864,37 +1758,18 @@ class ReaderController extends Notifier<ReaderState> {
   // Geometry and widget rebuilding do not own this state; dialogs do.
   Future<void> show(bool value) => _showRoute(value);
 
-  /// Only the matching fallback menu route may temporarily cover its own owner.
-  Future<void> showAppearanceMenuFallback(ReaderAppearanceMenuOwner owner) =>
-      _showRoute(false, appearanceMenu: owner);
-
-  Future<void> showSelectionMenuFallback(ReaderSelectionMenuOwner owner) =>
-      _showRoute(false, selectionMenu: owner);
-
-  Future<void> _showRoute(
-    bool value, {
-    ReaderAppearanceMenuOwner? appearanceMenu,
-    ReaderSelectionMenuOwner? selectionMenu,
-  }) async {
-    final ownedMenu =
-        appearanceMenu != null && ownsAppearanceMenu(appearanceMenu);
-    final ownedSelection =
-        selectionMenu != null && ownsSelectionMenu(selectionMenu);
+  Future<void> _showRoute(bool value) async {
     _routeVisible = value;
     if (!value) {
-      if (ownedSelection) {
-        _selectionMenuFallback = selectionMenu;
+      _panelRequest++;
+      if (_panelActive) {
+        await _dismissReaderControls(restoreFocus: false);
       } else {
         await _dismissSelectionMenu();
-      }
-      if (ownedMenu) {
-        _appearanceMenuFallback = appearanceMenu;
-      } else {
         await _dismissAppearanceMenu();
+        _invalidateLookup();
       }
       _focusRevision++;
-      if (ownedSelection) selectionMenu._focusRevision = _focusRevision;
-      _invalidateLookup();
       _appearanceNeedsReconcile |=
           _appearanceIntent != null || _appearanceResults.isNotEmpty;
       _invalidateAppearanceWork();
@@ -2050,7 +1925,7 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> focusChrome() async {
     _focusRevision++;
     if (state.bookId == null ||
-        _popoverActive ||
+        _panelActive ||
         (_appearanceMenuOwner != null || _selectionMenuOwner != null)) {
       return;
     }
@@ -2063,7 +1938,7 @@ class ReaderController extends Notifier<ReaderState> {
     _focusRevision++;
     final session = _session;
     try {
-      await dismissPopover(restoreFocus: false);
+      await dismissReaderControls(restoreFocus: false);
       if (session != _session) return false;
       await focusChrome();
       return session == _session;
@@ -2086,7 +1961,7 @@ class ReaderController extends Notifier<ReaderState> {
       event['session'] == _session &&
       event['focusRevision'] == _focusRevision &&
       interactive &&
-      !_popoverActive &&
+      !_panelActive &&
       _appearanceMenuOwner == null &&
       _selectionMenuOwner == null;
 
@@ -2107,8 +1982,19 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<bool> _acceptNativeContentFocus() async {
+    if (_panelActive && interactive) {
+      final session = _session, revision = _focusRevision;
+      final focused = await nativeContentHasFocus();
+      if (focused == true &&
+          ref.mounted &&
+          session == _session &&
+          revision == _focusRevision) {
+        await dismissReaderControls(restoreFocus: false);
+      }
+    }
+
     if (!interactive ||
-        _popoverActive ||
+        _panelActive ||
         _appearanceMenuOwner != null ||
         _selectionMenuOwner != null ||
         state.bookId == null) {
@@ -2121,7 +2007,7 @@ class ReaderController extends Notifier<ReaderState> {
         id == state.bookId &&
         revision == _focusRevision &&
         interactive &&
-        !_popoverActive &&
+        !_panelActive &&
         _appearanceMenuOwner == null &&
         _selectionMenuOwner == null;
     final focused = await nativeContentHasFocus();
@@ -2373,36 +2259,46 @@ class ReaderController extends Notifier<ReaderState> {
     }
   }
 
-  Future<void> dismissPopover({bool restoreFocus = true}) async {
-    await _dismissSelectionMenu();
-    await _dismissAppearanceMenu();
+  Future<void> dismissReaderControls({bool restoreFocus = true}) {
+    _panelRequest++;
+    return _dismissReaderControls(restoreFocus: restoreFocus);
+  }
+
+  Future<void> _dismissReaderControls({bool restoreFocus = true}) async {
+    final panel = state.panel;
+    final previousFocus = _panelReturnFocus;
     final session = _session, presentation = _presentation;
     final focusRevision = _focusRevision;
-    final lookupFocus = _popoverKind == 'lookup';
-    await _capturePopoverDraft(seal: true);
-    if (session != _session || presentation != _presentation) return;
-    final dismissedPresentation = ++_presentation;
+    await _dismissSelectionMenu();
+    await _dismissAppearanceMenu();
+    if (!ref.mounted || session != _session || presentation != _presentation) {
+      return;
+    }
+    _presentation++;
     _invalidateLookup();
-    _popoverActive = false;
-    _popoverNativeOwner = false;
-    _popoverKind = null;
-    _popoverSelection = null;
-    _annotationId = null;
-    final restore =
-        restoreFocus && focusRevision == _focusRevision && interactive;
-    await readerChannel.invokeMethod<void>('dismissPopover', {
-      'restoreFocus': restore,
-    });
-    if (restore &&
-        session == _session &&
-        dismissedPresentation == _presentation &&
-        focusRevision == _focusRevision &&
-        interactive) {
-      if (lookupFocus) {
-        _restoreLookupFocus(session, dismissedPresentation);
-      } else {
-        events.add(_publicationFocusEvent());
-      }
+    _panelReturnFocus = null;
+    if (panel != null) state = state.copy(clearPanel: true);
+    if (_navigationPending case final pending? when !pending.isCompleted) {
+      pending.completeError(StateError(_labels.navigationInterrupted));
+    }
+    if (restoreFocus && panel != null) {
+      final dismissed = _presentation;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!ref.mounted ||
+            session != _session ||
+            dismissed != _presentation ||
+            focusRevision != _focusRevision ||
+            !_routeVisible ||
+            _suspended) {
+          return;
+        }
+        if (previousFocus?.context?.mounted == true) {
+          previousFocus!.requestFocus();
+        } else {
+          _restoreLookupFocus(session, dismissed);
+        }
+      });
+      WidgetsBinding.instance.scheduleFrame();
     }
   }
 
@@ -2425,7 +2321,7 @@ class ReaderController extends Notifier<ReaderState> {
       _routeVisible &&
       !_suspended &&
       state.ready &&
-      !_popoverActive &&
+      !_panelActive &&
       _appearanceMenuOwner == null &&
       _selectionMenuOwner == null &&
       event['session'] == _session &&
@@ -2476,7 +2372,6 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> _dismissSelectionMenu() async {
     final dismiss = _selectionMenuDismiss;
     _selectionMenuOwner = null;
-    _selectionMenuFallback = null;
     _selectionMenuDismiss = null;
     await dismiss?.call();
   }
@@ -2493,7 +2388,7 @@ class ReaderController extends Notifier<ReaderState> {
     required Future<void> Function() dismiss,
   }) async {
     if (!_ownsSelection(target) || !interactive) return null;
-    await dismissPopover(restoreFocus: false);
+    await dismissReaderControls(restoreFocus: false);
     while (_viewportSettled != null) {
       await _viewportSettled!.future;
     }
@@ -2539,11 +2434,7 @@ class ReaderController extends Notifier<ReaderState> {
       owner.target.selectionRevision == _selectionRevision &&
       (owner.target.annotationId == null ||
           selectionAnnotation(owner.target) != null) &&
-      (interactive ||
-          identical(owner, _selectionMenuFallback) &&
-              state.ready &&
-              state.error == null &&
-              !_suspended);
+      interactive;
 
   void finishSelectionMenu(
     ReaderSelectionMenuOwner owner, {
@@ -2552,7 +2443,6 @@ class ReaderController extends Notifier<ReaderState> {
     if (!identical(owner, _selectionMenuOwner)) return;
     final current = ownsSelectionMenu(owner);
     _selectionMenuOwner = null;
-    _selectionMenuFallback = null;
     _selectionMenuDismiss = null;
     if (restoreFocus && current) _restoreSelectionFocus(owner);
   }
@@ -2648,34 +2538,25 @@ class ReaderController extends Notifier<ReaderState> {
     }
   }
 
-  Rect? Function()? goToAnchor;
   Rect? Function()? appearanceAnchor;
   ReaderAppearanceMenuOwner? _appearanceMenuOwner;
-  ReaderAppearanceMenuOwner? _appearanceMenuFallback;
   Future<void> Function()? _appearanceMenuDismiss;
 
   Future<void> _dismissAppearanceMenu() async {
     final dismiss = _appearanceMenuDismiss;
     _appearanceMenuOwner = null;
-    _appearanceMenuFallback = null;
     _appearanceMenuDismiss = null;
     await dismiss?.call();
   }
 
-  /// Uses the same sealed handoff as other reader controls. A failed capture
-  /// leaves the old editor in place and does not open a menu over its input.
+  /// Retires the previous reader control and waits for its measured viewport
+  /// before granting a menu ownership of the current session/presentation.
   Future<ReaderAppearanceMenuOwner?> prepareAppearanceMenu({
     required Future<void> Function() dismiss,
   }) async {
     if (!interactive) return null;
     final bookId = state.bookId!, session = _session, previous = _presentation;
-    await dismissPopover(restoreFocus: false);
-    if (state.popoverError != null) {
-      state = state.copy(clearPopoverError: true);
-      await WidgetsBinding.instance.endOfFrame.timeout(
-        const Duration(seconds: 15),
-      );
-    }
+    await dismissReaderControls(restoreFocus: false);
     while (_viewportSettled != null) {
       await _viewportSettled!.future;
     }
@@ -2698,16 +2579,11 @@ class ReaderController extends Notifier<ReaderState> {
       owner.bookId == state.bookId &&
       owner.session == _session &&
       owner.presentation == _presentation &&
-      (interactive ||
-          identical(owner, _appearanceMenuFallback) &&
-              state.ready &&
-              state.error == null &&
-              !_suspended);
+      interactive;
 
   void finishAppearanceMenu(ReaderAppearanceMenuOwner owner) {
     if (!identical(owner, _appearanceMenuOwner)) return;
     _appearanceMenuOwner = null;
-    _appearanceMenuFallback = null;
     _appearanceMenuDismiss = null;
   }
 
@@ -2720,256 +2596,104 @@ class ReaderController extends Notifier<ReaderState> {
     }
   }
 
-  double popoverTextScale = 1;
-  Future<void>? _popoverLayoutPending;
-  ({String kind, Rect? anchor, Map<String, dynamic> extra})? _failedPopover;
   int _navigationRequest = 0;
   Completer<void>? _navigationPending;
 
-  Future<void> retryPopover() async {
-    final failed = _failedPopover;
-    if (failed != null) {
-      if (failed.kind == 'lookup' &&
-          failed.extra['lookupTerm'] is String &&
-          state.bookId != null) {
-        await lookup(
-          ReaderSelectionTarget(
-            state.bookId!,
-            _session,
-            _presentation,
-            failed.extra['lookupTerm'] as String,
-            failed.anchor,
-          ),
-        );
-        return;
-      }
-      await showPopover(
-        failed.kind,
-        anchor: failed.kind == 'goto' ? null : failed.anchor,
-        extra: failed.extra,
-      );
-    }
-  }
+  Future<void> showGoTo() => _showReaderPanel(ReaderPanelKind.goTo);
 
-  Future<void> showPopover(
-    String kind, {
-    Rect? anchor,
-    Map<String, dynamic> extra = const {},
+  bool ownsReaderPanel(ReaderPanel panel) =>
+      ref.mounted &&
+      state.panel?.presentation == panel.presentation &&
+      panel.presentation == _presentation &&
+      panel.session == _session &&
+      panel.bookId == state.bookId &&
+      state.ready &&
+      _routeVisible &&
+      !_suspended;
+
+  Future<void> _showReaderPanel(
+    ReaderPanelKind kind, {
+    String term = '',
   }) async {
-    if (!state.ready || !_routeVisible) return;
-    final previous = _presentation, session = _session;
-    await _dismissSelectionMenu();
-    await _dismissAppearanceMenu();
-    await _capturePopoverDraft(seal: true);
-    if (session != _session || previous != _presentation) return;
-    // The handoff can change this very annotation's effective note. Resolve
-    // its payload afterwards, rather than reopening a pre-capture snapshot.
-    final targetId = extra['annotationId'];
-    if (kind == 'selection' && targetId is String) {
-      final target =
-          annotations.where((a) => a.id == targetId).firstOrNull ??
-          ref.read(notebookControllerProvider).sources[targetId];
-      if (target != null && target.bookId == state.bookId) {
-        extra = {...extra, ..._notePayload(target)};
-      }
+    if (!state.ready || !_routeVisible || _suspended) return;
+    final layout = ref.read(bookPresentationProvider);
+    if (!_workspaceVisible &&
+        layout.lastPane == BookPane.notebook &&
+        !layout.splitAvailable) {
+      return;
     }
-    _presentation++;
-    _popoverNativeOwner = false;
-    _invalidateLookup();
-    _popoverKind = kind;
-    if (kind == 'selection') {
-      _popoverSelection = state.selection;
-      _annotationId = extra['annotationId'] as String?;
-      if (_annotationId == null && _popoverSelection?['anchor'] is Map) {
-        final notebook = ref.read(notebookControllerProvider);
-        final pending = notebook.sources.values
-            .where(
-              (a) =>
-                  a.bookId == state.bookId &&
-                  notebook.drafts.containsKey(a.id) &&
-                  _sameAnchor(a.anchor, _popoverSelection!['anchor']),
-            )
-            .firstOrNull;
-        if (pending != null) {
-          _annotationId = pending.id;
-          extra = {...extra, ..._notePayload(pending)};
-        }
-      }
-    }
+    final session = _session, request = ++_panelRequest;
+    final previousFocus = FocusManager.instance.primaryFocus;
+    bool current() =>
+        ref.mounted &&
+        request == _panelRequest &&
+        session == _session &&
+        _routeVisible &&
+        !_suspended &&
+        state.ready;
+    final fromPublication = await nativeContentHasFocus();
+    if (!current()) return;
+    await _dismissReaderControls(restoreFocus: false);
+    if (!current()) return;
     final presentation = _presentation;
-    _popoverActive = true;
+    await focusChrome();
+    if (!current() || presentation != _presentation) return;
+    _panelReturnFocus =
+        kind == ReaderPanelKind.lookup || fromPublication == true
+        ? null
+        : previousFocus;
+    state = state.copy(
+      panel: ReaderPanel(
+        kind: kind,
+        bookId: state.bookId!,
+        session: session,
+        presentation: presentation,
+        term: term,
+      ),
+    );
+    ref
+        .read(bookPresentationProvider.notifier)
+        .focusPane(state.bookId!, BookPane.reading);
+  }
+
+  /// Keep renderer acknowledgements correlated with the current primary panel.
+  Future<void> navigateFromPanel(
+    ReaderPanel panel,
+    Map<String, dynamic> anchor,
+  ) async {
+    if (!ownsReaderPanel(panel) || _navigationPending != null) return;
+    final pending = Completer<void>();
+    _navigationPending = pending;
+    final request = ++_navigationRequest;
     try {
-      if (state.popoverError != null) {
-        state = state.copy(clearPopoverError: true);
-        // Removing primary feedback changes the publication bounds. Both hosts
-        // dismiss controls on a bounds update, so settle that frame first. All
-        // rapid replacements share this barrier; none can overtake its layout.
-        _popoverLayoutPending ??= WidgetsBinding.instance.endOfFrame.timeout(
-          const Duration(seconds: 15),
-        );
-      }
-      final layout = _popoverLayoutPending;
-      if (layout != null) {
-        try {
-          await layout;
-        } finally {
-          if (identical(_popoverLayoutPending, layout)) {
-            _popoverLayoutPending = null;
-          }
-        }
-      }
-      if (!hasCurrentViewport &&
-          session == _session &&
-          presentation == _presentation &&
-          _routeVisible) {
-        // A modal can return before the visible surface has begun measuring.
-        // Request that owned frame first; its geometry transaction then owns
-        // the acknowledgement below. Pending, unsent popovers have no native
-        // input to capture and must not cancel their own measurement.
-        requestViewportLayout();
-        await WidgetsBinding.instance.endOfFrame.timeout(
-          const Duration(seconds: 15),
-        );
-      }
-      while (_viewportSettled != null) {
-        final geometry = _viewportSettled!;
-        await geometry.future;
-      }
-      if (session != _session ||
-          presentation != _presentation ||
-          !_routeVisible) {
-        return;
-      }
-      if (!hasCurrentViewport) throw StateError(_labels.readerControlsFailed);
-      final rect =
-          anchor ??
-          (kind == 'goto'
-              ? goToAnchor?.call()
-              : _selectionRect(state.selection?['rect'])) ??
-          (kind == 'goto'
-              ? Rect.fromLTWH(viewport.left + 24, viewport.top - 1, 1, 1)
-              : Rect.fromLTWH(viewport.right - 48, viewport.top, 1, 1));
-      _popoverNativeOwner = true;
-      await readerChannel
-          .invokeMethod<void>('popover', {
-            ..._chrome,
-            'kind': kind,
-            'session': _session,
-            'presentation': _presentation,
-            'x': rect.left,
-            'y': rect.top,
-            'anchorWidth': rect.width,
-            'anchorHeight': rect.height,
-            'viewportX': viewport.left,
-            'viewportY': viewport.top,
-            'viewportWidth': viewport.width,
-            'viewportHeight': viewport.height,
-            'width': kind == 'goto' ? 360.0 : 460.0,
-            'height': kind == 'goto'
-                ? (viewport.height > 0 ? viewport.height : 420.0)
-                : kind == 'selection'
-                ? 340.0
-                : 480.0,
-            'textScale': popoverTextScale,
-            'appearance': appearance,
-            'typography': typographyCapabilities.toJson(),
-            'pdf': book?.format == 'pdf',
-            'pageNavigation': pageNavigation,
-            'comic': regionNotes,
-            'pages': state.pages,
-            'labels': state.labels,
-            'toc': state.toc,
-            'location': state.location,
-            'color': highlightColor,
-            ...extra,
-          })
-          .timeout(const Duration(seconds: 18));
-      if (session == _session &&
-          presentation == _presentation &&
-          _routeVisible &&
-          _popoverActive &&
-          state.ready &&
-          state.error == null) {
-        _failedPopover = null;
-        final id = state.bookId;
-        if (id != null) {
-          ref
-              .read(bookPresentationProvider.notifier)
-              .focusPane(id, BookPane.reading);
-        }
-      }
-    } catch (error, trace) {
-      if (session != _session || presentation != _presentation) return;
-      if (error is PlatformException && error.code == 'popover-cancelled') {
-        _popoverActive = false;
-        _popoverKind = null;
-        _invalidateLookup();
-        return;
-      }
-      // The public message stays short; retain the native stage at the owned
-      // boundary without recording book passages, annotations or note input.
-      if (const bool.fromEnvironment('BUSYBOOKS_READER_DIAGNOSTICS') ||
-          Platform.environment['BUSYBOOKS_READER_DIAGNOSTICS'] == '1') {
-        debugPrint(
-          'Reader controls failed kind=$kind session=$session '
-          'presentation=$presentation '
-          '${error is PlatformException ? 'code=${error.code} message=${error.message} details=${error.details}' : error.toString()}\n$trace',
-        );
-      }
-      _failedPopover = (kind: kind, anchor: anchor, extra: extra);
-      state = state.copy(popoverError: _labels.readerControlsFailed);
-      // A lost presentation reply may coexist with an interactive child. Protect
-      // accepted input before hiding it, just as on every normal handoff.
-      try {
-        await _capturePopoverDraft(seal: true);
-      } on _NoteDeliveryFailure {
-        return;
-      }
-      if (session != _session || presentation != _presentation) return;
-      await readerChannel.invokeMethod<void>('dismissPopover');
-      _popoverActive = false;
+      await Future.wait<void>([
+        pending.future.timeout(const Duration(seconds: 15)),
+        _send('goto', {
+          'anchor': anchor,
+          'request': request,
+        }, isCurrent: () => ownsReaderPanel(panel)),
+      ], eagerError: true);
+      if (ownsReaderPanel(panel)) await dismissReaderControls();
+    } finally {
+      if (identical(_navigationPending, pending)) _navigationPending = null;
     }
   }
 
-  // This bounded request reads UI input only; it never waits behind the reader
-  // event queue or asks the transient Flutter view to access the database.
-  // Sealing the old field closes the capture-to-replacement input gap.
-  Future<void> _capturePopoverDraft({bool seal = false}) async {
-    if (!_popoverActive) return;
-    final session = _session, presentation = _presentation;
-    try {
-      final captured = await readerChannel
-          .invokeMethod<dynamic>('capturePopover', {
-            'seal': seal,
-            'session': session,
-            'presentation': presentation,
-          })
-          .timeout(const Duration(seconds: 15));
-      if (session != _session || presentation != _presentation) return;
-      if (captured is Map &&
-          captured['note'] is String &&
-          captured['session'] == session &&
-          captured['presentation'] == presentation) {
-        _receiveNoteDraft(captured.cast<String, dynamic>());
-      }
-      if (session != _session || presentation != _presentation) return;
-      await readerChannel.invokeMethod<void>('popoverResult', {
-        'session': session,
-        'presentation': presentation,
-        'capturedRevision': captured is Map ? captured['revision'] : null,
-        'captureComplete': true,
-        'sealed': seal,
-      });
-    } catch (error) {
-      await readerChannel.invokeMethod<void>('popoverResult', {
-        'session': session,
-        'presentation': presentation,
-        'captureError': error.toString(),
-      });
-      if (session == _session && presentation == _presentation) {
-        state = state.copy(warning: error.toString());
-      }
-      throw _NoteDeliveryFailure(error);
+  Future<void> retryLookup(ReaderPanel panel) async {
+    if (ownsReaderPanel(panel) && panel.kind == ReaderPanelKind.lookup) {
+      await _runLookup();
+    }
+  }
+
+  void openLookupEntry(ReaderPanel panel) {
+    final entry = _lookupResult?.entry;
+    if (ownsReaderPanel(panel) &&
+        panel.kind == ReaderPanelKind.lookup &&
+        entry != null &&
+        entry.scheme == 'https' &&
+        entry.host == 'en.wiktionary.org' &&
+        entry.path.startsWith('/wiki/')) {
+      events.add({'type': 'dictionaryEntry', 'url': entry.toString()});
     }
   }
 
@@ -3027,7 +2751,7 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> editAnnotation(ReadingAnnotation annotation) async {
     if (annotation.bookId != state.bookId) return;
     final session = _session, selection = _selectionRevision;
-    await dismissPopover(restoreFocus: false);
+    await dismissReaderControls(restoreFocus: false);
     if (!ref.mounted ||
         session != _session ||
         annotation.bookId != state.bookId ||
@@ -3055,20 +2779,6 @@ class ReaderController extends Notifier<ReaderState> {
     });
   }
 
-  Map<String, dynamic> _notePayload(ReadingAnnotation annotation) {
-    final notebook = ref.read(notebookControllerProvider),
-        draft = notebook.drafts[annotation.id];
-    return {
-      'annotationId': annotation.id,
-      'annotationKind': annotation.kind,
-      'note': notebook.effectiveNote(annotation),
-      'color': annotation.color,
-      'notePending': draft != null,
-      'noteError': draft?.error,
-      'noteRevision': draft?.revision ?? 0,
-    };
-  }
-
   bool _sameAnchor(Object? a, Object? b) {
     if (a is Map && b is Map) {
       return a.length == b.length &&
@@ -3082,188 +2792,6 @@ class ReaderController extends Notifier<ReaderState> {
       return true;
     }
     return a == b;
-  }
-
-  bool _receiveNoteDraft(Map<String, dynamic> event) {
-    final text = event['note'];
-    if (text is! String || !validAnnotationText(text)) {
-      throw FormatException(_labels.noteInputLimit);
-    }
-    final drafts = ref.read(notebookControllerProvider.notifier);
-    var a =
-        annotations.where((a) => a.id == _annotationId).firstOrNull ??
-        ref.read(notebookControllerProvider).sources[_annotationId];
-    if (a == null &&
-        _annotationId == null &&
-        _popoverSelection?['anchor'] is Map &&
-        state.bookId != null) {
-      final time = DateTime.now().microsecondsSinceEpoch;
-      a = ReadingAnnotation({
-        'id': 'annotation-$time',
-        'kind': 'annotation',
-        'bookId': state.bookId,
-        'annotationKind': _popoverSelection!['anchor']['region'] != null
-            ? 'region'
-            : 'highlight',
-        'anchor': _popoverSelection!['anchor'],
-        'text': _popoverSelection!['text'] ?? '',
-        'note': '',
-        'reference': _popoverSelection!['reference'] ?? '',
-        'color': event['color'] ?? highlightColor,
-        'created': time,
-      });
-      _annotationId = a.id;
-      drafts.create(a, event['note'] as String);
-      // Capture later input while insertion is slow. The primary draft
-      // owns the full creation before any repository call can fail.
-      unawaited(drafts.save(a.id).catchError((Object _) {}));
-      return true;
-    }
-    if (a != null && event['note'] is String) {
-      if (ref.read(notebookControllerProvider).effectiveNote(a) == text) {
-        return true;
-      }
-      drafts.edit(a, event['note'] as String);
-      return true;
-    }
-    return false; // A deliberately deleted annotation cannot become a creation.
-  }
-
-  Future<void> _popoverAction(Map<String, dynamic> event) async {
-    final session = _session, presentation = _presentation;
-    bool current() => session == _session && presentation == _presentation;
-    Future<void> finish() async {
-      if (current()) await dismissPopover();
-    }
-
-    switch (event['action']) {
-      case 'dismiss':
-        await finish();
-      case 'goto':
-        final pending = Completer<void>();
-        _navigationPending = pending;
-        final request = ++_navigationRequest;
-        try {
-          await Future.wait<void>([
-            pending.future.timeout(const Duration(seconds: 15)),
-            send('goto', {'anchor': event['anchor'], 'request': request}),
-          ], eagerError: true);
-          await finish();
-        } finally {
-          if (!pending.isCompleted) {
-            pending.completeError(StateError('Navigation cancelled'));
-          }
-          if (identical(_navigationPending, pending)) _navigationPending = null;
-        }
-      case 'highlightColor':
-        final active =
-            annotations.where((a) => a.id == _annotationId).firstOrNull ??
-            ref.read(notebookControllerProvider).sources[_annotationId];
-        await ref.read(appSettingsControllerProvider.notifier).update({
-          'highlightColor': event['color'],
-        });
-        if (!current()) return;
-        if (active != null) {
-          await ref.read(notebookControllerProvider.notifier).save(active.id);
-          await ref.read(workspaceControllerProvider.notifier).updateAnnotation(
-            active.id,
-            {'color': event['color']},
-            bookId: active.bookId,
-          );
-        }
-      case 'highlight':
-        if (event['color'] is String) {
-          await ref.read(appSettingsControllerProvider.notifier).update({
-            'highlightColor': event['color'],
-          });
-        }
-        final draft =
-            annotations.where((a) => a.id == _annotationId).firstOrNull ??
-            ref.read(notebookControllerProvider).sources[_annotationId];
-        if (draft != null) {
-          ref
-              .read(notebookControllerProvider.notifier)
-              .edit(draft, event['note'] as String? ?? '');
-          await ref.read(notebookControllerProvider.notifier).save(draft.id);
-          await finish();
-          return;
-        }
-        if (_annotationId != null) {
-          return; // A deleted editor cannot become a creation.
-        }
-        await annotation(
-          _popoverSelection?['anchor']?['region'] != null
-              ? 'region'
-              : 'highlight',
-          color: event['color'] as String?,
-          note: event['note'] as String? ?? '',
-          passage: _popoverSelection,
-        );
-        await finish();
-      case 'copy':
-        await Clipboard.setData(
-          ClipboardData(
-            text:
-                (_popoverSelection ?? state.selection)?['text'] as String? ??
-                '',
-          ),
-        );
-        await finish();
-      case 'dictionary':
-        final target = await prepareLookup();
-        if (target != null) events.add({'type': 'lookup', 'target': target});
-      case 'searchSelection':
-        await searchSelection();
-      case 'lookupRetry':
-        unawaited(_runLookup());
-      case 'lookupFullEntry':
-        final entry = _lookupResult?.entry;
-        if (_popoverKind == 'lookup' &&
-            entry != null &&
-            entry.scheme == 'https' &&
-            entry.host == 'en.wiktionary.org' &&
-            entry.path.startsWith('/wiki/')) {
-          events.add({'type': 'dictionaryEntry', 'url': entry.toString()});
-        }
-      case 'speak':
-        await ref
-            .read(narrationControllerProvider.notifier)
-            .start(passage: _popoverSelection);
-        await finish();
-      case 'voice':
-        await ref
-            .read(narrationControllerProvider.notifier)
-            .configure(voice: event['voice'] as String);
-      case 'speed':
-        await ref
-            .read(narrationControllerProvider.notifier)
-            .configure(speed: event['speed'] as num);
-      case 'noteDraft':
-        break; // Captured before any fallible work in the event handler.
-      case 'annotationNote':
-      case 'annotationColor':
-      case 'deleteAnnotation':
-        final a =
-            annotations.where((a) => a.id == _annotationId).firstOrNull ??
-            ref.read(notebookControllerProvider).sources[_annotationId];
-        if (a == null) return;
-        final workspace = ref.read(workspaceControllerProvider.notifier);
-        if (event['action'] == 'deleteAnnotation') {
-          await workspace.deleteAnnotation(a.id);
-        } else {
-          if (event['note'] is String) {
-            final notes = ref.read(notebookControllerProvider.notifier);
-            notes.edit(a, event['note'] as String);
-            await notes.save(a.id);
-          }
-          if (event['color'] is String) {
-            await workspace.updateAnnotation(a.id, {
-              'color': event['color'],
-            }, bookId: a.bookId);
-          }
-        }
-        if (event['action'] != 'annotationColor') await finish();
-    }
   }
 
   Future<void> _save() async {
@@ -3309,7 +2837,6 @@ class ReaderController extends Notifier<ReaderState> {
   }
 
   Future<void> _drainRenderer() async {
-    await _capturePopoverDraft();
     await _appearanceTail;
     if (state.ready && !_suspended) {
       _flushing = Completer<void>();
@@ -3337,7 +2864,7 @@ class ReaderController extends Notifier<ReaderState> {
     _focusRevision++;
     _pendingJump?.cancel();
     final revision = ++_openRevision;
-    final session = _session, presentation = _presentation;
+    final session = _session;
     bool ownsClosing() =>
         ref.mounted && revision == _openRevision && session == _session;
     if (_preparationOwner != null) {
@@ -3349,7 +2876,6 @@ class ReaderController extends Notifier<ReaderState> {
     await ref.read(narrationControllerProvider.notifier).stop();
     if (!ownsClosing()) return;
     try {
-      await _capturePopoverDraft(seal: true);
       if (!ownsClosing()) return;
       _invalidateAppearanceWork();
       if (state.ready) await send('cancelAppearance');
@@ -3366,12 +2892,6 @@ class ReaderController extends Notifier<ReaderState> {
       } while (_pendingLocations.isNotEmpty);
       await readerChannel.invokeMethod<void>('visible', false);
     } catch (error) {
-      if (!ownsClosing()) return;
-      await readerChannel.invokeMethod<void>('popoverResult', {
-        'session': session,
-        'presentation': presentation,
-        'captureError': error.toString(),
-      });
       if (!ownsClosing()) return;
       await _applyVisibility();
       rethrow;
@@ -3391,12 +2911,9 @@ class ReaderController extends Notifier<ReaderState> {
     if (revision != _openRevision) return;
     _presentation++;
     _invalidateLookup();
-    _popoverActive = false;
-    _popoverSelection = null;
-    _annotationId = null;
+    state = state.copy(clearPanel: true);
     _invalidateLayoutVisibility();
     _session = 'closed:${++_generation}';
-    _failedPopover = null;
     await readerChannel.invokeMethod<void>('close');
     if (revision != _openRevision) return;
     _selectionIntent = null;

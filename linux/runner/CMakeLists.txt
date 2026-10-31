@@ -21,7 +21,6 @@ add_executable(${BINARY_NAME}
   "reading_fonts.cc"
   "reading_font_channel.cc"
   "reader_surface.cc"
-  "reader_popover.cc"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
 )
 

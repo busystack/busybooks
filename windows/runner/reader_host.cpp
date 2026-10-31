@@ -1,7 +1,5 @@
 #include "reader_host.h"
 #include "reading_font_channel.h"
-#include "../../native/reader_action_limits.h"
-#include "reader_popover.h"
 #include "native_menu_host.h"
 #include <flutter/standard_method_codec.h>
 #include <shlobj.h>
@@ -43,7 +41,6 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
   });
   fonts_=std::make_unique<ReadingFontChannel>(messenger);
   menus_=std::make_unique<NativeMenuHost>(parent_,messenger);
-  popover_=std::make_unique<ReaderPopover>(parent_,[this](const std::string& json){Event(json,kMaxReaderPopoverActionBytes);});
   channel_->SetMethodCallHandler([this](const auto& call,auto result){
     const auto& name=call.method_name();
     if(name=="surface"){
@@ -52,21 +49,7 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       if(color){if(auto color64=std::get_if<int64_t>(color))background_=static_cast<uint32_t>(*color64);else if(auto color32=std::get_if<int32_t>(color))background_=static_cast<uint32_t>(*color32);}
       Microsoft::WRL::ComPtr<ICoreWebView2Controller2> themed;
       if(controller_&&SUCCEEDED(controller_.As(&themed)))themed->put_DefaultBackgroundColor({255,static_cast<BYTE>(background_>>16),static_cast<BYTE>(background_>>8),static_cast<BYTE>(background_)});
-    }else if(name=="popoverResult"){
-      if(call.arguments())popover_->Result(*call.arguments());
-    }else if(name=="capturePopover"){
-      popover_->Capture(call.arguments(),std::move(result));return;
-    }else if(name=="popover"){
-      if (!call.arguments()) { result->Error("popover-payload", "Invalid reader controls"); return; }
-      popover_->Show(*call.arguments(), std::move(result)); return;
-    }else if(name=="dismissPopover"){
-      popover_->Hide();
-      const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
-      const auto* restore=map?field(*map,"restoreFocus"):nullptr;
-      const auto* should_restore=restore?std::get_if<bool>(restore):nullptr;
-      if(controller_&&(!should_restore||*should_restore))controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
     }else if(name=="open"){
-      popover_->Hide();
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       auto string_arg=[map](const char* key)->const std::string* { if(!map)return nullptr;auto it=map->find(EncodableValue(key));return it==map->end()?nullptr:std::get_if<std::string>(&it->second); };
       const auto* path=string_arg("publicationPath");const auto* cache=string_arg("cacheDirectory");
@@ -80,7 +63,6 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       if(web_){web_->Navigate(navigation_uri_.c_str());result->Success();}else{if(pending_)pending_->Error("reader-replaced","Reader was replaced");pending_=std::move(result);Initialize();}return;
     }
     else if(name=="bounds"){
-      popover_->Hide();
       auto map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;if(!map){result->Error("reader-bounds","Invalid bounds");return;}double dpi=GetDpiForWindow(parent_)/96.0;
       bounds_={static_cast<LONG>(number(*map,"x")*dpi),static_cast<LONG>(number(*map,"y")*dpi),static_cast<LONG>((number(*map,"x")+number(*map,"width"))*dpi),static_cast<LONG>((number(*map,"y")+number(*map,"height"))*dpi)};if(controller_)controller_->put_Bounds(bounds_);
     }else if(name=="hasFocus"){
@@ -89,23 +71,23 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       const auto* session=value?std::get_if<std::string>(value):nullptr;
       if(!session){result->Error("reader-focus","Missing focus owner");return;}
       HWND owner=GetAncestor(parent_,GA_ROOT);
-      result->Success(EncodableValue(*session==session_&&controller_&&visible_&&focused_&&!popover_->IsRequested()&&!IsIconic(owner)&&GetForegroundWindow()==owner));return;
+      result->Success(EncodableValue(*session==session_&&controller_&&visible_&&focused_&&!IsIconic(owner)&&GetForegroundWindow()==owner));return;
     }else if(name=="focusChrome"){
       const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       const auto* value=map?field(*map,"session"):nullptr;
       const auto* session=value?std::get_if<std::string>(value):nullptr;
       if(!session){result->Error("reader-focus","Missing focus owner");return;}
       HWND owner=GetAncestor(parent_,GA_ROOT);
-      if(*session==session_&&!popover_->IsRequested()&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner){focused_=false;SetFocus(parent_);}
+      if(*session==session_&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner){focused_=false;SetFocus(parent_);}
     }else if(name=="focus"){
       const auto* map=call.arguments()?std::get_if<EncodableMap>(call.arguments()):nullptr;
       const auto* value=map?field(*map,"session"):nullptr;
       const auto* session=value?std::get_if<std::string>(value):nullptr;
       if(!session){result->Error("reader-focus","Missing focus owner");return;}
       HWND owner=GetAncestor(parent_,GA_ROOT);
-      if(*session==session_&&controller_&&visible_&&!popover_->IsRequested()&&!IsIconic(owner)&&GetForegroundWindow()==owner)controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+      if(*session==session_&&controller_&&visible_&&!IsIconic(owner)&&GetForegroundWindow()==owner)controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
     }else if(name=="visible"){
-      auto value=call.arguments()?std::get_if<bool>(call.arguments()):nullptr;visible_=value&&*value;if(!visible_){focused_=false;popover_->Hide();}if(controller_)controller_->put_IsVisible(visible_);
+      auto value=call.arguments()?std::get_if<bool>(call.arguments()):nullptr;visible_=value&&*value;if(!visible_){focused_=false;}if(controller_)controller_->put_IsVisible(visible_);
       // A hidden publication must not retain keyboard ownership in Notebook.
       HWND owner=GetAncestor(parent_,GA_ROOT);
       if(!visible_&&IsWindowVisible(parent_)&&!IsIconic(owner)&&GetForegroundWindow()==owner)SetFocus(parent_);
@@ -114,7 +96,6 @@ ReaderHost::ReaderHost(HWND parent,flutter::BinaryMessenger* messenger):parent_(
       if(json->size()>1048576){Event("{\"type\":\"bridgeError\",\"session\":\""+session_+"\",\"direction\":\"command\",\"message\":\"Reader bridge frame limit exceeded\"}");result->Error("reader-bridge-limit","Reader bridge frame limit exceeded");return;}
       auto script=wide("window.busybooks?.dispatch("+*json+")");web_->ExecuteScript(script.c_str(),nullptr);
     }else if(name=="close"){
-      popover_->Hide();
       if(pending_){pending_->Error("reader-closed","Reader was closed");pending_.reset();}
       // A completed close must release WebView2 response/file-stream handles
       // before an explicit Move Book starts. Navigating to blank is asynchronous.
@@ -213,6 +194,4 @@ void ReaderHost::FileOpened(const wchar_t* path){if(!path||!*path)return;std::ws
 void ReaderHost::FilesDropped(HDROP drop){EncodableList paths;UINT count=DragQueryFileW(drop,0xffffffff,nullptr,0);for(UINT i=0;i<count;i++){UINT n=DragQueryFileW(drop,i,nullptr,0);std::wstring path(n+1,0);DragQueryFileW(drop,i,path.data(),n+1);if(input_ready_)paths.emplace_back(utf8(path.c_str()));else pending_files_.push_back(utf8(path.c_str()));}DragFinish(drop);if(!paths.empty())input_->InvokeMethod("assetFilesDropped",std::make_unique<EncodableValue>(paths));}
 void ReaderHost::AppearanceChanged(){DWORD color=0;BOOL opaque=FALSE;if(SUCCEEDED(DwmGetColorizationColor(&color,&opaque)))desktop_->InvokeMethod("accentChanged",std::make_unique<EncodableValue>(static_cast<int64_t>(color|0xff000000)));}
 void ReaderHost::SpeechEvents(){if(!voice_)return;SPEVENT event{};ULONG fetched=0;while(voice_->GetEvents(1,&event,&fetched)==S_OK&&fetched){if(event.eEventId==SPEI_END_INPUT_STREAM&&event.ulStreamNum==speech_stream_)speech_->InvokeMethod("event",std::make_unique<EncodableValue>("stopped"));SpClearEvent(&event);}}
-ReaderHost::~ReaderHost(){*alive_=false;menus_.reset();popover_.reset();input_->SetMethodCallHandler(nullptr);desktop_->SetMethodCallHandler(nullptr);channel_->SetMethodCallHandler(nullptr);speech_->SetMethodCallHandler(nullptr);if(voice_)voice_->Speak(nullptr,SPF_PURGEBEFORESPEAK,nullptr);if(controller_)controller_->Close();web_.Reset();controller_.Reset();environment_.Reset();std::error_code error;std::filesystem::remove_all(profile_,error);}
-
-void ReaderHost::WindowGeometryChanged() { if (popover_) popover_->Hide(); }
+ReaderHost::~ReaderHost(){*alive_=false;menus_.reset();input_->SetMethodCallHandler(nullptr);desktop_->SetMethodCallHandler(nullptr);channel_->SetMethodCallHandler(nullptr);speech_->SetMethodCallHandler(nullptr);if(voice_)voice_->Speak(nullptr,SPF_PURGEBEFORESPEAK,nullptr);if(controller_)controller_->Close();web_.Reset();controller_.Reset();environment_.Reset();std::error_code error;std::filesystem::remove_all(profile_,error);}

@@ -5,6 +5,7 @@ import '../../l10n/generated/app_localizations.dart';
 import 'app_locale.dart';
 import 'app_theme.dart';
 import 'busybooks_design.dart';
+import 'busybooks_toast.dart';
 import 'desktop_frame.dart';
 import 'localization.dart';
 import 'system_accent.dart';
@@ -35,28 +36,33 @@ class BusyBooksStartupFailure extends StatelessWidget {
         brightness: Brightness.dark,
         accentColor: busyBooksDefaultAccentColor,
       ),
-      home: Builder(
-        builder: (context) => desktopWindowHost(
-          Material(
-            child: Center(
-              child: BusyBooksDialogShell(
-                title: context.l10n.startupFailed,
-                actions: [
-                  BusyBooksDialogButton(
-                    label: context.l10n.close,
-                    onPressed: () => windowManager.close(),
-                  ),
-                  BusyBooksDialogButton(
-                    label: context.l10n.retry,
-                    suggested: true,
-                    onPressed: retry,
-                  ),
-                ],
-                children: [
-                  Text(context.l10n.startupRecovery),
-                  const SizedBox(height: BusyBooksSpacing.md),
-                  SelectableText(error.toString()),
-                ],
+      home: BusyBooksToastOverlay(
+        child: Builder(
+          builder: (context) => desktopWindowHost(
+            Material(
+              child: Center(
+                child: BusyBooksDialogShell(
+                  title: context.l10n.startupFailed,
+                  actions: [
+                    BusyBooksDialogButton(
+                      label: context.l10n.close,
+                      onPressed: () => windowManager.close(),
+                    ),
+                    BusyBooksDialogButton(
+                      label: context.l10n.retry,
+                      suggested: true,
+                      onPressed: retry,
+                    ),
+                  ],
+                  children: [
+                    Text(context.l10n.startupRecovery),
+                    const SizedBox(height: BusyBooksSpacing.md),
+                    SelectableText(
+                      contextMenuBuilder: busyBooksTextContextMenu,
+                      error.toString(),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

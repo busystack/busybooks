@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yaru/yaru.dart';
+import 'busybooks_design.dart';
 
 /// Identifies local query input to the application's early keyboard route.
 /// No ancestor lookup is needed while focus detaches during navigation.
@@ -224,6 +225,7 @@ class _BusyBooksSearchFieldState extends State<BusyBooksSearchField> {
         // one of the platform's ordinary text-editing combinations.
         child: BusyBooksLocalTextEditingShortcuts(
           child: TextField(
+            contextMenuBuilder: busyBooksTextContextMenu,
             controller: _controller,
             focusNode: _focusNode,
             autofocus: widget.autofocus,

@@ -99,7 +99,6 @@ Future<void> showReadingSelectionMenu(
       context: context,
       anchorRect: anchor,
       session: menu,
-      fallbackOwner: owner,
       focusFirst: true,
       preferAbove: true,
       items: readingSelectionMenuItems(

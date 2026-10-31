@@ -1,8 +1,12 @@
 import 'dart:ui' show Tristate;
 
 import 'package:busybooks/src/app/app_theme.dart';
+import 'package:busybooks/l10n/generated/app_localizations.dart';
+import 'package:busybooks/src/platform/native_menu_service.dart';
+import 'package:flutter/services.dart';
 import 'package:busybooks/src/app/busybooks_design.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yaru/yaru.dart';
@@ -172,4 +176,136 @@ void main() {
     expect(value, true);
     expect(changes, 1);
   });
+  for (final platform in [TargetPlatform.linux, TargetPlatform.windows]) {
+    testWidgets(
+      'text editing uses the $platform native menu and preserves keyboard selection',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = platform;
+        final controller = TextEditingController(text: 'Native desktop text');
+        final focus = FocusNode();
+        Map? menu;
+        String? clipboard;
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        const channel = MethodChannel(nativeMenuChannelName);
+        messenger.setMockMethodCallHandler(SystemChannels.platform, (
+          call,
+        ) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboard = (call.arguments as Map)['text'] as String;
+          }
+          if (call.method == 'Clipboard.getData') return {'text': clipboard};
+          if (call.method == 'Clipboard.hasStrings') {
+            return {'value': clipboard?.isNotEmpty == true};
+          }
+          return null;
+        });
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method != 'show') return true;
+          menu = call.arguments as Map;
+          final rows = menu!['entries'] as List;
+          return rows.indexWhere((e) => e['label'] == 'Copy');
+        });
+        try {
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: buildBusyBooksTheme(
+                brightness: Brightness.light,
+                accentColor: const Color(0xff3584e4),
+              ),
+              home: Scaffold(
+                body: BusyBooksGroupedTextEntry(
+                  label: 'Destination',
+                  controller: controller,
+                  focusNode: focus,
+                ),
+              ),
+            ),
+          );
+          focus.requestFocus();
+          await tester.pump();
+          controller.selection = const TextSelection(
+            baseOffset: 0,
+            extentOffset: 6,
+          );
+          await tester.pump();
+          tester
+              .state<EditableTextState>(find.byType(EditableText))
+              .showToolbar();
+          await tester.pumpAndSettle();
+          expect(menu, isNotNull);
+          expect(
+            (menu!['entries'] as List).map((e) => e['label']),
+            containsAll(['Copy', 'Cut']),
+          );
+          expect(clipboard, 'Native');
+          expect(controller.text, 'Native desktop text');
+          expect(focus.hasFocus, isTrue);
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+          await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+          expect(
+            controller.selection,
+            const TextSelection(baseOffset: 0, extentOffset: 19),
+          );
+          expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+          expect(find.byType(MenuAnchor), findsNothing);
+          expect(find.byType(PopupMenuItem<int>), findsNothing);
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          messenger.setMockMethodCallHandler(channel, null);
+          messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+          controller.dispose();
+          focus.dispose();
+          debugDefaultTargetPlatformOverride = null;
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'Go To style entries preserve IME composition and read-only input on physical Enter',
+    (tester) async {
+      final controller = TextEditingController(text: '23');
+      var submits = 0;
+      var readOnly = false;
+      late StateSetter update;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                update = setState;
+                return BusyBooksGroupedTextEntry(
+                  label: 'Page',
+                  controller: controller,
+                  autofocus: true,
+                  readOnly: readOnly,
+                  onSubmitted: (_) => submits++,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      controller.value = controller.value.copyWith(
+        composing: const TextRange(start: 0, end: 2),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(submits, 0);
+      controller.clearComposing();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(submits, 1);
+      update(() => readOnly = true);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(submits, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
 }

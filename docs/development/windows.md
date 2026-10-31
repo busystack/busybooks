@@ -135,11 +135,10 @@ cmake -S tools/native_menu_probe -B build/native-menu-probe
 cmake --build build/native-menu-probe --config Release
 ./build/native-menu-probe/Release/busybooks_native_menu_probe.exe
 ./build/native-menu-probe/Release/busybooks_menu_selection_test.exe
-./build/native-menu-probe/Release/busybooks_popover_geometry_test.exe
 ```
 
 Automated probes do not establish all GUI behavior. Actual Windows acceptance
-also checks WebView2 rendering/selection/footnotes, native popover placement and
+also checks WebView2 rendering/selection/footnotes, primary reader-panel placement and
 focus, minimize/restore, 100%/150%/200% display scaling, page/region notes after
 cache deletion/restart, native failed-save/Retry and backup/restore dialogs.
 Exercise all three book views, divider dragging/keyboard resizing, the approved

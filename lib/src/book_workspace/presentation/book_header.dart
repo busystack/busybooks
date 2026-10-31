@@ -40,28 +40,19 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
       _appearance = GlobalKey(),
       _context = GlobalKey();
   late final ReaderController _reader;
-  late final Rect? Function() _locationBounds, _appearanceBounds;
+  late final Rect? Function() _appearanceBounds;
   @override
   void initState() {
     super.initState();
     _reader = ref.read(readerControllerProvider.notifier);
-    _locationBounds = () => bookControlBounds(
-      _location.currentContext ??
-          _previous.currentContext ??
-          _context.currentContext,
-    );
     _appearanceBounds = () => bookControlBounds(
       _appearance.currentContext ?? _context.currentContext,
     );
-    _reader.goToAnchor = _locationBounds;
     _reader.appearanceAnchor = _appearanceBounds;
   }
 
   @override
   void dispose() {
-    if (identical(_reader.goToAnchor, _locationBounds)) {
-      _reader.goToAnchor = null;
-    }
     if (identical(_reader.appearanceAnchor, _appearanceBounds)) {
       _reader.appearanceAnchor = null;
     }
@@ -85,7 +76,6 @@ class _BookHeaderState extends ConsumerState<BookHeader> {
         !presentation.splitAvailable &&
         presentation.lastPane == BookPane.notebook;
     final reading = widget.view.hasReader && !collapsedNotebook;
-    _reader.popoverTextScale = MediaQuery.textScalerOf(context).scale(1);
     String? binding(String id) => registry[id]?.shortcut?.label;
     return LayoutBuilder(
       builder: (context, constraints) {

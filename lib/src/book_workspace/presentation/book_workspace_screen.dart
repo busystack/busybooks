@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -248,7 +249,7 @@ class _BookWorkspaceScreenState extends ConsumerState<BookWorkspaceScreen> {
     Widget content;
     if (_loading) {
       _setReaderVisible(false);
-      content = const Center(child: CircularProgressIndicator());
+      content = const Center(child: YaruCircularProgressIndicator());
     } else if (_error != null) {
       _setReaderVisible(false);
       content = Center(

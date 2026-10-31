@@ -428,5 +428,6 @@
         "type": "String"
       }
     }
-  }
+  },
+  "menuUnavailable": "The menu could not be opened. Please try again."
 }

@@ -14,7 +14,6 @@
 #include <string>
 #include <vector>
 
-class ReaderPopover;
 class ReadingFontChannel;
 class NativeMenuHost;
 class ReaderHost {
@@ -24,7 +23,6 @@ class ReaderHost {
   void FilesDropped(HDROP drop);
   void FileOpened(const wchar_t* path);
   void AppearanceChanged();
-  void WindowGeometryChanged();
   void SpeechEvents();
  private:
   void Initialize();
@@ -32,7 +30,6 @@ class ReaderHost {
   std::shared_ptr<bool> alive_=std::make_shared<bool>(true);
   HWND parent_;
   std::unique_ptr<ReadingFontChannel> fonts_;
-  std::unique_ptr<ReaderPopover> popover_;
   std::unique_ptr<NativeMenuHost> menus_;
   RECT bounds_{};
   uint32_t background_=0xfffafafa;

@@ -37,6 +37,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import '../support/annotation_store_gate.dart';
+import '../support/desktop_menu.dart';
 
 class _Settings implements LocalSettingsStore {
   _Settings({this.failWrites = false});
@@ -1084,9 +1085,11 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         // Returning to the collection is a book-context operation.
-        await tester.tap(find.byTooltip('Book Actions'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Back to Collection'));
+        await chooseDesktopMenu(
+          tester,
+          find.byTooltip('Book Actions'),
+          'Back to Collection',
+        );
         await tester.pumpAndSettle();
         await _until(
           tester,

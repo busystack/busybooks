@@ -1,3 +1,4 @@
+import 'package:yaru/yaru.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -82,7 +83,7 @@ class _NotebookRegionPreviewState extends ConsumerState<NotebookRegionPreview> {
                   ),
                 ),
               ),
-        loading: () => LinearProgressIndicator(
+        loading: () => YaruLinearProgressIndicator(
           semanticsLabel: context.l10n.regionPreviewLoading,
         ),
         error: (_, _) => unavailable,

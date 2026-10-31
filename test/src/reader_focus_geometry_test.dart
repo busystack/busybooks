@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:busybooks/src/app/app_settings.dart';
 import 'package:busybooks/src/book_workspace/application/book_presentation.dart';
 import 'package:busybooks/src/library/data/library_store.dart';
-import 'package:busybooks/src/notebook/application/notebook_controller.dart';
 import 'package:busybooks/src/reading/application/reader_controller.dart';
 import 'package:busybooks/src/reading/domain/reader_bridge.dart';
 import 'package:busybooks/src/workspace/workspace_controller.dart';
@@ -30,8 +29,6 @@ class _FocusGeometryFixture {
   late String bookId;
   String session = '';
   bool nativeFocused = true;
-  bool rejectCapture = false;
-  String? captureNote;
   Completer<bool>? focusReply;
   Completer<void>? focusCommandReply;
   Completer<void>? boundsReply;
@@ -64,19 +61,6 @@ class _FocusGeometryFixture {
           }
           if (call.method == 'focus') await focusCommandReply?.future;
           if (call.method == 'focusChrome') nativeFocused = false;
-          if (call.method == 'capturePopover') {
-            if (rejectCapture) {
-              throw PlatformException(code: 'unconfirmed-input');
-            }
-            if (captureNote != null) {
-              return {
-                ...call.arguments as Map,
-                'note': captureNote,
-                'revision': 3,
-                'color': 'yellow',
-              };
-            }
-          }
           if (call.method == 'dispatch') {
             final command = jsonDecode(call.arguments as String) as Map;
             if (command['action'] == 'layoutVisibility') {
@@ -353,105 +337,6 @@ void main() {
         expect(f.calls.where((call) => call.method == 'hasFocus'), isEmpty);
       } finally {
         await subscription.cancel();
-        await f.dispose();
-      }
-    },
-  );
-  test(
-    'viewport transfer seals protected popup input before any native hide',
-    () async {
-      final f = _FocusGeometryFixture();
-      await f.initialize();
-      try {
-        await f.event('selection', {
-          'text': 'library',
-          'anchor': {'cfi': 'epubcfi(/6/2!/4/4,/1:53,/1:60)', 'index': 0},
-        });
-        f.container
-            .read(bookPresentationProvider.notifier)
-            .focusPane(f.bookId, BookPane.notebook);
-        await f.reader.showPopover('selection');
-        final popup =
-            f.calls.lastWhere((call) => call.method == 'popover').arguments
-                as Map;
-        expect(popup['viewportX'], 300);
-        expect(popup['viewportY'], 48);
-        expect(popup['viewportWidth'], 900);
-        expect(popup['viewportHeight'], 650);
-        expect(
-          f.container.read(bookPresentationProvider).lastPane,
-          BookPane.reading,
-        );
-        f.captureNote = 'Protected native input survives divider geometry.';
-        f.calls.clear();
-        expect(
-          await f.reader.updateViewport(
-            const Rect.fromLTWH(300, 48, 450, 650),
-            bookId: f.bookId,
-          ),
-          isTrue,
-        );
-        final methods = f.calls.map((call) => call.method).toList();
-        expect(
-          methods.indexOf('capturePopover'),
-          lessThan(methods.indexOf('visible')),
-        );
-        expect(
-          methods.indexOf('dismissPopover'),
-          lessThan(methods.indexOf('bounds')),
-        );
-        final notes = f.container.read(notebookControllerProvider);
-        final source = notes.sources.values.singleWhere(
-          (note) => note.bookId == f.bookId,
-        );
-        expect(notes.effectiveNote(source), f.captureNote);
-      } finally {
-        await f.dispose();
-      }
-    },
-  );
-
-  test(
-    'unconfirmed popup input preserves its editor and retries geometry explicitly',
-    () async {
-      final f = _FocusGeometryFixture();
-      await f.initialize();
-      try {
-        await f.reader.showPopover('selection');
-        f.rejectCapture = true;
-        f.calls.clear();
-        expect(
-          await f.reader.updateViewport(
-            const Rect.fromLTWH(300, 48, 450, 650),
-            bookId: f.bookId,
-          ),
-          isFalse,
-        );
-        expect(
-          f.calls.where(
-            (call) =>
-                call.method == 'bounds' ||
-                call.method == 'dismissPopover' ||
-                call.method == 'visible',
-          ),
-          isEmpty,
-        );
-        expect(f.reader.viewport.width, 900);
-        expect(
-          f.container.read(readerControllerProvider).warning,
-          contains('unconfirmed-input'),
-        );
-        f.rejectCapture = false;
-        expect(
-          await f.reader.updateViewport(
-            const Rect.fromLTWH(300, 48, 450, 650),
-            bookId: f.bookId,
-          ),
-          isTrue,
-        );
-        expect(f.reader.viewport.width, 450);
-      } finally {
-        f.rejectCapture = false;
         await f.dispose();
       }
     },

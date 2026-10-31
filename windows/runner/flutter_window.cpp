@@ -55,9 +55,6 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
-  // Dismiss owned controls on movement/scale changes; reopening resolves the
-  // current logical header anchor. Never leave a tool window on the old monitor.
-  if (reader_host_ && (message == WM_MOVE || message == WM_DPICHANGED)) reader_host_->WindowGeometryChanged();
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

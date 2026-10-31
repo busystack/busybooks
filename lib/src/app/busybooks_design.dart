@@ -13,6 +13,8 @@ import '../platform/gtk_header_icon_service.dart';
 import '../platform/native_menu_service.dart';
 import 'busybooks_glyphs.dart';
 import 'path_label.dart';
+import 'busybooks_toast.dart';
+import 'localization.dart';
 
 abstract final class BusyBooksSpacing {
   static const double xxs = 2;
@@ -1054,14 +1056,12 @@ class _BusyBooksHeaderPopupMenuButtonState<T>
   }
 }
 
-/// Owns one native or Flutter fallback menu presentation.
+/// Owns one host-toolkit menu presentation.
 final class BusyBooksMenuSession {
   BusyBooksMenuSession() : _nativeSession = NativeMenuSession();
 
   final NativeMenuSession _nativeSession;
-  final GlobalKey _fallbackRouteKey = GlobalKey();
   NativeMenuService _nativeMenuService = const NativeMenuService();
-  Route<dynamic>? _fallbackRoute;
   var _started = false;
   var _dismissed = false;
 
@@ -1072,7 +1072,6 @@ final class BusyBooksMenuSession {
       return;
     }
     _dismissed = true;
-    _removeFallbackRoute();
     await _nativeMenuService.dismiss(_nativeSession);
   }
 
@@ -1082,31 +1081,6 @@ final class BusyBooksMenuSession {
     }
     _started = true;
     _nativeMenuService = nativeMenuService;
-  }
-
-  void _captureFallbackRoute() {
-    final routeContext = _fallbackRouteKey.currentContext;
-    final route = routeContext == null ? null : ModalRoute.of(routeContext);
-    if (route == null) {
-      return;
-    }
-    _fallbackRoute = route;
-    if (_dismissed) {
-      _removeFallbackRoute();
-    }
-  }
-
-  void _releaseFallbackRoute() {
-    _fallbackRoute = null;
-  }
-
-  void _removeFallbackRoute() {
-    final route = _fallbackRoute;
-    final navigator = route?.navigator;
-    if (route != null && navigator != null && route.isActive) {
-      navigator.removeRoute(route);
-    }
-    _fallbackRoute = null;
   }
 }
 
@@ -1124,7 +1098,7 @@ class BusyBooksMenuHostScope extends InheritedWidget {
 }
 
 /// Presents menus, including nested submenus, through the desktop toolkit.
-/// A themed fallback is only used when no native host is available.
+/// Presentation failure is reported through the application notification host.
 Future<T?> showBusyBooksMenu<T>({
   required BuildContext context,
   required List<PopupMenuEntry<T>> items,
@@ -1133,10 +1107,8 @@ Future<T?> showBusyBooksMenu<T>({
   Rect? anchorRect,
   NativeMenuService nativeMenuService = const NativeMenuService(),
   BusyBooksMenuSession? session,
-  Object? fallbackOwner,
   bool focusFirst = false,
   bool preferAbove = false,
-  double? width,
 }) async {
   assert(
     anchorRect == null || (anchorContext == null && anchorPoint == null),
@@ -1163,10 +1135,15 @@ Future<T?> showBusyBooksMenu<T>({
       (BusyBooksSizes.iconSm * MediaQuery.devicePixelRatioOf(context))
           .round()
           .clamp(16, 64);
-  final nativeEntries = await _busyBooksNativeMenuEntries(
-    itemSnapshot,
-    iconSize: iconSize,
-  );
+  List<NativeMenuEntry>? nativeEntries;
+  try {
+    nativeEntries = await _busyBooksNativeMenuEntries(
+      itemSnapshot,
+      iconSize: iconSize,
+    );
+  } catch (error, stack) {
+    debugPrint('Native menu conversion failed: $error\n$stack');
+  }
   if (!context.mounted || presentation.dismissed) return null;
   if (nativeEntries != null) {
     final nativeResult = await menuHost.show(
@@ -1187,49 +1164,8 @@ Future<T?> showBusyBooksMenu<T>({
   if (!context.mounted) {
     return null;
   }
-  if (itemSnapshot.any((item) => item is BusyBooksSubmenuItem<T>)) {
-    final navigator = Navigator.of(context, rootNavigator: true);
-    if (!navigator.mounted || navigator.overlay?.mounted != true) return null;
-    final previousFocus = FocusManager.instance.primaryFocus;
-    final overlay = navigator.overlay?.context.findRenderObject();
-    final localAnchor = overlay is RenderBox
-        ? Rect.fromPoints(
-            overlay.globalToLocal(anchor.topLeft),
-            overlay.globalToLocal(anchor.bottomRight),
-          )
-        : anchor;
-    final route = _BusyBooksNestedMenuRoute<T>(
-      settings: RouteSettings(arguments: fallbackOwner),
-      anchor: localAnchor,
-      items: itemSnapshot,
-      themes: InheritedTheme.capture(from: context, to: navigator.context),
-      direction: Directionality.of(context),
-      focusFirst: focusFirst,
-      routeKey: presentation._fallbackRouteKey,
-      dismissLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    );
-    final result = navigator.push<T>(route);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => presentation._captureFallbackRoute(),
-    );
-    try {
-      final value = await result;
-      return presentation.dismissed ? null : value;
-    } finally {
-      presentation._releaseFallbackRoute();
-      if (previousFocus?.context?.mounted == true) {
-        previousFocus!.requestFocus();
-      }
-    }
-  }
-  final selection = await _showBusyBooksFallbackMenu<T>(
-    context: context,
-    anchor: anchor,
-    items: itemSnapshot,
-    session: presentation,
-    width: width,
-  );
-  return presentation.dismissed ? null : selection;
+  BusyBooksToastOverlay.show(context, message: context.l10n.menuUnavailable);
+  return null;
 }
 
 Rect _busyBooksMenuAnchorRect(BuildContext anchorContext, Offset? anchorPoint) {
@@ -1357,154 +1293,14 @@ T? _busyBooksMenuValueAt<T>(List<PopupMenuEntry<T>> items, int? index) {
   return visit(items, true);
 }
 
-double _busyBooksMenuTextWidth(
-  BuildContext context,
-  String text,
-  TextStyle? style,
-) {
-  final painter = TextPainter(
-    text: TextSpan(text: text, style: style),
-    maxLines: 1,
-    textDirection: Directionality.of(context),
-    textScaler: MediaQuery.textScalerOf(context),
-  )..layout();
-  final width = painter.width;
-  painter.dispose();
-  return width;
-}
-
-double? _busyBooksFallbackMenuWidth<T>(
-  BuildContext context,
-  List<PopupMenuEntry<T>> items,
-  double? preferred,
-  double available,
-) {
-  final theme = Theme.of(context),
-      labelStyle =
-          theme.popupMenuTheme.labelTextStyle?.resolve({}) ??
-          theme.popupMenuTheme.textStyle ??
-          theme.textTheme.labelLarge;
-  var width = preferred ?? BusyBooksSizes.popupMenuMinWidth;
-  for (final entry in items) {
-    if (entry is! BusyBooksPopupMenuItem<T>) {
-      if (entry is! PopupMenuDivider) return preferred;
-      continue;
-    }
-    var content =
-        _busyBooksMenuTextWidth(context, entry.label, labelStyle) +
-        BusyBooksSpacing.md * 2;
-    if (entry.icon != null) {
-      content += BusyBooksSizes.iconSm + BusyBooksSpacing.sm;
-    }
-    if (entry.shortcut case final String shortcut) {
-      content +=
-          BusyBooksSpacing.sm +
-          _busyBooksMenuTextWidth(
-            context,
-            shortcut,
-            theme.textTheme.labelSmall,
-          );
-    }
-    if (entry.trailingCheck) {
-      content += BusyBooksSpacing.sm + BusyBooksSizes.iconSm;
-    }
-    width = math.max(width, content);
-  }
-  return width.clamp(1, math.max(1, available - BusyBooksSpacing.sm * 2));
-}
-
-Future<T?> _showBusyBooksFallbackMenu<T>({
-  required BuildContext context,
-  required Rect anchor,
-  required List<PopupMenuEntry<T>> items,
-  required BusyBooksMenuSession session,
-  required double? width,
-}) async {
-  final navigator = Navigator.of(context, rootNavigator: true);
-  final overlay = navigator.overlay?.context.findRenderObject();
-  if (overlay is! RenderBox || !overlay.hasSize) {
-    return null;
-  }
-  final localAnchor = Rect.fromPoints(
-    overlay.globalToLocal(anchor.topLeft),
-    overlay.globalToLocal(anchor.bottomRight),
-  );
-  final menuAnchor = Rect.fromLTWH(
-    localAnchor.left,
-    localAnchor.bottom,
-    localAnchor.width,
-    0,
-  );
-  final fallbackItems = _busyBooksFallbackItems(
-    items,
-    session._fallbackRouteKey,
-  );
-  final selection = showMenu<T>(
-    context: context,
-    useRootNavigator: true,
-    position: RelativeRect.fromRect(menuAnchor, Offset.zero & overlay.size),
-    items: fallbackItems,
-    constraints: switch (_busyBooksFallbackMenuWidth(
-      context,
-      items,
-      width,
-      overlay.size.width,
-    )) {
-      final double measured => BoxConstraints.tightFor(width: measured),
-      _ => null,
-    },
-    requestFocus: true,
-  );
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    session._captureFallbackRoute();
-  });
-  try {
-    return await selection;
-  } finally {
-    session._releaseFallbackRoute();
-  }
-}
-
-List<PopupMenuEntry<T>> _busyBooksFallbackItems<T>(
-  List<PopupMenuEntry<T>> items,
-  GlobalKey routeKey,
-) {
-  final fallbackItems = <PopupMenuEntry<T>>[];
-  var routeKeyPending = true;
-  for (final item in items) {
-    if (item is BusyBooksPopupMenuItem<T>) {
-      fallbackItems.add(
-        BusyBooksPopupMenuItem<T>(
-          value: item.menuValue,
-          label: item.label,
-          icon: item.icon,
-          iconColor: item.iconColor,
-          shortcut: item.shortcut,
-          enabled: item.enabled,
-          checked: item.checked,
-          trailingCheck: item.trailingCheck,
-          mutuallyExclusive: item.mutuallyExclusive,
-          routeKey: routeKeyPending ? routeKey : null,
-        ),
-      );
-      routeKeyPending = false;
-    } else {
-      fallbackItems.add(item);
-    }
-  }
-  return fallbackItems;
-}
-
 /// Shows a BusyBooks context menu at a global pointer position.
 ///
-/// The menu opens away from the pointer's reading-direction edge and stays
-/// inside the root overlay. Use [BusyBooksPopupMenuItem] entries to keep menu
-/// rows consistent with the rest of the application.
+/// The native host positions the menu at the pointer's reading-direction edge
+/// within the monitor work area. Entries carry desktop command metadata.
 Future<T?> showBusyBooksContextMenu<T>(
   BuildContext context,
   Offset globalPosition, {
   required List<PopupMenuEntry<T>> items,
-  double width = BusyBooksSizes.popupMenuMinWidth,
 }) {
   if (items.isEmpty) {
     return Future<T?>.value();
@@ -1513,7 +1309,6 @@ Future<T?> showBusyBooksContextMenu<T>(
     context: context,
     anchorPoint: globalPosition,
     items: items,
-    width: width,
   );
 }
 
@@ -1542,161 +1337,10 @@ class _BusyBooksSubmenuItemState<T> extends State<BusyBooksSubmenuItem<T>> {
   Widget build(BuildContext context) => Text(widget.label);
 }
 
-class _BusyBooksNestedMenuRoute<T> extends PopupRoute<T> {
-  _BusyBooksNestedMenuRoute({
-    super.settings,
-    required this.anchor,
-    required this.items,
-    required this.themes,
-    required this.direction,
-    required this.routeKey,
-    required this.dismissLabel,
-    required this.focusFirst,
-  });
-  final bool focusFirst;
-  final Rect anchor;
-  final List<PopupMenuEntry<T>> items;
-  final CapturedThemes themes;
-  final TextDirection direction;
-  final GlobalKey routeKey;
-  final String dismissLabel;
-  @override
-  Color? get barrierColor => null;
-  @override
-  bool get barrierDismissible => true;
-  @override
-  String? get barrierLabel => dismissLabel;
-  @override
-  Duration get transitionDuration => Duration.zero;
-  @override
-  Widget buildPage(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-  ) => themes.wrap(
-    Directionality(
-      textDirection: direction,
-      child: _BusyBooksNestedMenu<T>(route: this),
-    ),
-  );
-}
-
-class _BusyBooksNestedMenu<T> extends StatefulWidget {
-  const _BusyBooksNestedMenu({required this.route});
-  final _BusyBooksNestedMenuRoute<T> route;
-  @override
-  State<_BusyBooksNestedMenu<T>> createState() =>
-      _BusyBooksNestedMenuState<T>();
-}
-
-class _BusyBooksNestedMenuState<T> extends State<_BusyBooksNestedMenu<T>> {
-  final _controller = MenuController();
-  final _firstFocus = FocusNode(debugLabel: 'First nested menu item');
-  bool _selected = false;
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _controller.open();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.route.focusFirst) _firstFocus.requestFocus();
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _firstFocus.dispose();
-    super.dispose();
-  }
-
-  List<Widget> _children(
-    List<PopupMenuEntry<T>> items, {
-    bool root = false,
-  }) => [
-    for (final item in items)
-      if (item is BusyBooksSubmenuItem<T>)
-        SubmenuButton(
-          focusNode: root && identical(item, items.first) ? _firstFocus : null,
-          menuChildren: item.enabled ? _children(item.items) : const [],
-          child: Text(item.label),
-        )
-      else if (item is BusyBooksPopupMenuItem<T>)
-        Semantics(
-          checked: item.trailingCheck ? item.checked : null,
-          inMutuallyExclusiveGroup:
-              item.trailingCheck && item.mutuallyExclusive,
-          child: MenuItemButton(
-            focusNode: root && identical(item, items.first)
-                ? _firstFocus
-                : null,
-            closeOnActivate: false,
-            onPressed: item.enabled
-                ? () {
-                    _selected = true;
-                    Navigator.of(context).pop(item.menuValue);
-                  }
-                : null,
-            leadingIcon: item.icon == null
-                ? null
-                : Icon(
-                    item.icon,
-                    size: BusyBooksSizes.iconSm,
-                    color: item.iconColor,
-                  ),
-            trailingIcon: item.trailingCheck
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (item.shortcut case final shortcut?) ...[
-                        Text(shortcut),
-                        const SizedBox(width: BusyBooksSpacing.sm),
-                      ],
-                      Visibility.maintain(
-                        visible: item.checked,
-                        child: const Icon(
-                          BusyBooksGlyphs.check,
-                          size: BusyBooksSizes.iconSm,
-                        ),
-                      ),
-                    ],
-                  )
-                : item.shortcut == null
-                ? null
-                : Text(item.shortcut!),
-            child: Text(item.label),
-          ),
-        )
-      else if (item is PopupMenuDivider)
-        const Divider(height: BusyBooksSpacing.sm),
-  ];
-
-  @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      Positioned(
-        left: widget.route.anchor.left,
-        top: widget.route.anchor.bottom,
-        child: MenuAnchor(
-          key: widget.route.routeKey,
-          controller: _controller,
-          consumeOutsideTap: true,
-          onClose: () {
-            if (!_selected && mounted && widget.route.isCurrent) {
-              Navigator.of(context).pop();
-            }
-          },
-          menuChildren: _children(widget.route.items, root: true),
-          child: const SizedBox.shrink(),
-        ),
-      ),
-    ],
-  );
-}
-
-class BusyBooksPopupMenuItem<T> extends PopupMenuItem<T> {
-  BusyBooksPopupMenuItem({
+/// Typed command metadata consumed only by the desktop menu serializer.
+/// No Flutter Material menu row is built from this entry.
+class BusyBooksPopupMenuItem<T> extends PopupMenuEntry<T> {
+  const BusyBooksPopupMenuItem({
     super.key,
     required T value,
     required String label,
@@ -1704,11 +1348,10 @@ class BusyBooksPopupMenuItem<T> extends PopupMenuItem<T> {
     Color? iconColor,
     String? shortcut,
     this.gtkAccelerator,
-    super.enabled = true,
+    this.enabled = true,
     bool checked = false,
     bool trailingCheck = false,
     bool mutuallyExclusive = true,
-    Key? routeKey,
   }) : label = label,
        menuValue = value,
        icon = icon,
@@ -1716,22 +1359,7 @@ class BusyBooksPopupMenuItem<T> extends PopupMenuItem<T> {
        shortcut = shortcut,
        checked = checked,
        trailingCheck = trailingCheck,
-       mutuallyExclusive = mutuallyExclusive,
-       super(
-         value: value,
-         child: KeyedSubtree(
-           key: routeKey,
-           child: _BusyBooksPopupMenuItemContent(
-             label: label,
-             icon: icon,
-             iconColor: iconColor,
-             shortcut: shortcut,
-             checked: checked,
-             trailingCheck: trailingCheck,
-             mutuallyExclusive: mutuallyExclusive,
-           ),
-         ),
-       );
+       mutuallyExclusive = mutuallyExclusive;
 
   final String label;
   final T menuValue;
@@ -1739,91 +1367,22 @@ class BusyBooksPopupMenuItem<T> extends PopupMenuItem<T> {
   final Color? iconColor;
   final String? shortcut;
   final String? gtkAccelerator;
+  final bool enabled;
   final bool checked;
   final bool trailingCheck;
   final bool mutuallyExclusive;
+  @override
+  double get height => 0;
+  @override
+  bool represents(T? value) => value == menuValue;
+  @override
+  State<BusyBooksPopupMenuItem<T>> createState() =>
+      _BusyBooksMenuMetadataState<T>();
 }
 
-class _BusyBooksPopupMenuItemContent extends StatelessWidget {
-  const _BusyBooksPopupMenuItemContent({
-    required this.label,
-    required this.icon,
-    required this.iconColor,
-    required this.shortcut,
-    required this.checked,
-    required this.trailingCheck,
-    required this.mutuallyExclusive,
-  });
-
-  final String label;
-  final IconData? icon;
-  final Color? iconColor;
-  final String? shortcut;
-  final bool checked;
-  final bool trailingCheck;
-  final bool mutuallyExclusive;
-
+class _BusyBooksMenuMetadataState<T> extends State<BusyBooksPopupMenuItem<T>> {
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final labelText = Text(label, maxLines: 1, overflow: TextOverflow.ellipsis);
-    final shortcutText = shortcut == null || shortcut!.isEmpty
-        ? null
-        : Directionality(
-            textDirection: TextDirection.ltr,
-            child: Text(
-              shortcut!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall,
-            ),
-          );
-    final labelWidth = _busyBooksMenuTextWidth(
-          context,
-          label,
-          DefaultTextStyle.of(context).style,
-        ),
-        shortcutWidth = shortcut == null
-            ? 0.0
-            : _busyBooksMenuTextWidth(
-                context,
-                shortcut!,
-                theme.textTheme.labelSmall,
-              );
-    return Semantics(
-      checked: trailingCheck ? checked : null,
-      inMutuallyExclusiveGroup: trailingCheck && mutuallyExclusive,
-      child: IconTheme.merge(
-        data: const IconThemeData(size: BusyBooksSizes.iconSm),
-        child: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: iconColor),
-              const SizedBox(width: BusyBooksSpacing.sm),
-            ],
-            Expanded(flex: math.max(1, labelWidth.ceil()), child: labelText),
-            if (shortcutText != null) ...[
-              const SizedBox(width: BusyBooksSpacing.sm),
-              Expanded(
-                flex: math.max(1, shortcutWidth.ceil()),
-                child: Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: shortcutText,
-                ),
-              ),
-            ],
-            if (trailingCheck) ...[
-              const SizedBox(width: BusyBooksSpacing.sm),
-              Visibility.maintain(
-                visible: checked,
-                child: const Icon(BusyBooksGlyphs.check),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 typedef BusyBooksMenuTriggerBuilder =
@@ -1848,7 +1407,7 @@ class BusyBooksMenuTriggerDetails {
   }
 }
 
-/// A shared trigger that presents GTK menus with a Flutter fallback.
+/// A shared trigger for host-toolkit menus.
 class BusyBooksMenuButton<T> extends StatefulWidget {
   const BusyBooksMenuButton({
     super.key,
@@ -1858,7 +1417,6 @@ class BusyBooksMenuButton<T> extends StatefulWidget {
     required this.triggerBuilder,
     this.enabled = true,
     this.nativeMenuService = const NativeMenuService(),
-    this.fallbackMenuWidth,
   });
 
   final String tooltip;
@@ -1867,7 +1425,6 @@ class BusyBooksMenuButton<T> extends StatefulWidget {
   final BusyBooksMenuTriggerBuilder triggerBuilder;
   final bool enabled;
   final NativeMenuService nativeMenuService;
-  final double? fallbackMenuWidth;
 
   @override
   State<BusyBooksMenuButton<T>> createState() => _BusyBooksMenuButtonState<T>();
@@ -1974,7 +1531,6 @@ class _BusyBooksMenuButtonState<T> extends State<BusyBooksMenuButton<T>> {
         nativeMenuService: widget.nativeMenuService,
         session: session,
         focusFirst: focusFirst,
-        width: widget.fallbackMenuWidth,
       );
     } finally {
       if (mounted && identical(_activeMenuSession, session)) {
@@ -2042,8 +1598,6 @@ class BusyBooksPopupSelector<T> extends StatelessWidget {
     required this.options,
     required this.onSelected,
     this.enabled = true,
-    this.popupMinWidth = BusyBooksSizes.languagePopupMinWidth,
-    this.popupMaxWidth = BusyBooksSizes.languagePopupMaxWidth,
     this.buttonMaxWidth = BusyBooksSizes.languageButtonMaxWidth,
     this.leading,
     this.fullWidth = false,
@@ -2056,8 +1610,6 @@ class BusyBooksPopupSelector<T> extends StatelessWidget {
   final List<BusyBooksPopupSelectorOption<T>> options;
   final ValueChanged<T> onSelected;
   final bool enabled;
-  final double popupMinWidth;
-  final double popupMaxWidth;
   final double buttonMaxWidth;
   final Widget? leading;
   final bool fullWidth;
@@ -2068,8 +1620,6 @@ class BusyBooksPopupSelector<T> extends StatelessWidget {
     // the neutral control foreground rather than an action-link accent.
     final neutralButtonStyle = Theme.of(context).outlinedButtonTheme.style;
     final selectorEnabled = enabled && options.isNotEmpty;
-    final fallbackMenuWidth = (fullWidth ? popupMaxWidth : buttonMaxWidth)
-        .clamp(popupMinWidth, popupMaxWidth);
     return Align(
       widthFactor: fullWidth ? null : 1,
       alignment: AlignmentDirectional.centerEnd,
@@ -2080,7 +1630,6 @@ class BusyBooksPopupSelector<T> extends StatelessWidget {
         child: BusyBooksMenuButton<T>(
           tooltip: tooltip,
           enabled: selectorEnabled,
-          fallbackMenuWidth: fallbackMenuWidth,
           onSelected: onSelected,
           items: [
             for (final option in options)
@@ -2306,6 +1855,7 @@ class _BusyBooksGroupedTextEntryState extends State<BusyBooksGroupedTextEntry> {
   Widget _buildRow(BuildContext context) {
     return YaruListTile.square(
       title: TextFormField(
+        contextMenuBuilder: busyBooksTextContextMenu,
         key: _fieldKey,
         controller: widget.controller,
         initialValue: widget.initialValue,
@@ -2338,6 +1888,12 @@ class _BusyBooksGroupedTextEntryState extends State<BusyBooksGroupedTextEntry> {
   }
 
   void _submit() {
+    final composing = widget.controller?.value.composing;
+    if (widget.readOnly ||
+        !widget.enabled ||
+        composing != null && composing.isValid && !composing.isCollapsed) {
+      return;
+    }
     final value =
         widget.controller?.text ??
         _fieldKey.currentState?.value ??
@@ -3143,6 +2699,7 @@ class BusyBooksComboRow<T> extends StatelessWidget {
     this.errorText,
     this.leading,
     this.enabled = true,
+    this.activateSelected = false,
     this.tooltip,
     this.width = BusyBooksSizes.controlRowWidth,
   }) : values = List<T>.unmodifiable(values) {
@@ -3185,6 +2742,7 @@ class BusyBooksComboRow<T> extends StatelessWidget {
   final String? errorText;
   final Widget? leading;
   final bool enabled;
+  final bool activateSelected;
   final String? tooltip;
   final double width;
 
@@ -3223,7 +2781,7 @@ class BusyBooksComboRow<T> extends StatelessWidget {
           enabled: enabled,
           onSelected: (index) {
             final value = values[index];
-            if (value != selected) {
+            if (activateSelected || value != selected) {
               onSelected(value);
             }
           },
@@ -3968,4 +3526,78 @@ class _BusyBooksDialogButtonContent extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Text editing keeps Flutter's editing actions, but uses the same desktop menu
+/// host as every other application command. No adaptive Material toolbar opens.
+Widget busyBooksTextContextMenu(
+  BuildContext context,
+  EditableTextState editable,
+) => _BusyBooksTextContextMenu(editable: editable);
+
+class _BusyBooksTextContextMenu extends StatefulWidget {
+  const _BusyBooksTextContextMenu({required this.editable});
+  final EditableTextState editable;
+  @override
+  State<_BusyBooksTextContextMenu> createState() =>
+      _BusyBooksTextContextMenuState();
+}
+
+class _BusyBooksTextContextMenuState extends State<_BusyBooksTextContextMenu> {
+  final _menu = BusyBooksMenuSession();
+  late final TextEditingValue _value;
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.editable.textEditingValue;
+    widget.editable.widget.controller.addListener(_changed);
+    widget.editable.widget.focusNode.addListener(_changed);
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_show()));
+  }
+
+  void _changed() {
+    if (widget.editable.textEditingValue != _value ||
+        !widget.editable.widget.focusNode.hasFocus) {
+      unawaited(_menu.dismiss());
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.editable.widget.controller.removeListener(_changed);
+    widget.editable.widget.focusNode.removeListener(_changed);
+    unawaited(_menu.dismiss());
+    super.dispose();
+  }
+
+  Future<void> _show() async {
+    if (!mounted || !widget.editable.mounted) return;
+    final items = widget.editable.contextMenuButtonItems;
+    final anchor = widget.editable.contextMenuAnchors.primaryAnchor;
+    final selected = await showBusyBooksMenu<int>(
+      context: context,
+      session: _menu,
+      focusFirst: true,
+      anchorPoint: anchor,
+      items: [
+        for (final (index, item) in items.indexed)
+          BusyBooksPopupMenuItem(
+            value: index,
+            label: AdaptiveTextSelectionToolbar.getButtonLabel(context, item),
+            enabled: item.onPressed != null,
+          ),
+      ],
+    );
+    if (!mounted || !widget.editable.mounted) return;
+    if (!_menu.dismissed &&
+        selected != null &&
+        widget.editable.textEditingValue == _value &&
+        widget.editable.widget.focusNode.hasFocus) {
+      items[selected].onPressed?.call();
+    }
+    widget.editable.hideToolbar();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
