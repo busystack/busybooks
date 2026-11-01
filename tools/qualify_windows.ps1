@@ -55,6 +55,8 @@ function Invoke-Check([string]$Name, [string]$Executable, [string[]]$Arguments) 
 }
 
 $versionLog = Join-Path $EvidenceDirectory 'flutter-version.json'
+& $flutter --version | Out-File -Encoding utf8 (Join-Path $EvidenceDirectory 'flutter-bootstrap.log')
+if ($LASTEXITCODE -ne 0) { throw 'Official Flutter bootstrap failed' }
 & $flutter --version --machine | Out-File -Encoding utf8 $versionLog
 if ($LASTEXITCODE -ne 0) { throw 'Flutter version check failed' }
 $version = Get-Content $versionLog -Raw | ConvertFrom-Json

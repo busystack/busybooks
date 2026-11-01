@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -118,6 +119,28 @@ class ReleaseMetadataTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'differs from pubspec'):
                     release.versions()
                 path.write_text(before)
+
+
+class ToolchainMetadataTest(unittest.TestCase):
+    def setUp(self):
+        self.version = dict(frameworkVersion=release.FLUTTER, dartSdkVersion=release.DART,
+                            frameworkRevision=release.REVISION)
+
+    def test_cold_start_bootstrap_is_separate_from_machine_json(self):
+        with mock.patch.object(release.shutil, 'which', return_value='/owned-sdk/bin/flutter'), \
+             mock.patch.object(release.subprocess, 'run') as bootstrap, \
+             mock.patch.object(release.subprocess, 'check_output',
+                               side_effect=[json.dumps(self.version), '']):
+            self.assertEqual(release.toolchain(), self.version)
+        bootstrap.assert_called_once_with(['/owned-sdk/bin/flutter', '--version'],
+                                          check=True, stdout=sys.stderr)
+
+    def test_invalid_machine_output_fails_with_diagnostics(self):
+        with mock.patch.object(release.shutil, 'which', return_value='/owned-sdk/bin/flutter'), \
+             mock.patch.object(release.subprocess, 'run'), \
+             mock.patch.object(release.subprocess, 'check_output', return_value='unexpected bootstrap text'):
+            with self.assertRaisesRegex(ValueError, 'unexpected bootstrap text'):
+                release.toolchain()
 
 
 if __name__ == '__main__':

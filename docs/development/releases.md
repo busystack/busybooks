@@ -99,9 +99,10 @@ An independent reviewer must record installed-package acceptance for the exact
 head revision and artifact hashes before approving. New commits dismiss approval.
 The aggregate check verifies automation; review records human acceptance.
 
-The connector used during implementation could read the repository but returned
-403 for PR creation and exposes no ruleset administration endpoint. Importing this
-file is an owner action; committing it alone does **not** activate protection.
+An administrator can also apply the file with the authenticated GitHub CLI:
+`gh api --method POST repos/busystack/busybooks/rulesets --input .github/main-ruleset.json`.
+Inspect existing rulesets first and update an existing rule by ID instead of
+creating duplicates. Committing the JSON alone does **not** activate protection.
 Confirm the active rule in Settings and verify direct pushes/force pushes/deletion
 are blocked without attempting a destructive operation against main.
 

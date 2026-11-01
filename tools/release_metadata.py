@@ -95,13 +95,21 @@ def toolchain():
     flutter = shutil.which('flutter')
     if not flutter:
         raise ValueError('Flutter is required')
-    data = json.loads(subprocess.check_output([flutter, '--version', '--machine'], text=True))
+    # The official Windows archive bootstraps flutter_tools on its first command.
+    # Keep that command's human-readable output out of the machine JSON stream.
+    subprocess.run([flutter, '--version'], check=True, stdout=sys.stderr)
+    output = subprocess.check_output([flutter, '--version', '--machine'], text=True)
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError as error:
+        raise ValueError(f'Flutter machine output is not JSON: {output[:2000]}') from error
     if (data['frameworkVersion'], data['dartSdkVersion'].split()[0], data['frameworkRevision']) != (FLUTTER, DART, REVISION):
         raise ValueError(f'Expected official Flutter {FLUTTER} ({REVISION}) / Dart {DART}; got {data}')
     # Detect modifications to tracked SDK sources as well as a misleading version label.
     sdk = Path(flutter).resolve().parent.parent
     if subprocess.check_output(['git', '-C', str(sdk), 'status', '--porcelain', '--untracked-files=no'], text=True).strip():
-        raise ValueError('Tracked Flutter SDK sources have been modified')
+        changes = subprocess.check_output(['git', '-C', str(sdk), 'diff', '--stat'], text=True)
+        raise ValueError(f'Tracked Flutter SDK sources have been modified: {changes}')
     return data
 
 
