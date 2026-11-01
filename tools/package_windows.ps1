@@ -41,6 +41,13 @@ Copy-Item "$release/*" $staging -Recurse -Force
 Copy-Item $WebViewRuntimeInstaller (Join-Path $staging 'MicrosoftEdgeWebView2RuntimeInstallerX64.exe') -Force
 Copy-Item $VisualCppRuntimeInstaller (Join-Path $staging 'VC_redist.x64.exe') -Force
 Copy-Item LICENSE,NOTICE,'docs/development/windows.md' $staging
+$nativeVersion = (Get-Item (Join-Path $staging 'busybooks.exe')).VersionInfo
+if ($nativeVersion.ProductVersion -ne "$($metadata.version)+$($metadata.buildNumber)" -or
+    $nativeVersion.ProductName -ne 'BusyBooks' -or $nativeVersion.CompanyName -ne 'BusyStack') {
+    throw "Expected BusyBooks $($metadata.version)+$($metadata.buildNumber) from BusyStack; staged executable reports $($nativeVersion.ProductName) $($nativeVersion.ProductVersion) from $($nativeVersion.CompanyName)"
+}
+@{productName=$nativeVersion.ProductName; productVersion=$nativeVersion.ProductVersion; fileVersion=$nativeVersion.FileVersion; publisher=$nativeVersion.CompanyName} |
+    ConvertTo-Json | Set-Content (Join-Path $QualificationDirectory 'windows-version.json')
 python tools/verify_vendor.py --platform windows --bundle $staging
 if ($LASTEXITCODE) { throw 'Staged vendor verification failed' }
 python tools/verify_distribution.py --platform windows --bundle $staging --output (Join-Path $QualificationDirectory 'staged-distribution.json')

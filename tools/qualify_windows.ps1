@@ -74,7 +74,7 @@ $report.lockfileSha256 = $lockBefore
 if (!(Invoke-Check 'upstream-source' 'python.exe' @('tools/verify_vendor.py') | Select-Object -Last 1)) {
     throw 'Upstream dependency verification failed'
 }
-$null = Invoke-Check 'upstream-verifier-tests' 'python.exe' @('-m', 'unittest', 'discover', '-s', 'test/tools', '-p', '*_test.py')
+$null = Invoke-Check 'upstream-verifier-tests' 'python.exe' @('-m', 'unittest', 'discover', '-v', '-s', 'test/tools', '-p', '*_test.py')
 $null = Invoke-Check 'doctor' $flutter @('doctor', '-v')
 $null = Invoke-Check 'devices' $flutter @('devices')
 if (!(Invoke-Check 'dependencies' $flutter @('pub', 'get', '--enforce-lockfile') | Select-Object -Last 1)) {

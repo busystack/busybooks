@@ -28,6 +28,10 @@ no secrets or write token are supplied to builds.
 Linux's ordinary build qualifies host-native probes; Snapcraft independently
 compiles against its isolated core24 environment. Windows packaging reuses the
 qualified build only after checking source, lockfile and every release file hash.
+Windows validates the staged and installed executable's native `VERSIONINFO`,
+including `VERSION+BUILD`, product name and publisher. Linux additionally checks
+its packaged Flutter `version.json` and AppStream metadata. No metadata is invented
+for a build platform that does not generate it.
 A failed or skipped required check cannot become a successful aggregate result.
 There is no `continue-on-error`.
 

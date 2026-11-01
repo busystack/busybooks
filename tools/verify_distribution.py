@@ -47,9 +47,12 @@ def verify(root, platform):
     if platform == 'linux':
         if appstream_version(root / 'share/metainfo/io.busystack.busybooks.metainfo.xml') != version:
             raise ValueError('Bundled Linux AppStream identity/version differs')
-    metadata = json.loads((root / 'data/flutter_assets/version.json').read_text(encoding='utf-8'))
-    if (metadata.get('version'), metadata.get('build_number'), metadata.get('app_name')) != (version, build, 'busybooks'):
-        raise ValueError(f'Bundled Flutter application metadata differs: {metadata}')
+        metadata = json.loads((root / 'data/flutter_assets/version.json').read_text(encoding='utf-8'))
+        if (metadata.get('version'), metadata.get('build_number'), metadata.get('app_name')) != (version, build, 'busybooks'):
+            raise ValueError(f'Bundled Flutter application metadata differs: {metadata}')
+    # Windows packaging and installed-package qualification validate the native
+    # executable's VERSIONINFO using System.Diagnostics.FileVersionInfo. The
+    # pinned Windows build does not generate Linux's version.json asset.
     inventory = []
     for path in sorted(root.rglob('*')):
         relative = path.relative_to(root)
