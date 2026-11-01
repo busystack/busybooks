@@ -18,7 +18,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.identity.outputs.version }}
-      prefix: ${{ steps.identity.outputs.prefix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -46,14 +45,6 @@ jobs:
           flutter-version: '3.47.5'
       - name: Qualify Linux release
         run: bash tools/qualify_linux.sh
-      - name: Upload Linux verification evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: ${{ needs.identity.outputs.prefix }}-linux-diagnostics-attempt-${{ github.run_attempt }}
-          path: build/release/linux/
-          if-no-files-found: error
-          retention-days: 30
   windows:
     name: Windows verification and installer
     needs: identity
@@ -84,32 +75,40 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.identity.outputs.version }}
         run: |
-          ./tools/qualify_windows_installer.ps1 -Installer "build/distributions/BusyBooks-$env:RELEASE_VERSION-windows-x64.exe"
-      - name: Record installer provenance
+          try {
+            ./tools/qualify_windows_installer.ps1 -Installer "build/distributions/BusyBooks-$env:RELEASE_VERSION-windows-x64.exe"
+          } finally {
+            foreach ($name in 'install.log', 'uninstall.log', 'installed-app.stdout.log', 'installed-app.stderr.log') {
+              $log = "build/release/windows/$name"
+              if (Test-Path $log) {
+                Write-Host "::group::$name"
+                Get-Content $log
+                Write-Host '::endgroup::'
+              }
+            }
+          }
+      - name: Record package provenance and stage Windows artifact
         env:
           RELEASE_VERSION: ${{ needs.identity.outputs.version }}
         run: |
           python tools/release_metadata.py --check-event --toolchain --evidence build/release/windows --package "build/distributions/BusyBooks-$env:RELEASE_VERSION-windows-x64.exe"
           if ($LASTEXITCODE) { throw 'Installer provenance failed' }
-      - name: Upload qualified Windows candidate or final packages
+          $artifact = 'build/artifacts/Windows'
+          New-Item -ItemType Directory -Force "$artifact/provenance" | Out-Null
+          foreach ($name in "BusyBooks-$env:RELEASE_VERSION-windows-x64.exe", "busybooks-$env:RELEASE_VERSION-windows-x64.zip") {
+            Copy-Item "build/distributions/$name", "build/distributions/$name.sha256" $artifact
+          }
+          Copy-Item build/release/windows/*.json, build/release/windows/*.txt, build/release/windows/pubspec.lock "$artifact/provenance"
+          python tools/release_metadata.py --check-event --package "build/distributions/busybooks-$env:RELEASE_VERSION-windows-x64.zip" |
+            Set-Content -Encoding utf8 "$artifact/provenance/portable-zip.json"
+          if ($LASTEXITCODE) { throw 'Portable ZIP provenance failed' }
+      - name: Upload qualified Windows packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ needs.identity.outputs.prefix }}-windows-x64-attempt-${{ github.run_attempt }}
-          path: |
-            build/distributions/BusyBooks-${{ needs.identity.outputs.version }}-windows-x64.exe
-            build/distributions/BusyBooks-${{ needs.identity.outputs.version }}-windows-x64.exe.sha256
-            build/distributions/busybooks-${{ needs.identity.outputs.version }}-windows-x64.zip
-            build/distributions/busybooks-${{ needs.identity.outputs.version }}-windows-x64.zip.sha256
-            build/release/windows/
+          name: BusyBooks-${{ needs.identity.outputs.version }}-Windows
+          path: build/artifacts/Windows/
           if-no-files-found: error
-          retention-days: 30
-      - name: Upload Windows diagnostics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: ${{ needs.identity.outputs.prefix }}-windows-diagnostics-attempt-${{ github.run_attempt }}
-          path: build/release/windows/
-          if-no-files-found: error
+          overwrite: true
           retention-days: 30
   snap:
     name: Snap packaging and installation
@@ -142,29 +141,22 @@ jobs:
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           bash tools/qualify_snap.sh "$SNAP_PACKAGE"
-      - name: Upload qualified Snap candidate or final package
+      - name: Stage Linux artifact
+        env:
+          SNAP_PACKAGE: ${{ steps.snapcraft.outputs.snap }}
+        run: |
+          artifact=build/artifacts/Linux
+          package_name=$(basename "$SNAP_PACKAGE")
+          mkdir -p "$artifact/provenance"
+          cp "build/distributions/$package_name" "build/distributions/$package_name.sha256" "$artifact/"
+          cp build/release/snap/*.json build/release/snap/*.txt build/release/snap/pubspec.lock "$artifact/provenance/"
+      - name: Upload qualified Linux package
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ needs.identity.outputs.prefix }}-linux-amd64-snap-attempt-${{ github.run_attempt }}
-          path: |
-            build/distributions/busybooks_${{ needs.identity.outputs.version }}_amd64.snap
-            build/distributions/busybooks_${{ needs.identity.outputs.version }}_amd64.snap.sha256
-            build/release/snap/
+          name: BusyBooks-${{ needs.identity.outputs.version }}-Linux
+          path: build/artifacts/Linux/
           if-no-files-found: error
-          retention-days: 30
-      - name: Upload Snap diagnostics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: ${{ needs.identity.outputs.prefix }}-snap-diagnostics-attempt-${{ github.run_attempt }}
-          path: |
-            build/release/snap/*.log
-            build/release/snap/*.json
-            build/release/snap/*.txt
-            build/release/snap/pubspec.lock
-            snapcraft*.log
-            .snapcraft/log/
-          if-no-files-found: warn
+          overwrite: true
           retention-days: 30
   release-verification:
     name: Release verification complete

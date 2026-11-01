@@ -49,14 +49,24 @@ fixtures were relaxed.
 
 ## Artifacts and provenance
 
-PR artifacts use `candidate-pr-N-HEADSHA12-*`; they are **unapproved candidates**.
-The provenance records both the PR head and the tested GitHub merge revision.
-Final artifacts use `vMAJOR.MINOR.PATCH-*`. Neither name implies manual acceptance.
-Artifact names include the run attempt, so retrying failed jobs preserves earlier
-evidence and avoids collisions with immutable artifacts from the same run.
-Each package artifact includes verification evidence, its SHA-256 sidecar, source
-revision, run URL/attempt, toolchain and checked-in lockfile/vendor manifest.
-Snapcraft's build manifest also records staged package versions.
+Successful runs produce exactly two artifacts, named from the validated source
+version: `BusyBooks-VERSION-Linux` and `BusyBooks-VERSION-Windows`. PR and final-tag
+builds use the same names. PR packages remain **unapproved candidates**; provenance
+records the classification, PR head, tested GitHub merge revision, run URL and
+attempt. Artifact names do not imply manual acceptance.
+
+Packages and SHA-256 sidecars are at each artifact's root. The `provenance/`
+directory contains package identity/hash records, qualification results, inventories,
+toolchain/runtime records and the checked-in lockfile/vendor manifest. Windows
+includes separate installer and portable ZIP provenance. Snapcraft's embedded build
+manifest also records staged package versions. Verification logs stay in the
+GitHub Actions job logs; no separate diagnostic artifacts are uploaded. Windows
+installation, application and removal logs are printed into their existing job.
+
+Uploads use the supported `overwrite: true` option. A workflow rerun replaces an
+existing artifact with the same name, giving it a new artifact ID while retaining
+exactly two names. Download links and hashes should be taken from the latest
+successful attempt. See [artifact replacement](https://github.com/actions/upload-artifact#overwriting-an-artifact).
 
 Expected package files for the declared source version:
 
@@ -66,8 +76,7 @@ Expected package files for the declared source version:
 - A `.sha256` file for each package.
 
 Use the workflow run's **Artifacts** section to download (30-day retention).
-Diagnostics artifacts are separate, may contain failed checks, and are never
-qualified distributions. Uploads of package artifacts occur only after validation.
+Uploads of package artifacts occur only after validation.
 Checks assert individual required files exist; upload also uses
 `if-no-files-found: error`. Download and verify sidecars with `sha256sum -c` on
 Linux or `Get-FileHash -Algorithm SHA256` on Windows. Artifact ZIP hashes shown by
