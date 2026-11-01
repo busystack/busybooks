@@ -11,6 +11,8 @@ REPO = Path(__file__).resolve().parents[2]
 PROBE = REPO / 'tools/probe_linux_shutdown.py'
 
 
+@unittest.skipUnless(sys.platform == 'linux',
+                     'Linux shutdown driver requires POSIX executables, signals and X11')
 class LinuxShutdownProbeTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix='busybooks-shutdown-driver-test-')

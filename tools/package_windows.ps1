@@ -1,44 +1,60 @@
 param(
   [Parameter(Mandatory=$true)][string]$WebViewRuntimeInstaller,
-  [Parameter(Mandatory=$true)][string]$VisualCppRuntimeInstaller
+  [Parameter(Mandatory=$true)][string]$VisualCppRuntimeInstaller,
+  [string]$QualificationDirectory = '',
+  [string]$InnoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 )
-$ErrorActionPreference='Stop'
+$ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
-$flutterVersion=(flutter --version --machine | ConvertFrom-Json).frameworkVersion
-if ($flutterVersion -ne '3.47.5') {throw 'Flutter 3.47.5 is required.'}
-if (!(Test-Path $WebViewRuntimeInstaller)) {throw 'Supply the official Evergreen standalone WebView2 Runtime installer for offline installation.'}
-$signature=Get-AuthenticodeSignature $WebViewRuntimeInstaller
-if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {throw 'WebView2 Runtime installer must have a valid Microsoft signature.'}
-if (!(Test-Path $VisualCppRuntimeInstaller)) {throw 'Supply the official Microsoft Visual C++ x64 redistributable installer.'}
-$vcSignature=Get-AuthenticodeSignature $VisualCppRuntimeInstaller
-if ($vcSignature.Status -ne 'Valid' -or $vcSignature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {throw 'Visual C++ runtime installer must have a valid Microsoft signature.'}
-python tools/verify_vendor.py
-if ($LASTEXITCODE) {throw 'upstream verification failed'}
-python -m unittest discover -s test/tools -p '*_test.py'
-if ($LASTEXITCODE) {throw 'upstream verifier tests failed'}
-flutter clean
-if ($LASTEXITCODE) {throw 'clean failed'}
-flutter pub get --enforce-lockfile
-if ($LASTEXITCODE) {throw 'pub get failed'}
-flutter gen-l10n
-flutter analyze
-if ($LASTEXITCODE) {throw 'analysis failed'}
-flutter test
-if ($LASTEXITCODE) {throw 'tests failed'}
-flutter build windows --release
-if ($LASTEXITCODE) {throw 'release build failed'}
-python tools/verify_vendor.py --platform windows --bundle build/windows/x64/runner/Release --build-tree build/windows/x64
-if ($LASTEXITCODE) {throw 'release dependency verification failed'}
-$staging=Join-Path $PWD 'build/distributions/windows'
-if (Test-Path $staging) {Remove-Item -Recurse -Force $staging}
+$WebViewRuntimeInstaller = (Resolve-Path $WebViewRuntimeInstaller).Path
+$VisualCppRuntimeInstaller = (Resolve-Path $VisualCppRuntimeInstaller).Path
+foreach ($file in @($WebViewRuntimeInstaller, $VisualCppRuntimeInstaller)) {
+    $signature = Get-AuthenticodeSignature $file
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {
+        throw "Runtime installer must have a valid Microsoft signature: $file"
+    }
+}
+if (!$QualificationDirectory) {
+    $QualificationDirectory = Join-Path $PWD 'build/release/windows'
+    $sdk = Split-Path -Parent (Split-Path -Parent (Get-Command flutter).Source)
+    & ./tools/qualify_windows.ps1 -FlutterSdk $sdk -EvidenceDirectory $QualificationDirectory -SourceRevision (git rev-parse HEAD)
+}
+$report = Get-Content (Join-Path $QualificationDirectory 'automated-results.json') -Raw | ConvertFrom-Json
+if (!$report.passed -or !$report.lockfileUnchanged -or $report.sourceRevision -ne (git rev-parse HEAD)) {
+    throw 'Packaging requires successful qualification of this exact source revision'
+}
+if ((Get-FileHash pubspec.lock -Algorithm SHA256).Hash -ne $report.lockfileSha256) { throw 'Lockfile changed since qualification' }
+$release = Join-Path $PWD 'build/windows/x64/runner/Release'
+$actual = @(Get-ChildItem $release -File -Recurse)
+if (!$report.releaseFiles -or $actual.Count -ne $report.releaseFiles.Count) { throw 'Qualified release inventory differs' }
+foreach ($file in $report.releaseFiles) {
+    if ((Get-FileHash (Join-Path $release $file.path) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) {
+        throw "Qualified build changed: $($file.path)"
+    }
+}
+$metadata = python tools/release_metadata.py --toolchain | ConvertFrom-Json
+if ($LASTEXITCODE) { throw 'Release metadata/toolchain validation failed' }
+$staging = Join-Path $PWD 'build/distributions/windows'
+if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 New-Item -ItemType Directory -Force $staging | Out-Null
-Copy-Item 'build/windows/x64/runner/Release/*' $staging -Recurse -Force
-python tools/verify_vendor.py --platform windows --bundle $staging
-if ($LASTEXITCODE) {throw 'staged dependency verification failed'}
+Copy-Item "$release/*" $staging -Recurse -Force
 Copy-Item $WebViewRuntimeInstaller (Join-Path $staging 'MicrosoftEdgeWebView2RuntimeInstallerX64.exe') -Force
 Copy-Item $VisualCppRuntimeInstaller (Join-Path $staging 'VC_redist.x64.exe') -Force
 Copy-Item LICENSE,NOTICE,'docs/development/windows.md' $staging
-$zip=Join-Path $PWD 'build/distributions/busybooks-0.1.0-windows-x64.zip'
+python tools/verify_vendor.py --platform windows --bundle $staging
+if ($LASTEXITCODE) { throw 'Staged vendor verification failed' }
+python tools/verify_distribution.py --platform windows --bundle $staging --output (Join-Path $QualificationDirectory 'staged-distribution.json')
+if ($LASTEXITCODE) { throw 'Staged distribution verification failed' }
+$zip = Join-Path $PWD "build/distributions/busybooks-$($metadata.version)-windows-x64.zip"
 Compress-Archive -Path "$staging/*" -DestinationPath $zip -Force
-Get-FileHash $zip -Algorithm SHA256 | Format-List | Out-File "$zip.sha256"
-Write-Output $zip
+if (!(Test-Path $InnoCompiler)) { throw "Inno Setup compiler is missing: $InnoCompiler" }
+$output = Join-Path $PWD 'build/distributions'
+& $InnoCompiler "/O$output" 'packaging/windows/busybooks.iss'
+if ($LASTEXITCODE) { throw 'Inno Setup compilation failed' }
+$installer = Join-Path $output "BusyBooks-$($metadata.version)-windows-x64.exe"
+if (!(Test-Path $installer)) { throw "Required installer missing: $installer" }
+foreach ($package in @($zip, $installer)) {
+    $hash = (Get-FileHash $package -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$hash  $(Split-Path -Leaf $package)" | Set-Content -Encoding ascii "$package.sha256"
+}
+Write-Output $installer

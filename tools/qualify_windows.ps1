@@ -64,6 +64,7 @@ if ($version.frameworkVersion -ne '3.47.5' -or $version.dartSdkVersion -notlike 
 }
 $report.toolchain = $version
 $lockBefore = (Get-FileHash pubspec.lock -Algorithm SHA256).Hash
+$report.lockfileSha256 = $lockBefore
 if (!(Invoke-Check 'upstream-source' 'python.exe' @('tools/verify_vendor.py') | Select-Object -Last 1)) {
     throw 'Upstream dependency verification failed'
 }

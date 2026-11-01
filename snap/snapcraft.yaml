@@ -65,10 +65,13 @@ parts:
       test "$(git -C "$build_sdk" describe --tags --exact-match HEAD)" = "$BUSYBOOKS_FLUTTER_VERSION"
       export CI=true
       export PUB_CACHE="$CRAFT_PART_BUILD/.busybooks-pub-cache"
+      export PATH="$build_sdk/bin:$PATH"
+      python3 tools/release_metadata.py --toolchain
       "$build_sdk/bin/flutter" --no-version-check precache --linux
       "$build_sdk/bin/flutter" --no-version-check pub get --enforce-lockfile
       "$build_sdk/bin/flutter" --no-version-check gen-l10n
       "$build_sdk/bin/flutter" --no-version-check build linux --release --no-pub --target lib/main.dart
+      git diff --exit-code -- pubspec.lock
       cp -r build/linux/*/release/bundle/* "$CRAFT_PART_INSTALL/"
   desktop-integration:
     after: [busybooks]

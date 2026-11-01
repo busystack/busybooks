@@ -16,6 +16,8 @@ installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 
 
+@unittest.skipUnless(sys.platform == 'linux',
+                     'Linux XDG desktop registration, executable permissions and filenames')
 class LinuxDesktopInstallTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix='busybooks-desktop-test-')

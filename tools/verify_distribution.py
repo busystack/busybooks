@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Inspect the shipped application, native architecture, assets and provenance."""
+import argparse
+import json
+from pathlib import Path
+import struct
+import sys
+
+from release_metadata import sha256
+from verify_vendor import load_manifest, verify_bundle
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def verify(root, platform):
+    required = ['data/icudtl.dat', 'data/flutter_assets/AssetManifest.bin']
+    if platform == 'windows':
+        required += ['busybooks.exe', 'busybooks_comic_archive.exe', 'flutter_windows.dll', 'data/app.so']
+        if not list(root.rglob('*sqlite3*.dll')):
+            raise ValueError('Missing bundled Windows SQLite native asset')
+    else:
+        required += ['busybooks', 'busybooks_comic_archive', 'lib/libflutter_linux_gtk.so',
+                     'lib/libapp.so', 'lib/libsqlite3.so',
+                     'share/applications/io.busystack.busybooks.desktop',
+                     'share/icons/hicolor/scalable/apps/io.busystack.busybooks.svg',
+                     'share/mime/packages/io.busystack.busybooks.mime.xml',
+                     'share/licenses/busybooks/LICENSE', 'share/licenses/busybooks/NOTICE']
+    for name in required:
+        path = root / name
+        if not path.is_file() or not path.stat().st_size:
+            raise ValueError(f'Missing or empty distribution file: {path}')
+    verify_bundle(load_manifest(ROOT / 'tools/vendor-manifest.json'), root, platform)
+    inventory = []
+    for path in sorted(root.rglob('*')):
+        relative = path.relative_to(root)
+        if any(p.lower() in {'.git', '.aws', '.env', 'credentials', 'id_rsa', 'id_ed25519'} for p in relative.parts) or path.suffix.lower() in {'.pem', '.pfx', '.p12', '.key'}:
+            raise ValueError(f'Unexpected credential/development file: {relative}')
+        if not path.is_file():
+            continue
+        with path.open('rb') as stream:
+            header = stream.read(64)
+            if header[:4] == b'\x7fELF':
+                if header[4:6] != b'\x02\x01' or struct.unpack_from('<H', header, 18)[0] != 62:
+                    raise ValueError(f'Expected Linux x64 ELF: {relative}')
+            elif header[:2] == b'MZ':
+                stream.seek(struct.unpack_from('<I', header, 60)[0])
+                pe = stream.read(6)
+                # Redistributable installer launchers can be x86; application binaries must be x64.
+                if path.name not in {'MicrosoftEdgeWebView2RuntimeInstallerX64.exe', 'VC_redist.x64.exe'}:
+                    if pe != b'PE\0\0d\x86':
+                        raise ValueError(f'Expected Windows x64 PE: {relative}')
+        inventory.append(dict(path=relative.as_posix(), bytes=path.stat().st_size, sha256=sha256(path)))
+    return dict(platform=platform, architecture='x64', files=inventory, status='passed')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--platform', required=True, choices=['linux', 'windows'])
+    parser.add_argument('--bundle', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+    try:
+        result = verify(args.bundle.resolve(strict=True), args.platform)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2) + '\n')
+        print(f"Verified {len(result['files'])} distribution files ({args.platform} x64)")
+    except (ValueError, OSError) as error:
+        parser.exit(1, f'Distribution verification failed: {error}\n')
+
+
+if __name__ == '__main__':
+    main()

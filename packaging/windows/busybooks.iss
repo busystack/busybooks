@@ -32,6 +32,41 @@ Root: HKCU; Subkey: "Software\Classes\.fbz\OpenWithProgids"; ValueType: string; 
 Root: HKCU; Subkey: "Software\Classes\.cbz\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: comics; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\.cbr\OpenWithProgids"; ValueType: string; ValueName: "BusyBooks.Book"; ValueData: ""; Tasks: comics; Flags: uninsdeletevalue
 [Run]
-Filename: "{app}\VC_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Microsoft Visual C++ Runtime"; Flags: waituntilterminated
-Filename: "{app}\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"; Parameters: "/silent /install"; StatusMsg: "Installing WebView2 Runtime"; Flags: waituntilterminated
 Filename: "{app}\busybooks.exe"; Description: "Launch BusyBooks"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function WebViewInstalled: Boolean;
+var
+  Version: String;
+  Key: String;
+begin
+  Key := 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  Result := (RegQueryStringValue(HKLM32, Key, 'pv', Version) or
+             RegQueryStringValue(HKCU, Key, 'pv', Version)) and
+            (Version <> '') and (Version <> '0.0.0.0');
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Code: Integer;
+begin
+  Result := '';
+  ExtractTemporaryFile('VC_redist.x64.exe');
+  if not Exec(ExpandConstant('{tmp}\VC_redist.x64.exe'),
+              '/install /quiet /norestart', '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Result := 'Could not start the Microsoft Visual C++ x64 runtime installer.'
+  else if (Code <> 0) and (Code <> 3010) and (Code <> 1638) then
+    Result := Format('Microsoft Visual C++ runtime installation failed (%d).', [Code]);
+  { 1638 means a newer redistributable is already installed. }
+  if Code = 3010 then NeedsRestart := True;
+  if (Result = '') and not WebViewInstalled then begin
+    ExtractTemporaryFile('MicrosoftEdgeWebView2RuntimeInstallerX64.exe');
+    if not Exec(ExpandConstant('{tmp}\MicrosoftEdgeWebView2RuntimeInstallerX64.exe'),
+                '/silent /install', '', SW_HIDE, ewWaitUntilTerminated, Code) then
+      Result := 'Could not start the Microsoft WebView2 Evergreen x64 installer.'
+    else if Code <> 0 then
+      Result := Format('Microsoft WebView2 runtime installation failed (%d).', [Code]);
+    if (Result = '') and not WebViewInstalled then
+      Result := 'Microsoft WebView2 Runtime registration is missing after installation.';
+  end;
+end;

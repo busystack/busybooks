@@ -14,7 +14,8 @@ python3 -m unittest discover -s test/tools -p '*_test.py'
 "$flutter_bin" build linux --release
 python3 tools/verify_vendor.py --platform linux --bundle build/linux/x64/release/bundle --build-tree build/linux/x64/release
 mkdir -p build/distributions
-artifact="build/distributions/busybooks-0.1.0-linux-x64.tar.gz"
+app_version=$(python3 tools/release_metadata.py | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+artifact="build/distributions/busybooks-${app_version}-linux-x64.tar.gz"
 package_epoch=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}
 tar --sort=name --mtime="@${package_epoch}" --owner=0 --group=0 --numeric-owner -C build/linux/x64/release/bundle -cf - . | gzip -n > "$artifact"
 sha256sum "$artifact" > "$artifact.sha256"
