@@ -204,4 +204,5 @@ an independently approved grade change.
 - [Flutter Linux distribution](https://docs.flutter.dev/platform-integration/linux/building), [Windows prerequisites](https://docs.flutter.dev/platform-integration/windows/setup).
 - [Microsoft WebView2 distribution](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution), [VC runtime distribution](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
 - [Inno compiler](https://jrsoftware.org/ishelp/topic_compilercmdline.htm), [silent setup](https://jrsoftware.org/ishelp/topic_setupcmdline.htm), [setup events](https://jrsoftware.org/ishelp/topic_scriptevents.htm).
+- [Inno 6.7.1 versioned reference](https://github.com/jrsoftware/issrc/blob/is-6_7_1/ISHelp/isetup.xml): its default English `AppVerName` and uninstall display name is `BusyBooks version VERSION`; current online documentation describes a later default.
 - [GitHub artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data).

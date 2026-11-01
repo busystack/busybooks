@@ -17,8 +17,13 @@ $version = (Get-Item "$destination/busybooks.exe").VersionInfo.ProductVersion
 if ($version -ne "$($metadata.version)+$($metadata.buildNumber)") { throw "Installed executable version differs: $version" }
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\io.busystack.busybooks_is1'
 $registration = Get-ItemProperty $uninstallKey
-# Inno's default AppVerName/UninstallDisplayName is AppName + AppVersion.
-if ($registration.DisplayName -ne "BusyBooks $($metadata.version)" -or $registration.DisplayVersion -ne $metadata.version) { throw 'Invalid per-user uninstall registration' }
+# Inno 6's English NameAndVersion default includes the word "version".
+# Keep the existing installer behavior and verify its exact registration.
+$registration | Select-Object DisplayName, DisplayVersion, Publisher, InstallLocation, UninstallString |
+    ConvertTo-Json | Set-Content "$evidence/uninstall-registration.json"
+if ($registration.DisplayName -ne "BusyBooks version $($metadata.version)" -or $registration.DisplayVersion -ne $metadata.version) {
+    throw "Invalid per-user uninstall registration: name='$($registration.DisplayName)', version='$($registration.DisplayVersion)'"
+}
 $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'BusyBooks\BusyBooks.lnk'
 if (!(Test-Path $shortcut)) { throw 'Missing per-user Start Menu shortcut' }
 $shell = New-Object -ComObject WScript.Shell
