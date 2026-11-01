@@ -27,8 +27,12 @@ PY
 python3 tools/verify_distribution.py --platform linux --bundle "$root" --output build/release/snap/distribution.json
 cp "$root/share/busybooks/flutter-toolchain.json" build/release/snap/flutter-toolchain.json
 python3 tools/probe_linux_mime.py "$root/share/mime"
-test -f "$root/meta/gui/io.busystack.busybooks.desktop"
-rg '^Exec=.*busybooks' "$root/meta/gui/io.busystack.busybooks.desktop"
+# Snapcraft renames an apps.<name>.desktop source to <name>.desktop in meta/gui.
+desktop="$root/meta/gui/busybooks.desktop"
+test -f "$desktop"
+rg '^Name=BusyBooks$' "$desktop"
+rg '^StartupWMClass=io\.busystack\.busybooks$' "$desktop"
+rg '^Exec=busybooks( |$)' "$desktop"
 find "$root/usr/lib" -name 'libwebkit2gtk-4.1.so*' -print -quit | rg .
 find "$root/usr/lib" -name 'libhandy-1.so*' -print -quit | rg .
 find "$root" -name 'WebKitWebProcess' -print -quit | rg .
@@ -36,7 +40,10 @@ snapcraft --version > build/release/snap/snapcraft-version.txt
 # --dangerous bypasses the absent Store assertion only; confinement stays strict.
 confinement=$(timeout 30s snap debug confinement)
 printf '%s\n' "$confinement" > build/release/snap/host-confinement.txt
-test "$confinement" = strict
+if [ "$confinement" != strict ]; then
+  echo "Strict Snap confinement is required; this host reports: $confinement" >&2
+  exit 1
+fi
 sudo snap install --dangerous "$package"
 snap list busybooks | tee build/release/snap/installed.txt
 snap connections busybooks | tee build/release/snap/connections.txt

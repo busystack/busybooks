@@ -29,6 +29,9 @@ $report = [ordered]@{
 function Invoke-Check([string]$Name, [string]$Executable, [string[]]$Arguments) {
     Write-Host "Running $Name"
     $log = Join-Path $EvidenceDirectory ($Name + '.log')
+    # A successful native check may write no stdout/stderr. Preserve that empty
+    # stream as evidence; Tee-Object only creates a file when it receives data.
+    [IO.File]::WriteAllText($log, '')
     $start = [DateTime]::UtcNow
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'

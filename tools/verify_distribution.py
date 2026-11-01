@@ -30,7 +30,19 @@ def verify(root, platform):
         path = root / name
         if not path.is_file() or not path.stat().st_size:
             raise ValueError(f'Missing or empty distribution file: {path}')
-    verify_bundle(load_manifest(ROOT / 'tools/vendor-manifest.json'), root, platform)
+    manifest = load_manifest(ROOT / 'tools/vendor-manifest.json')
+    verify_bundle(manifest, root, platform)
+    owned_assets = 0
+    for source in (ROOT / 'assets').rglob('*'):
+        if not source.is_file():
+            continue
+        relative = source.relative_to(ROOT).as_posix()
+        if relative in manifest['sha256']:
+            continue  # The upstream verifier already checks these exact bytes.
+        shipped = root / 'data/flutter_assets' / relative
+        if not shipped.is_file() or sha256(shipped) != sha256(source):
+            raise ValueError(f'Missing or changed application asset: {relative}')
+        owned_assets += 1
     version, build = versions()
     if platform == 'linux':
         if appstream_version(root / 'share/metainfo/io.busystack.busybooks.metainfo.xml') != version:
@@ -50,7 +62,7 @@ def verify(root, platform):
             raise ValueError(f'Unexpected private key: {relative}')
         with path.open('rb') as stream:
             header = stream.read(64)
-            native = path.name in {'busybooks', 'busybooks.exe', 'busybooks_comic_archive', 'busybooks_comic_archive.exe'} or path.suffix.lower() in {'.dll', '.so'} or '.so.' in path.name
+            native = path.name in {'busybooks', 'busybooks.exe', 'busybooks_comic_archive', 'busybooks_comic_archive.exe', 'unins000.exe'} or path.suffix.lower() in {'.dll', '.so'} or '.so.' in path.name
             expected_magic = b'MZ' if platform == 'windows' else b'\x7fELF'
             if native and not header.startswith(expected_magic):
                 raise ValueError(f'Invalid native binary: {relative}')
@@ -60,12 +72,18 @@ def verify(root, platform):
             elif header[:2] == b'MZ':
                 stream.seek(struct.unpack_from('<I', header, 60)[0])
                 pe = stream.read(6)
-                # Redistributable installer launchers can be x86; application binaries must be x64.
-                if path.name not in {'MicrosoftEdgeWebView2RuntimeInstallerX64.exe', 'VC_redist.x64.exe'}:
-                    if pe != b'PE\0\0d\x86':
-                        raise ValueError(f'Expected Windows x64 PE: {relative}')
+                # Inno 6's uninstaller and Microsoft's runtime launchers can be
+                # x86 even in an x64 application installation.
+                bootstrap = relative.as_posix() in {
+                    'MicrosoftEdgeWebView2RuntimeInstallerX64.exe',
+                    'VC_redist.x64.exe', 'unins000.exe',
+                }
+                allowed = {b'PE\0\0d\x86', b'PE\0\0L\x01'} if bootstrap else {b'PE\0\0d\x86'}
+                if pe not in allowed:
+                    raise ValueError(f'Unexpected Windows PE architecture: {relative}')
         inventory.append(dict(path=relative.as_posix(), bytes=path.stat().st_size, sha256=sha256(path)))
-    return dict(platform=platform, architecture='x64', files=inventory, status='passed')
+    return dict(platform=platform, architecture='x64', applicationAssets=owned_assets,
+                files=inventory, status='passed')
 
 
 def main():

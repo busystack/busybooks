@@ -50,7 +50,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ needs.identity.outputs.prefix }}-linux-diagnostics
+          name: ${{ needs.identity.outputs.prefix }}-linux-diagnostics-attempt-${{ github.run_attempt }}
           path: build/release/linux/
           if-no-files-found: error
           retention-days: 30
@@ -94,7 +94,7 @@ jobs:
       - name: Upload qualified Windows candidate or final packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ needs.identity.outputs.prefix }}-windows-x64
+          name: ${{ needs.identity.outputs.prefix }}-windows-x64-attempt-${{ github.run_attempt }}
           path: |
             build/distributions/BusyBooks-${{ needs.identity.outputs.version }}-windows-x64.exe
             build/distributions/BusyBooks-${{ needs.identity.outputs.version }}-windows-x64.exe.sha256
@@ -107,7 +107,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ needs.identity.outputs.prefix }}-windows-diagnostics
+          name: ${{ needs.identity.outputs.prefix }}-windows-diagnostics-attempt-${{ github.run_attempt }}
           path: build/release/windows/
           if-no-files-found: error
           retention-days: 30
@@ -138,7 +138,7 @@ jobs:
       - name: Upload qualified Snap candidate or final package
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ needs.identity.outputs.prefix }}-linux-amd64-snap
+          name: ${{ needs.identity.outputs.prefix }}-linux-amd64-snap-attempt-${{ github.run_attempt }}
           path: |
             build/distributions/busybooks_${{ needs.identity.outputs.version }}_amd64.snap
             build/distributions/busybooks_${{ needs.identity.outputs.version }}_amd64.snap.sha256
@@ -149,7 +149,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ needs.identity.outputs.prefix }}-snap-diagnostics
+          name: ${{ needs.identity.outputs.prefix }}-snap-diagnostics-attempt-${{ github.run_attempt }}
           path: |
             build/release/snap/*.log
             snapcraft*.log

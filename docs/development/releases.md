@@ -45,6 +45,8 @@ fixtures were relaxed.
 PR artifacts use `candidate-pr-N-HEADSHA12-*`; they are **unapproved candidates**.
 The provenance records both the PR head and the tested GitHub merge revision.
 Final artifacts use `vMAJOR.MINOR.PATCH-*`. Neither name implies manual acceptance.
+Artifact names include the run attempt, so retrying failed jobs preserves earlier
+evidence and avoids collisions with immutable artifacts from the same run.
 Each package artifact includes verification evidence, its SHA-256 sidecar, source
 revision, run URL/attempt, toolchain and checked-in lockfile/vendor manifest.
 Snapcraft's build manifest also records staged package versions.
