@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
@@ -30,6 +31,17 @@ def match(path, pattern):
     return values[0]
 
 
+def appstream_version(path):
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError as error:
+        raise ValueError(f'Invalid AppStream metadata: {path}: {error}') from error
+    release = root.find('releases/release')
+    if root.findtext('id') != 'io.busystack.busybooks' or release is None:
+        raise ValueError(f'AppStream requires the BusyBooks identity and current release: {path}')
+    return release.get('version')
+
+
 def versions():
     package = match('pubspec.yaml', rf'^version: ({VERSION}\+[0-9]+)\s*$')
     version, build = package.split('+')
@@ -37,6 +49,7 @@ def versions():
         'Dart application': match('lib/src/app/app_metadata.dart', r"^const busyBooksAppVersion = '([^']+)';$"),
         'Snap': match('snap/snapcraft.yaml', r"^version: '([^']+)'$"),
         'Inno Setup': match('packaging/windows/busybooks.iss', r'^#define MyAppVersion "([^"]+)"$'),
+        'Linux AppStream': appstream_version(ROOT / 'linux/io.busystack.busybooks.metainfo.xml'),
     }
     for source, value in declared.items():
         if value != version:

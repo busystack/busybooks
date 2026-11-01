@@ -14,7 +14,14 @@ Invoke-Installer $Installer @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/SP-', '/NORE
 $metadata = python tools/release_metadata.py | ConvertFrom-Json
 if ($LASTEXITCODE) { throw 'Invalid release version' }
 $version = (Get-Item "$destination/busybooks.exe").VersionInfo.ProductVersion
-if ($version -notlike "$($metadata.version)*") { throw "Installed executable version differs: $version" }
+if ($version -ne "$($metadata.version)+$($metadata.buildNumber)") { throw "Installed executable version differs: $version" }
+$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\io.busystack.busybooks_is1'
+$registration = Get-ItemProperty $uninstallKey
+if ($registration.DisplayName -ne 'BusyBooks' -or $registration.DisplayVersion -ne $metadata.version) { throw 'Invalid per-user uninstall registration' }
+$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'BusyBooks\BusyBooks.lnk'
+if (!(Test-Path $shortcut)) { throw 'Missing per-user Start Menu shortcut' }
+$shell = New-Object -ComObject WScript.Shell
+if ($shell.CreateShortcut($shortcut).TargetPath -ne "$destination\busybooks.exe") { throw 'Invalid Start Menu shortcut target' }
 foreach ($file in Get-ChildItem $staging -File -Recurse) {
     $relative = $file.FullName.Substring($staging.Length + 1)
     if ((Get-FileHash "$destination/$relative" -Algorithm SHA256).Hash -ne (Get-FileHash $file.FullName -Algorithm SHA256).Hash) {
@@ -45,15 +52,18 @@ try {
     # A visible native window establishes startup, not full WebView2 book acceptance.
     $startup = @{pid=$app.Id; nativeWindow=$app.MainWindowHandle.ToInt64(); scope='Installed application created a native window; reader GUI acceptance remains manual'}
     $startup | ConvertTo-Json | Set-Content "$evidence/installed-startup.json"
+    if (!$app.CloseMainWindow() -or !$app.WaitForExit(30000)) { throw 'Installed application did not close normally' }
+    if ($app.ExitCode -ne 0) { throw "Installed application closed with exit code $($app.ExitCode)" }
 } finally {
     if (!$app.HasExited) { Stop-Process -Id $app.Id -Force; $app.WaitForExit() }
     Remove-Item Env:BUSYBOOKS_PROFILE
 }
 Invoke-Installer "$destination/unins000.exe" @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$evidence/uninstall.log`"")
 if (Test-Path "$destination/busybooks.exe") { throw 'Uninstall left the application executable behind' }
+if ((Test-Path $uninstallKey) -or (Test-Path $shortcut)) { throw 'Uninstall left its registration or shortcut behind' }
 if (Test-Path 'HKCU:\Software\Classes\BusyBooks.Book') { throw 'Uninstall left the application ProgID behind' }
 foreach ($extension in '.epub', '.pdf', '.fb2', '.fbz', '.cbz', '.cbr') {
     $key = "HKCU:\Software\Classes\$extension\OpenWithProgids"
     if ((Test-Path $key) -and (Get-ItemProperty $key).PSObject.Properties.Name -contains 'BusyBooks.Book') { throw "Uninstall left association: $extension" }
 }
-@{status='passed'; scope='Silent install, exact staged bytes, x64/version/assets/vendor/decoder, optional associations, native-window startup, uninstall'; manualAcceptance='Required: unelevated clean Windows desktop, runtime first install, WebView2 rendering and complete GUI checks'} | ConvertTo-Json | Set-Content "$evidence/installer-results.json"
+@{status='passed'; scope='Silent install, exact staged bytes, x64/version/assets/vendor/decoder, per-user shortcut and uninstall registration, optional associations, native-window startup and normal close, uninstall'; manualAcceptance='Required: unelevated clean Windows desktop, runtime first install, WebView2 rendering and complete GUI checks'} | ConvertTo-Json | Set-Content "$evidence/installer-results.json"

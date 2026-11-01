@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -24,12 +23,14 @@ class ReleaseMetadataTest(unittest.TestCase):
         current_version = release.versions()[0]
         for name in ['pubspec.yaml', 'pubspec.lock', 'lib/src/app/app_metadata.dart',
                      'snap/snapcraft.yaml', 'packaging/windows/busybooks.iss',
+                     'linux/io.busystack.busybooks.metainfo.xml',
                      'tools/vendor-manifest.json']:
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(REPO / name, target)
             if name in {'pubspec.yaml', 'lib/src/app/app_metadata.dart',
-                        'snap/snapcraft.yaml', 'packaging/windows/busybooks.iss'}:
+                        'snap/snapcraft.yaml', 'packaging/windows/busybooks.iss',
+                        'linux/io.busystack.busybooks.metainfo.xml'}:
                 target.write_text(target.read_text().replace(current_version, '2.3.4'))
         self.patch = mock.patch.object(release, 'ROOT', self.root)
         self.patch.start()
@@ -113,7 +114,7 @@ class ReleaseMetadataTest(unittest.TestCase):
 
     def test_every_packaging_version_must_agree(self):
         for filename in ['lib/src/app/app_metadata.dart', 'snap/snapcraft.yaml',
-                         'packaging/windows/busybooks.iss']:
+                         'packaging/windows/busybooks.iss', 'linux/io.busystack.busybooks.metainfo.xml']:
             with self.subTest(filename=filename):
                 path = self.root / filename
                 before = path.read_text()
@@ -129,13 +130,21 @@ class ToolchainMetadataTest(unittest.TestCase):
                             frameworkRevision=release.REVISION)
 
     def test_cold_start_bootstrap_is_separate_from_machine_json(self):
+        ready = False
+
+        def bootstrap(command, **kwargs):
+            nonlocal ready
+            ready = '--machine' not in command
+
+        def output(command, **kwargs):
+            if command[0] == 'git':
+                return ''
+            return json.dumps(self.version) if ready else 'Building flutter tool...\n'
+
         with mock.patch.object(release.shutil, 'which', return_value='/owned-sdk/bin/flutter'), \
-             mock.patch.object(release.subprocess, 'run') as bootstrap, \
-             mock.patch.object(release.subprocess, 'check_output',
-                               side_effect=[json.dumps(self.version), '']):
+             mock.patch.object(release.subprocess, 'run', side_effect=bootstrap), \
+             mock.patch.object(release.subprocess, 'check_output', side_effect=output):
             self.assertEqual(release.toolchain(), self.version)
-        bootstrap.assert_called_once_with(['/owned-sdk/bin/flutter', '--version'],
-                                          check=True, stdout=sys.stderr)
 
     def test_invalid_machine_output_fails_with_diagnostics(self):
         with mock.patch.object(release.shutil, 'which', return_value='/owned-sdk/bin/flutter'), \

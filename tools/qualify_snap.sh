@@ -34,6 +34,9 @@ find "$root/usr/lib" -name 'libhandy-1.so*' -print -quit | rg .
 find "$root" -name 'WebKitWebProcess' -print -quit | rg .
 snapcraft --version > build/release/snap/snapcraft-version.txt
 # --dangerous bypasses the absent Store assertion only; confinement stays strict.
+confinement=$(timeout 30s snap debug confinement)
+printf '%s\n' "$confinement" > build/release/snap/host-confinement.txt
+test "$confinement" = strict
 sudo snap install --dangerous "$package"
 snap list busybooks | tee build/release/snap/installed.txt
 snap connections busybooks | tee build/release/snap/connections.txt

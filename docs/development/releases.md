@@ -19,7 +19,7 @@ no secrets or write token are supplied to builds.
 
 | Job | Required work |
 | --- | --- |
-| Release identity | Match pubspec, Dart metadata, Snap and Inno versions and pinned Flutter configuration. Final tags must match the version and resolve to a commit in `origin/main` history. |
+| Release identity | Match pubspec, Dart metadata, Linux AppStream, Snap and Inno versions and pinned Flutter configuration. Final tags must match the version and resolve to a commit in `origin/main` history. |
 | Linux verification | Official Flutter 3.47.5 revision / Dart 3.13.4; locked packages; every Python test; format/analyze/Flutter tests; normative EPUB 2; SQLite/storage/cache/order/cross-volume; release compilation; vendor/build-source inventory; MIME/RAR/formats/resources; reader JS; GTK/input/WebKit/typography/formats/review/Chromium; bundled application opening. |
 | Windows verification and installer | Check MSVC/CMake/ATL/SDK/Inno prerequisites, official pinned SDK, all applicable Python tests, format/analyze/Flutter tests, storage/cache/order, release compilation, unchanged WebView2/UnRAR build inputs, decoder/formats/resources, DirectWrite and native menus, reader JS; stage exact verified build; signed Microsoft offline runtimes; ZIP and Inno installer; installed bytes, version/architecture/assets, associations, native-window startup, uninstall. |
 | Snap packaging and installation | Canonical's maintained LXD/Snapcraft build, core24; inspect generated metadata, ELF/assets/libraries/vendor bytes/desktop/MIME; install with strict confinement; verify mounted bytes; existing 19-book rendering/opening/location probe under Xvfb through the home interface; removal. |

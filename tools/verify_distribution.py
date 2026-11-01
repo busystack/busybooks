@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 import sys
 
-from release_metadata import sha256, versions
+from release_metadata import appstream_version, sha256, versions
 from verify_vendor import load_manifest, verify_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +23,7 @@ def verify(root, platform):
                      'lib/libapp.so', 'lib/libsqlite3.so',
                      'share/applications/io.busystack.busybooks.desktop',
                      'share/icons/hicolor/scalable/apps/io.busystack.busybooks.svg',
+                     'share/metainfo/io.busystack.busybooks.metainfo.xml',
                      'share/mime/packages/io.busystack.busybooks.mime.xml',
                      'share/licenses/busybooks/LICENSE', 'share/licenses/busybooks/NOTICE']
     for name in required:
@@ -31,6 +32,9 @@ def verify(root, platform):
             raise ValueError(f'Missing or empty distribution file: {path}')
     verify_bundle(load_manifest(ROOT / 'tools/vendor-manifest.json'), root, platform)
     version, build = versions()
+    if platform == 'linux':
+        if appstream_version(root / 'share/metainfo/io.busystack.busybooks.metainfo.xml') != version:
+            raise ValueError('Bundled Linux AppStream identity/version differs')
     metadata = json.loads((root / 'data/flutter_assets/version.json').read_text(encoding='utf-8'))
     if (metadata.get('version'), metadata.get('build_number'), metadata.get('app_name')) != (version, build, 'busybooks'):
         raise ValueError(f'Bundled Flutter application metadata differs: {metadata}')

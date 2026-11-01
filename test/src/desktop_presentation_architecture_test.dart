@@ -59,7 +59,9 @@ void main() {
                 .firstOrNull
                 ?.name ??
             '<top-level>';
-        final key = '${file.path}::$owner::${control[1]}';
+        // The reviewed manifest uses repository paths on both supported hosts.
+        final sourcePath = file.path.replaceAll(Platform.pathSeparator, '/');
+        final key = '$sourcePath::$owner::${control[1]}';
         actual.update(key, (count) => count + 1, ifAbsent: () => 1);
       }
     }

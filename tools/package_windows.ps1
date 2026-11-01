@@ -49,7 +49,7 @@ $zip = Join-Path $PWD "build/distributions/busybooks-$($metadata.version)-window
 Compress-Archive -Path "$staging/*" -DestinationPath $zip -Force
 if (!(Test-Path $InnoCompiler)) { throw "Inno Setup compiler is missing: $InnoCompiler" }
 $output = Join-Path $PWD 'build/distributions'
-& $InnoCompiler "/O$output" 'packaging/windows/busybooks.iss'
+& $InnoCompiler "/O$output" 'packaging/windows/busybooks.iss' 2>&1 | Tee-Object -FilePath (Join-Path $QualificationDirectory 'inno-build.log')
 if ($LASTEXITCODE) { throw 'Inno Setup compilation failed' }
 $installer = Join-Path $output "BusyBooks-$($metadata.version)-windows-x64.exe"
 if (!(Test-Path $installer)) { throw "Required installer missing: $installer" }

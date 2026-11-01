@@ -27,13 +27,14 @@ $report = [ordered]@{
 }
 
 function Invoke-Check([string]$Name, [string]$Executable, [string[]]$Arguments) {
+    Write-Host "Running $Name"
     $log = Join-Path $EvidenceDirectory ($Name + '.log')
     $start = [DateTime]::UtcNow
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     $command = Get-Command $Executable -ErrorAction SilentlyContinue
     if ($command) {
-        & $command @Arguments 2>&1 | ForEach-Object { $_.ToString() } | Out-File -Encoding utf8 $log
+        & $command @Arguments 2>&1 | ForEach-Object { $_.ToString() } | Tee-Object -FilePath $log | ForEach-Object { Write-Host $_ }
         $code = $LASTEXITCODE
     } else {
         "Required executable unavailable: $Executable" | Out-File -Encoding utf8 $log
