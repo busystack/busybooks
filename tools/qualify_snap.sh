@@ -6,6 +6,7 @@ package=$(realpath "${1:?Supply the Snapcraft output}")
 mkdir -p build/release/snap build/distributions
 exec > >(tee build/release/snap/verification.log) 2>&1
 version=$(python3 tools/release_metadata.py | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+python3 tools/release_metadata.py --check-event --evidence build/release/snap
 expected="busybooks_${version}_amd64.snap"
 test "$(basename "$package")" = "$expected"
 root="$PWD/build/release/snap/unpacked"
@@ -50,7 +51,13 @@ snap connections busybooks | tee build/release/snap/connections.txt
 # Verify the installed mounted bytes. Never execute the unpacked binary as proof
 # that strict confinement works.
 python3 tools/verify_distribution.py --platform linux --bundle /snap/busybooks/current --output build/release/snap/installed-distribution.json
-xvfb-run -a dbus-run-session -- python3 tools/probe_linux_opening.py --snap
+# Use the systemd user bus, not a private dbus-run-session without a user manager.
+timeout 30s systemctl --user show --property=Version > build/release/snap/systemd-user.txt
+# The Snap's private /tmp cannot read xvfb-run's default authority file. Keep its
+# mode-600 authentication cookie in ordinary home storage covered by the home plug.
+authority=$(mktemp "$HOME/busybooks-xauthority-XXXXXX")
+trap 'rm -f "$authority"' EXIT
+xvfb-run -a -f "$authority" python3 tools/probe_linux_opening.py --snap
 sudo snap remove --purge busybooks
 cp "$package" "build/distributions/$expected"
 python3 tools/release_metadata.py --check-event --evidence build/release/snap --package "build/distributions/$expected"

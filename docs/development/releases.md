@@ -151,6 +151,15 @@ Exercise original-byte export, Move/Locate, cache deletion, collection and backu
 restore using [existing acceptance procedures](../../tools/README.md).
 Finish with `sudo snap remove --purge busybooks` and inspect cleanup. The Xvfb CI
 probe only establishes its tested headless X11 paths and home access.
+Hosted service runners initialize a systemd user manager with `loginctl enable-linger`
+and use its real user bus, which Snap needs for application cgroup tracking; a
+private `dbus-run-session` cannot supply that manager. See the
+[Snap maintainer's guidance](https://forum.snapcraft.io/t/cannot-run-snap-applications-on-this-system/46210)
+and [systemd loginctl](https://www.freedesktop.org/software/systemd/man/latest/loginctl.html).
+Xvfb's authentication cookie stays mode 600 in ordinary home storage so the strict
+Snap can read it through its existing home plug despite private `/tmp`.
+The staged speech audio plugins include `libaudio2` and `libsndio7.0`, fixing the
+two missing dependencies reported by Snapcraft's library linter.
 
 ### Windows x64 Inno installer
 

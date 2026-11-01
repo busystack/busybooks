@@ -134,7 +134,14 @@ jobs:
       - name: Inspect and install strict Snap
         env:
           SNAP_PACKAGE: ${{ steps.snapcraft.outputs.snap }}
-        run: bash tools/qualify_snap.sh "$SNAP_PACKAGE"
+        run: |
+          # Hosted service processes have no login session. Snap needs the real
+          # systemd user bus to create its required application tracking scope.
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          bash tools/qualify_snap.sh "$SNAP_PACKAGE"
       - name: Upload qualified Snap candidate or final package
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -152,6 +159,9 @@ jobs:
           name: ${{ needs.identity.outputs.prefix }}-snap-diagnostics-attempt-${{ github.run_attempt }}
           path: |
             build/release/snap/*.log
+            build/release/snap/*.json
+            build/release/snap/*.txt
+            build/release/snap/pubspec.lock
             snapcraft*.log
             .snapcraft/log/
           if-no-files-found: warn

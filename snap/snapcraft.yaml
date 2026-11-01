@@ -52,7 +52,7 @@ parts:
     build-environment:
       - BUSYBOOKS_FLUTTER_VERSION: '3.47.5'
     build-packages: [git, curl, unzip, xz-utils, python3, clang, cmake, ninja-build, pkg-config, shared-mime-info, libgtk-3-dev, libhandy-1-dev, libwebkit2gtk-4.1-dev]
-    stage-packages: [libwebkit2gtk-4.1-0, libhandy-1-0, libsqlite3-0, libspeechd2, speech-dispatcher, speech-dispatcher-espeak-ng, fonts-noto-core, fonts-noto-cjk, yaru-theme-gtk, yaru-theme-icon]
+    stage-packages: [libwebkit2gtk-4.1-0, libhandy-1-0, libsqlite3-0, libspeechd2, speech-dispatcher, speech-dispatcher-espeak-ng, libaudio2, libsndio7.0, fonts-noto-core, fonts-noto-cjk, yaru-theme-gtk, yaru-theme-icon]
     override-build: |
       set -eu
       rm -rf "$CRAFT_PART_BUILD/build" "$CRAFT_PART_BUILD/.dart_tool" "$CRAFT_PART_BUILD/linux/flutter/ephemeral"
