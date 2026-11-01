@@ -1,0 +1,405 @@
+{
+  "referenceCommit": "7008772",
+  "contracts": [
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksHeaderTooltipState",
+      "constructor": "Tooltip",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkTooltipStyle + lib/src/app/app_theme.dart:tooltipTheme",
+      "construction": "One metadata Tooltip; native frame paints the same themed Container/Center/Text box; Flutter rendering disabled only while native stacking is used."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksHeaderIconButton",
+      "constructor": "YaruIconButton",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkHeaderIconButton",
+      "construction": "YaruIconButton.defaultStyleOf merged with semantic icon style; real IconButton with zero padding and Yaru focus border. Accessible name is explicit."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksHeaderIconButton",
+      "constructor": "IconButton",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkHeaderIconButton",
+      "construction": "YaruIconButton.defaultStyleOf merged with semantic icon style; real IconButton with zero padding and Yaru focus border. Accessible name is explicit."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksCompactIconButton",
+      "constructor": "YaruIconButton",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkCompactIconButton",
+      "construction": "Tight 24px IconButton, 13px glyph, zero padding, Yaru style/focus border."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksCompactIconButton",
+      "constructor": "IconButton",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkCompactIconButton",
+      "construction": "Tight 24px IconButton, 13px glyph, zero padding, Yaru style/focus border."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksPopupSelector",
+      "constructor": "TextButton",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkPopupSelector.triggerBuilder",
+      "construction": "TextButton retains the reference borderless menu geometry and copies neutral outlined foreground/icon state properties; label, 8px gap and 16px down arrow. Native checked menu remains separate."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksGroupedTextEntryState",
+      "constructor": "YaruListTile",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkGroupedTextEntry",
+      "construction": "YaruListTile.square contains the borderless text form field; shared input decoration, native text menu and desktop focus/IME handling."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksGroupedTextEntryState",
+      "constructor": "TextFormField",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkGroupedTextEntry",
+      "construction": "YaruListTile.square contains the borderless text form field; shared input decoration, native text menu and desktop focus/IME handling."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksSurface",
+      "constructor": "Card",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkSurface",
+      "construction": "Theme card shape, semantic fill, surface tint disabled and shared nativeCardShadows; transparent Material owns ink only."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksSurface",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkSurface",
+      "construction": "Theme card shape, semantic fill, surface tint disabled and shared nativeCardShadows; transparent Material owns ink only."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksSidebarSurface",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkSidebarSurface",
+      "construction": "Semantic sidebar fill and shared clipped surface; no default Material card decoration."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksSidebarRecordRowState",
+      "constructor": "YaruListTile",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:_BusyMarkSidebarRecordRowState",
+      "construction": "YaruListTile.square in a clipped selected Material/InkWell, with neutral row hover, owned focus and native contextual menu."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksSidebarRecordRowState",
+      "constructor": "InkWell",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:_BusyMarkSidebarRecordRowState",
+      "construction": "YaruListTile.square in a clipped selected Material/InkWell, with neutral row hover, owned focus and native contextual menu."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksSidebarRecordRowState",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:_BusyMarkSidebarRecordRowState",
+      "construction": "YaruListTile.square in a clipped selected Material/InkWell, with neutral row hover, owned focus and native contextual menu."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksComboRow",
+      "constructor": "YaruListTile",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkComboRow",
+      "construction": "YaruListTile.square is the whole-row native MenuButton trigger, with responsive neutral value/arrow allocation and enabled/disabled row states; exact menu values retained."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksActionRowState",
+      "constructor": "YaruListTile",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:_BusyMarkActionRowState",
+      "construction": "YaruListTile.square with shared neutral row hover, one activation owner, title/subtitle/trailing alignment and disabled role."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "_BusyBooksSwitchState",
+      "constructor": "YaruSwitch",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:_BusyMarkSwitchState",
+      "construction": "Real YaruSwitch with semantic enabled/selected state and its normal focus/press treatment."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksDialogShell",
+      "constructor": "Dialog",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkDialogShell",
+      "construction": "Shared theme shape/dialog fill, native titlebar, constrained scrolling body and semantic action roles; repaired route lifetime remains outside the shell."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksPushButton",
+      "constructor": "FilledButton",
+      "count": 2,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkPushButton",
+      "construction": "standard/standardIcon use FilledButton; suggested/destructive use ElevatedButton with the shared role colors; retain Yaru geometry and state properties."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksPushButton",
+      "constructor": "ElevatedButton",
+      "count": 2,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkPushButton",
+      "construction": "standard/standardIcon use FilledButton; suggested/destructive use ElevatedButton with the shared role colors; retain Yaru geometry and state properties."
+    },
+    {
+      "source": "lib/src/app/busybooks_search_field.dart",
+      "owner": "_BusyBooksSearchFieldState",
+      "constructor": "TextField",
+      "count": 1,
+      "reference": "lib/src/app/busymark_search_field.dart:_BusyMarkSearchFieldState",
+      "construction": "TextField with the same outlined Yaru input decoration, 34px icon allocations and ordinary clear IconButton; explicit name and shared native hint preserve accessibility/stacking."
+    },
+    {
+      "source": "lib/src/app/busybooks_search_field.dart",
+      "owner": "_BusyBooksSearchFieldState",
+      "constructor": "IconButton",
+      "count": 1,
+      "reference": "lib/src/app/busymark_search_field.dart:_BusyMarkSearchFieldState",
+      "construction": "TextField with the same outlined Yaru input decoration, 34px icon allocations and ordinary clear IconButton; explicit name and shared native hint preserve accessibility/stacking."
+    },
+    {
+      "source": "lib/src/app/busybooks_toast.dart",
+      "owner": "_BusyBooksToastSurface",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/app/busymark_toast.dart:_BusyMarkToastSurface",
+      "construction": "Same transparent Material, semantic popover DecoratedBox/shadows, 16/8px padding, bodyMedium semibold message and TextButton action. This one action-link construction is intentionally retained because it is the exact reference toast control."
+    },
+    {
+      "source": "lib/src/app/busybooks_toast.dart",
+      "owner": "_BusyBooksToastSurface",
+      "constructor": "TextButton",
+      "count": 1,
+      "reference": "lib/src/app/busymark_toast.dart:_BusyMarkToastSurface",
+      "construction": "Same transparent Material, semantic popover DecoratedBox/shadows, 16/8px padding, bodyMedium semibold message and TextButton action. This one action-link construction is intentionally retained because it is the exact reference toast control."
+    },
+    {
+      "source": "lib/src/app/linux/linux_window_host.dart",
+      "owner": "_LinuxWindowControlCluster",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/app/linux/linux_window_host.dart:_LinuxWindowControlCluster in BusyMark",
+      "construction": "Transparent Material around the same YaruWindowControl drawing, 34px metric allocation, semantic name and activation opacity; hints alone use the shared themed native frame."
+    },
+    {
+      "source": "lib/src/app/startup_failure.dart",
+      "owner": "BusyBooksStartupFailure",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkDialogShell + lib/src/workspace/presentation/settings_screen.dart:settings-content-surface",
+      "construction": "Window background uses the reference view role; centered existing shared dialog shell and standard/suggested buttons, not a separate default dialog design."
+    },
+    {
+      "source": "lib/src/notebook/presentation/notebook_item.dart",
+      "owner": "_NotebookItemState",
+      "constructor": "InkWell",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/workspace_screen.dart:_SidebarRowSurface in BusyMark",
+      "construction": "Existing annotation header keeps its layout; inline selection InkWell uses the reference neutral row hover, 8px corner treatment, explicit button/selected semantics and the theme NoSplash/focus/pressed states."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_panel.dart",
+      "owner": "_ReaderInformationPanelState",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkSurface + BusyMarkPushButton",
+      "construction": "Existing primary lookup layout retains the reference semantic panel fill and shared neutral close/retry/full-entry buttons; Material supplies the panel background, with no default elevation/ripple surface."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_sidebar.dart",
+      "owner": "_SidebarRowSurface",
+      "constructor": "Material",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/workspace_screen.dart:_SidebarRowSurface in BusyMark",
+      "construction": "Exact selected background, 1px vertical inset, 8px clipped Material and neutral InkWell hover; existing reader tree keyboard and explicit focus outline retained."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_sidebar.dart",
+      "owner": "_SidebarRowSurface",
+      "constructor": "InkWell",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/workspace_screen.dart:_SidebarRowSurface in BusyMark",
+      "construction": "Exact selected background, 1px vertical inset, 8px clipped Material and neutral InkWell hover; existing reader tree keyboard and explicit focus outline retained."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksSidebarNavigationTile",
+      "constructor": "YaruMasterTile",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkSidebarNavigationTile in BusyMark",
+      "construction": "The exact sidebar master tile with semantic selected state, shared small icon sizing and the enclosing reference navigation list theme."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksSwitchRow",
+      "constructor": "YaruSwitchListTile",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkSwitchRow in BusyMark",
+      "construction": "The reference square switch row with semantic title, disabled state and shared row hover; Yaru owns focus/pressed interaction."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksStatusBox",
+      "constructor": "YaruInfoBox",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkStatusBox in BusyMark",
+      "construction": "The reference YaruInfoBox maps information/success/warning/error to its matching semantic kind, with shared subtitle typography."
+    },
+    {
+      "source": "lib/src/app/busybooks_design.dart",
+      "owner": "BusyBooksDialogTitleBar",
+      "constructor": "YaruDialogTitleBar",
+      "count": 1,
+      "reference": "lib/src/app/busymark_design.dart:BusyMarkDialogTitleBar in BusyMark",
+      "construction": "The reference YaruDialogTitleBar uses semantic dialog fill, centered title, close name, no hero ownership and a high-contrast divider."
+    },
+    {
+      "source": "lib/src/app/keyboard_shortcuts_settings.dart",
+      "owner": "_ShortcutEditorState",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    },
+    {
+      "source": "lib/src/app/linux/linux_window_host.dart",
+      "owner": "_LinuxWindowControlState",
+      "constructor": "YaruWindowControl",
+      "count": 1,
+      "reference": "lib/src/app/linux/linux_window_host.dart:_LinuxWindowControlState in BusyMark",
+      "construction": "The reference YaruWindowControl uses the matching minimize/maximize/close role and semantic name; reduced-motion state layers and circular geometry follow the same reference implementation."
+    },
+    {
+      "source": "lib/src/app/product_actions.dart",
+      "owner": "<top-level>",
+      "constructor": "SelectableText",
+      "count": 3,
+      "reference": "lib/src/app/busymark_dialogs.dart:_SyntaxReferenceValue in BusyMark",
+      "construction": "The reference selectable body/metadata text uses the shared body typography and desktop selection context menu; existing note/publication text and selection are preserved."
+    },
+    {
+      "source": "lib/src/app/startup_failure.dart",
+      "owner": "BusyBooksStartupFailure",
+      "constructor": "SelectableText",
+      "count": 1,
+      "reference": "lib/src/app/busymark_dialogs.dart:_SyntaxReferenceValue in BusyMark",
+      "construction": "The reference selectable body/metadata text uses the shared body typography and desktop selection context menu; existing note/publication text and selection are preserved."
+    },
+    {
+      "source": "lib/src/book_workspace/presentation/book_workspace_screen.dart",
+      "owner": "_BookWorkspaceScreenState",
+      "constructor": "YaruCircularProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/workspace_screen.dart:_SpellingReviewDialogState in BusyMark",
+      "construction": "The same Yaru circular spinner used by the reference spelling checking/suggestion state, centered in the existing bounded loading area with accessible status."
+    },
+    {
+      "source": "lib/src/library/presentation/collection_screen.dart",
+      "owner": "_CollectionScreenState",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    },
+    {
+      "source": "lib/src/notebook/presentation/notebook_item.dart",
+      "owner": "_NotebookItemState",
+      "constructor": "SelectableText",
+      "count": 2,
+      "reference": "lib/src/app/busymark_dialogs.dart:_SyntaxReferenceValue in BusyMark",
+      "construction": "The reference selectable body/metadata text uses the shared body typography and desktop selection context menu; existing note/publication text and selection are preserved."
+    },
+    {
+      "source": "lib/src/notebook/presentation/region_preview.dart",
+      "owner": "_NotebookRegionPreviewState",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    },
+    {
+      "source": "lib/src/reading/presentation/font_chooser.dart",
+      "owner": "_ReadingFontChooserState",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_panel.dart",
+      "owner": "_ReaderInformationPanelState",
+      "constructor": "SelectableText",
+      "count": 2,
+      "reference": "lib/src/app/busymark_dialogs.dart:_SyntaxReferenceValue in BusyMark",
+      "construction": "The reference selectable body/metadata text uses the shared body typography and desktop selection context menu; existing note/publication text and selection are preserved."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_panel.dart",
+      "owner": "_ReaderInformationPanelState",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_screen.dart",
+      "owner": "_ReadingContentState",
+      "constructor": "YaruCircularProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/workspace_screen.dart:_SpellingReviewDialogState in BusyMark",
+      "construction": "The same Yaru circular spinner used by the reference spelling checking/suggestion state, centered in the existing bounded loading area with accessible status."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_screen.dart",
+      "owner": "_ReadingContentState",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    },
+    {
+      "source": "lib/src/reading/presentation/reader_sidebar.dart",
+      "owner": "_ThumbnailPanelState",
+      "constructor": "YaruCircularProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/workspace_screen.dart:_SpellingReviewDialogState in BusyMark",
+      "construction": "The same Yaru circular spinner used by the reference spelling checking/suggestion state, centered in the existing bounded loading area with accessible status."
+    },
+    {
+      "source": "lib/src/search/book_search_widgets.dart",
+      "owner": "BookSearchSidebar",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    },
+    {
+      "source": "lib/src/workspace/presentation/welcome_screen.dart",
+      "owner": "_WelcomeScreenState",
+      "constructor": "YaruLinearProgressIndicator",
+      "count": 1,
+      "reference": "lib/src/workspace/presentation/writerside_template_dialogs.dart in BusyMark: YaruLinearProgressIndicator loading state",
+      "construction": "The reference Yaru linear progress control in its existing bounded status slot, preserving determinate progress when available and accessible loading status."
+    }
+  ]
+}

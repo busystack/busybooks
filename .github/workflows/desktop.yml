@@ -1,0 +1,179 @@
+name: Release verification
+run-name: "${{ github.event_name == 'pull_request' && format('Candidate PR #{0}', github.event.number) || format('Final {0}', github.ref_name) }}"
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  identity:
+    name: Release identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: identity
+        run: python3 tools/release_metadata.py --check-event --github-output
+  linux:
+    name: Linux verification
+    needs: identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install native verification prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libhandy-1-dev libwebkit2gtk-4.1-dev libspeechd2 speech-dispatcher-espeak-ng libxtst6 libxml2-utils fonts-lato xvfb dbus-x11 desktop-file-utils
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: '3.47.5'
+      - name: Qualify Linux release
+        run: bash tools/qualify_linux.sh
+  windows:
+    name: Windows verification and installer
+    needs: identity
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify prerequisites and download official Microsoft runtimes
+        run: ./tools/prepare_windows.ps1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: '3.47.5'
+      - name: Validate source identity and official SDK
+        run: |
+          python tools/release_metadata.py --check-event --toolchain --evidence build/release/windows
+          if ($LASTEXITCODE) { throw 'Release identity/toolchain validation failed' }
+      - name: Qualify Windows release
+        run: |
+          ./tools/qualify_windows.ps1 -FlutterSdk $env:FLUTTER_ROOT -EvidenceDirectory build/release/windows -SourceRevision (git rev-parse HEAD)
+      - name: Package qualified Windows distribution and Inno Setup installer
+        run: |
+          ./tools/package_windows.ps1 -QualificationDirectory build/release/windows -InnoCompiler $env:BUSYBOOKS_ISCC -WebViewRuntimeInstaller "$env:BUSYBOOKS_RUNTIME_DIRECTORY/MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -VisualCppRuntimeInstaller "$env:BUSYBOOKS_RUNTIME_DIRECTORY/VC_redist.x64.exe"
+      - name: Install, inspect, launch and uninstall Windows package
+        env:
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          try {
+            ./tools/qualify_windows_installer.ps1 -Installer "build/distributions/BusyBooks-$env:RELEASE_VERSION-windows-x64.exe"
+          } finally {
+            foreach ($name in 'install.log', 'uninstall.log', 'installed-app.stdout.log', 'installed-app.stderr.log') {
+              $log = "build/release/windows/$name"
+              if (Test-Path $log) {
+                Write-Host "::group::$name"
+                Get-Content $log
+                Write-Host '::endgroup::'
+              }
+            }
+          }
+      - name: Record package provenance and stage Windows artifact
+        env:
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          python tools/release_metadata.py --check-event --toolchain --evidence build/release/windows --package "build/distributions/BusyBooks-$env:RELEASE_VERSION-windows-x64.exe"
+          if ($LASTEXITCODE) { throw 'Installer provenance failed' }
+          $artifact = 'build/artifacts/Windows'
+          New-Item -ItemType Directory -Force "$artifact/provenance" | Out-Null
+          foreach ($name in "BusyBooks-$env:RELEASE_VERSION-windows-x64.exe", "busybooks-$env:RELEASE_VERSION-windows-x64.zip") {
+            Copy-Item "build/distributions/$name", "build/distributions/$name.sha256" $artifact
+          }
+          Copy-Item build/release/windows/*.json, build/release/windows/*.txt, build/release/windows/pubspec.lock "$artifact/provenance"
+          python tools/release_metadata.py --check-event --package "build/distributions/busybooks-$env:RELEASE_VERSION-windows-x64.zip" |
+            Set-Content -Encoding utf8 "$artifact/provenance/portable-zip.json"
+          if ($LASTEXITCODE) { throw 'Portable ZIP provenance failed' }
+      - name: Upload qualified Windows packages
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: BusyBooks-${{ needs.identity.outputs.version }}-Windows
+          path: build/artifacts/Windows/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
+  snap:
+    name: Snap packaging and installation
+    needs: [identity, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install package inspection prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y squashfs-tools python3-yaml ripgrep shared-mime-info libglib2.0-bin xvfb dbus-x11
+      - name: Build core24 Snap with Canonical tooling
+        id: snapcraft
+        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1
+        with:
+          snapcraft-channel: stable
+          build-info: true
+      - name: Inspect and install strict Snap
+        env:
+          SNAP_PACKAGE: ${{ steps.snapcraft.outputs.snap }}
+        run: |
+          # Hosted service processes have no login session. Snap needs the real
+          # systemd user bus to create its required application tracking scope.
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          bash tools/qualify_snap.sh "$SNAP_PACKAGE"
+      - name: Stage Linux artifact
+        env:
+          SNAP_PACKAGE: ${{ steps.snapcraft.outputs.snap }}
+        run: |
+          artifact=build/artifacts/Linux
+          package_name=$(basename "$SNAP_PACKAGE")
+          mkdir -p "$artifact/provenance"
+          cp "build/distributions/$package_name" "build/distributions/$package_name.sha256" "$artifact/"
+          cp build/release/snap/*.json build/release/snap/*.txt build/release/snap/pubspec.lock "$artifact/provenance/"
+      - name: Upload qualified Linux package
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: BusyBooks-${{ needs.identity.outputs.version }}-Linux
+          path: build/artifacts/Linux/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
+  release-verification:
+    name: Release verification complete
+    if: ${{ always() }}
+    needs: [identity, linux, windows, snap]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every mandatory job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          jobs = json.loads(os.environ['RESULTS'])
+          failures = {name: job['result'] for name, job in jobs.items() if job['result'] != 'success'}
+          if failures:
+              raise SystemExit(f'Release verification incomplete: {failures}')
+          print('Automated package qualification passed. Manual release acceptance and publication remain required.')
+          PY

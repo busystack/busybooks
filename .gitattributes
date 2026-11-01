@@ -1,0 +1,19 @@
+# Opaque publication/font/decoder resources must remain byte-for-byte intact.
+*.pdf binary
+*.epub binary
+*.cbz binary
+*.cbr binary
+*.fbz binary
+*.zip binary
+*.tar.gz binary
+# FB2 encoding fixtures include UTF-16 and Windows-1251 XML.
+test/fixtures/formats/*.fb2 binary
+*.bcmap binary
+*.pfb binary
+*.otf binary
+*.ttf binary
+*.wasm binary
+*.icc binary
+# Preserve upstream source/license whitespace in pinned vendored distributions.
+assets/reader/vendor/** -text -whitespace
+native/vendor/** -text -whitespace
