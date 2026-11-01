@@ -12,6 +12,34 @@ from verify_vendor import load_manifest, verify_bundle
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def verify_native(stream, relative, platform):
+    header = stream.read(64)
+    native = relative.name in {'busybooks', 'busybooks.exe', 'busybooks_comic_archive', 'busybooks_comic_archive.exe', 'unins000.exe'} or relative.suffix.lower() in {'.dll', '.so'} or '.so.' in relative.name
+    # Flutter's WindowsAotBundle ships an app-aot-elf snapshot. Windows loads
+    # this through Flutter, while application executables and DLLs remain PE.
+    aot = platform == 'windows' and relative.as_posix() == 'data/app.so'
+    expected_magic = b'\x7fELF' if platform == 'linux' or aot else b'MZ'
+    if native and not header.startswith(expected_magic):
+        raise ValueError(f'Invalid native binary: {relative}')
+    if header[:4] == b'\x7fELF':
+        if len(header) < 20 or header[4:6] != b'\x02\x01' or struct.unpack_from('<H', header, 18)[0] != 62:
+            raise ValueError(f'Expected x64 ELF: {relative}')
+    elif header[:2] == b'MZ':
+        if len(header) < 64:
+            raise ValueError(f'Truncated Windows PE: {relative}')
+        stream.seek(struct.unpack_from('<I', header, 60)[0])
+        pe = stream.read(6)
+        # Inno 6's uninstaller and Microsoft's runtime launchers can be x86
+        # even in an x64 application installation.
+        bootstrap = relative.as_posix() in {
+            'MicrosoftEdgeWebView2RuntimeInstallerX64.exe',
+            'VC_redist.x64.exe', 'unins000.exe',
+        }
+        allowed = {b'PE\0\0d\x86', b'PE\0\0L\x01'} if bootstrap else {b'PE\0\0d\x86'}
+        if pe not in allowed:
+            raise ValueError(f'Unexpected Windows PE architecture: {relative}')
+
+
 def verify(root, platform):
     required = ['data/icudtl.dat', 'data/flutter_assets/AssetManifest.bin']
     if platform == 'windows':
@@ -64,26 +92,7 @@ def verify(root, platform):
         if path.suffix.lower() == '.pem' and b'PRIVATE KEY' in path.read_bytes():
             raise ValueError(f'Unexpected private key: {relative}')
         with path.open('rb') as stream:
-            header = stream.read(64)
-            native = path.name in {'busybooks', 'busybooks.exe', 'busybooks_comic_archive', 'busybooks_comic_archive.exe', 'unins000.exe'} or path.suffix.lower() in {'.dll', '.so'} or '.so.' in path.name
-            expected_magic = b'MZ' if platform == 'windows' else b'\x7fELF'
-            if native and not header.startswith(expected_magic):
-                raise ValueError(f'Invalid native binary: {relative}')
-            if header[:4] == b'\x7fELF':
-                if header[4:6] != b'\x02\x01' or struct.unpack_from('<H', header, 18)[0] != 62:
-                    raise ValueError(f'Expected Linux x64 ELF: {relative}')
-            elif header[:2] == b'MZ':
-                stream.seek(struct.unpack_from('<I', header, 60)[0])
-                pe = stream.read(6)
-                # Inno 6's uninstaller and Microsoft's runtime launchers can be
-                # x86 even in an x64 application installation.
-                bootstrap = relative.as_posix() in {
-                    'MicrosoftEdgeWebView2RuntimeInstallerX64.exe',
-                    'VC_redist.x64.exe', 'unins000.exe',
-                }
-                allowed = {b'PE\0\0d\x86', b'PE\0\0L\x01'} if bootstrap else {b'PE\0\0d\x86'}
-                if pe not in allowed:
-                    raise ValueError(f'Unexpected Windows PE architecture: {relative}')
+            verify_native(stream, relative, platform)
         inventory.append(dict(path=relative.as_posix(), bytes=path.stat().st_size, sha256=sha256(path)))
     return dict(platform=platform, architecture='x64', applicationAssets=owned_assets,
                 files=inventory, status='passed')

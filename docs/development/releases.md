@@ -32,6 +32,9 @@ Windows validates the staged and installed executable's native `VERSIONINFO`,
 including `VERSION+BUILD`, product name and publisher. Linux additionally checks
 its packaged Flutter `version.json` and AppStream metadata. No metadata is invented
 for a build platform that does not generate it.
+Native architecture inspection requires x64 PE application executables and DLLs
+on Windows, and x64 ELF for Flutter's Windows `data/app.so` AOT snapshot, matching
+the pinned upstream `WindowsAotBundle`. Linux native files require x64 ELF.
 A failed or skipped required check cannot become a successful aggregate result.
 There is no `continue-on-error`.
 
