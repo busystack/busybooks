@@ -31,7 +31,7 @@ def verify(root, platform):
             raise ValueError(f'Missing or empty distribution file: {path}')
     verify_bundle(load_manifest(ROOT / 'tools/vendor-manifest.json'), root, platform)
     version, build = versions()
-    metadata = json.loads((root / 'data/flutter_assets/version.json').read_text())
+    metadata = json.loads((root / 'data/flutter_assets/version.json').read_text(encoding='utf-8'))
     if (metadata.get('version'), metadata.get('build_number'), metadata.get('app_name')) != (version, build, 'busybooks'):
         raise ValueError(f'Bundled Flutter application metadata differs: {metadata}')
     inventory = []
@@ -73,7 +73,7 @@ def main():
     try:
         result = verify(args.bundle.resolve(strict=True), args.platform)
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(result, indent=2) + '\n')
+        args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
         print(f"Verified {len(result['files'])} distribution files ({args.platform} x64)")
     except (ValueError, OSError) as error:
         parser.exit(1, f'Distribution verification failed: {error}\n')

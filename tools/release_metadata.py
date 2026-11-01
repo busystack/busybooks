@@ -49,14 +49,14 @@ def versions():
 
 
 def git(*arguments):
-    return subprocess.check_output(['git', *arguments], cwd=ROOT, text=True).strip()
+    return subprocess.check_output(['git', *arguments], cwd=ROOT, encoding='utf-8').strip()
 
 
 def context(check_event=False):
     version, build = versions()
     revision = git('rev-parse', 'HEAD')
     event_name = os.environ.get('GITHUB_EVENT_NAME', 'local')
-    event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()) if os.environ.get('GITHUB_EVENT_PATH') else {}
+    event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8')) if os.environ.get('GITHUB_EVENT_PATH') else {}
     result = dict(version=version, buildNumber=build, sourceRevision=revision,
                   lockfileSha256=sha256(ROOT / 'pubspec.lock'),
                   vendorManifestSha256=sha256(ROOT / 'tools/vendor-manifest.json'),
@@ -98,7 +98,7 @@ def toolchain():
     # The official Windows archive bootstraps flutter_tools on its first command.
     # Keep that command's human-readable output out of the machine JSON stream.
     subprocess.run([flutter, '--version'], check=True, stdout=sys.stderr)
-    output = subprocess.check_output([flutter, '--version', '--machine'], text=True)
+    output = subprocess.check_output([flutter, '--version', '--machine'], encoding='utf-8')
     try:
         data = json.loads(output)
     except json.JSONDecodeError as error:
@@ -107,8 +107,8 @@ def toolchain():
         raise ValueError(f'Expected official Flutter {FLUTTER} ({REVISION}) / Dart {DART}; got {data}')
     # Detect modifications to tracked SDK sources as well as a misleading version label.
     sdk = Path(flutter).resolve().parent.parent
-    if subprocess.check_output(['git', '-C', str(sdk), 'status', '--porcelain', '--untracked-files=no'], text=True).strip():
-        changes = subprocess.check_output(['git', '-C', str(sdk), 'diff', '--stat'], text=True)
+    if subprocess.check_output(['git', '-C', str(sdk), 'status', '--porcelain', '--untracked-files=no'], encoding='utf-8').strip():
+        changes = subprocess.check_output(['git', '-C', str(sdk), 'diff', '--stat'], encoding='utf-8')
         raise ValueError(f'Tracked Flutter SDK sources have been modified: {changes}')
     return data
 
@@ -130,14 +130,14 @@ def main():
             if package.stat().st_size == 0:
                 raise ValueError(f'Empty release package: {package}')
             data['package'] = dict(name=package.name, bytes=package.stat().st_size, sha256=sha256(package))
-            package.with_name(package.name + '.sha256').write_text(f'{sha256(package)}  {package.name}\n')
+            package.with_name(package.name + '.sha256').write_text(f'{sha256(package)}  {package.name}\n', encoding='utf-8')
         if args.evidence:
             args.evidence.mkdir(parents=True, exist_ok=True)
-            (args.evidence / 'provenance.json').write_text(json.dumps(data, indent=2) + '\n')
+            (args.evidence / 'provenance.json').write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
             shutil.copyfile(ROOT / 'pubspec.lock', args.evidence / 'pubspec.lock')
             shutil.copyfile(ROOT / 'tools/vendor-manifest.json', args.evidence / 'vendor-manifest.json')
         if args.github_output:
-            with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
                 output.write(f"version={data['version']}\nprefix={data['artifactPrefix']}\n")
         print(json.dumps(data, indent=2))
     except (ValueError, OSError, subprocess.CalledProcessError) as error:

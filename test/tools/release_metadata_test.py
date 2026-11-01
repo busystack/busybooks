@@ -101,7 +101,9 @@ class ReleaseMetadataTest(unittest.TestCase):
     def test_candidate_preserves_both_head_and_tested_revision(self):
         head = 'b' * 40
         self.event_path.write_text(json.dumps({'number': 42, 'pull_request': {
-            'base': {'ref': 'main', 'sha': self.revision}, 'head': {'sha': head}}}))
+            'body': 'Reviewed “candidate” — 中文',
+            'base': {'ref': 'main', 'sha': self.revision}, 'head': {'sha': head}}},
+            ensure_ascii=False), encoding='utf-8')
         with mock.patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request'}):
             result = release.context(check_event=True)
         self.assertEqual(result['headRevision'], head)
