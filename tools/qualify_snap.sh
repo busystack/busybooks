@@ -25,6 +25,7 @@ if not required <= set(app['plugs']):
     raise SystemExit('Snap filesystem/desktop interfaces differ')
 PY
 python3 tools/verify_distribution.py --platform linux --bundle "$root" --output build/release/snap/distribution.json
+cp "$root/share/busybooks/flutter-toolchain.json" build/release/snap/flutter-toolchain.json
 python3 tools/probe_linux_mime.py "$root/share/mime"
 test -f "$root/meta/gui/io.busystack.busybooks.desktop"
 rg '^Exec=.*busybooks' "$root/meta/gui/io.busystack.busybooks.desktop"
@@ -39,8 +40,9 @@ snap connections busybooks | tee build/release/snap/connections.txt
 # Verify the installed mounted bytes. Never execute the unpacked binary as proof
 # that strict confinement works.
 python3 tools/verify_distribution.py --platform linux --bundle /snap/busybooks/current --output build/release/snap/installed-distribution.json
+xvfb-run -a dbus-run-session -- python3 tools/probe_linux_opening.py --snap
 sudo snap remove --purge busybooks
 cp "$package" "build/distributions/$expected"
 python3 tools/release_metadata.py --check-event --evidence build/release/snap --package "build/distributions/$expected"
-printf '%s\n' '{"status":"passed","checks":["metadata","architecture","vendor bytes","runtime inventory","desktop identity","strict installation","mounted inventory","removal"],"graphicalRuntime":"MANUAL ACCEPTANCE REQUIRED: hosted headless session does not qualify confined desktop, portals or book opening"}' > build/release/snap/package-results.json
+printf '%s\n' '{"status":"passed","checks":["metadata","architecture","vendor bytes","runtime inventory","desktop identity","strict installation","mounted inventory","Xvfb installed application launch and 19 rendered/saved fixtures through home interface","removal"],"manualAcceptance":"Real desktop portals/chooser, Wayland, removable-media, GPU, speech and complete GUI acceptance remain required"}' > build/release/snap/package-results.json
 rm -rf "$root"

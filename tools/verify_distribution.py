@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 import sys
 
-from release_metadata import sha256
+from release_metadata import sha256, versions
 from verify_vendor import load_manifest, verify_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,15 +30,26 @@ def verify(root, platform):
         if not path.is_file() or not path.stat().st_size:
             raise ValueError(f'Missing or empty distribution file: {path}')
     verify_bundle(load_manifest(ROOT / 'tools/vendor-manifest.json'), root, platform)
+    version, build = versions()
+    metadata = json.loads((root / 'data/flutter_assets/version.json').read_text())
+    if (metadata.get('version'), metadata.get('build_number'), metadata.get('app_name')) != (version, build, 'busybooks'):
+        raise ValueError(f'Bundled Flutter application metadata differs: {metadata}')
     inventory = []
     for path in sorted(root.rglob('*')):
         relative = path.relative_to(root)
-        if any(p.lower() in {'.git', '.aws', '.env', 'credentials', 'id_rsa', 'id_ed25519'} for p in relative.parts) or path.suffix.lower() in {'.pem', '.pfx', '.p12', '.key'}:
+        if any(p.lower() in {'.git', '.aws', '.env', 'credentials', 'id_rsa', 'id_ed25519'} for p in relative.parts) or path.suffix.lower() in {'.pfx', '.p12', '.key'}:
             raise ValueError(f'Unexpected credential/development file: {relative}')
         if not path.is_file():
             continue
+        # Linux runtime trust stores contain public PEM certificates legitimately.
+        if path.suffix.lower() == '.pem' and b'PRIVATE KEY' in path.read_bytes():
+            raise ValueError(f'Unexpected private key: {relative}')
         with path.open('rb') as stream:
             header = stream.read(64)
+            native = path.name in {'busybooks', 'busybooks.exe', 'busybooks_comic_archive', 'busybooks_comic_archive.exe'} or path.suffix.lower() in {'.dll', '.so'} or '.so.' in path.name
+            expected_magic = b'MZ' if platform == 'windows' else b'\x7fELF'
+            if native and not header.startswith(expected_magic):
+                raise ValueError(f'Invalid native binary: {relative}')
             if header[:4] == b'\x7fELF':
                 if header[4:6] != b'\x02\x01' or struct.unpack_from('<H', header, 18)[0] != 62:
                     raise ValueError(f'Expected Linux x64 ELF: {relative}')

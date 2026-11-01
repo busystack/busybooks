@@ -2,6 +2,11 @@
 
 Run tools from the repository root with the pinned Flutter/Dart SDK and lockfile.
 The desktop CI commands are in [desktop.yml](../.github/workflows/desktop.yml).
+The [release procedure](../docs/development/releases.md) documents candidate and
+final artifacts, the required main ruleset and installed-package acceptance.
+`qualify_linux.sh` preserves the full Linux verification entry;
+`qualify_windows.ps1` records the full Windows verification. Packaging validates
+the verified outputs rather than treating compilation as release acceptance.
 Keep execution logs/screenshots/qualification JSON in ignored `evidence/`, test
 output in `test-results/`, and automated logs in CI artifacts. Selected release
 records can be release attachments. Maintained docs describe contracts and

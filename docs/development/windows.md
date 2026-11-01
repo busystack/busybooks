@@ -156,20 +156,20 @@ quality and a full screen-reader audit need their own checks.
 ## Packaging and installation
 
 Supply official Microsoft-signed x64 offline runtime installers. The packaging
-script validates both signatures, performs a clean pinned build/test cycle and
-stages the whole release with root licenses and this guide:
+script validates both signatures, runs the complete pinned qualification and
+stages the whole release with root licenses and this guide. It also compiles the
+existing Inno Setup definition:
 
 ```powershell
 ./tools/package_windows.ps1 `
   -WebViewRuntimeInstaller 'C:\path\to\MicrosoftEdgeWebView2RuntimeInstallerX64.exe' `
   -VisualCppRuntimeInstaller 'C:\path\to\VC_redist.x64.exe'
-iscc packaging/windows/busybooks.iss
 ```
 
 Replace the installer paths with your downloads. The portable ZIP and SHA-256
 sidecar are under `build/distributions/`; portable users install the runtimes
-before launch. The optional per-user Inno Setup installer runs both runtime
-installers before launch and requires Inno Setup's `iscc` command. File-association
+before launch. The per-user Inno Setup installer runs both runtime
+installers before launch and requires Inno Setup 6. File-association
 tasks are optional and cover `.epub`, `.pdf`, `.fb2`, `.fbz`, `.cbz` and `.cbr`.
 Windows matches the final extension, so `.fb2.zip` uses Open Book, drops or the
 command line; BusyBooks does not claim generic `.zip` or `.rar` associations.

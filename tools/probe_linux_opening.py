@@ -5,6 +5,7 @@ Requires a Linux display/session bus. Uses only copied fixtures and a disposable
 profile. A book must report both a rendered/opened reading timestamp and a saved
 typed location, so successful inspection alone cannot pass this probe.
 """
+import argparse
 import hashlib
 import json
 import os
@@ -17,7 +18,13 @@ import tempfile
 import time
 
 root = Path(__file__).resolve().parents[1]
-binary = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / 'build/linux/x64/release/bundle/busybooks'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('binary', nargs='?', type=Path,
+                    default=root / 'build/linux/x64/release/bundle/busybooks')
+parser.add_argument('--snap', action='store_true',
+                    help='Exercise the installed strict Snap with home-interface fixtures')
+args = parser.parse_args()
+command = ['snap', 'run', 'busybooks'] if args.snap else [str(args.binary.resolve())]
 names = [
     'formats/epub2.epub', 'formats/epub2-utf16.epub',
     'formats/epub2-raster-fallback.epub', 'formats/fiction-idless.fb2',
@@ -29,7 +36,9 @@ names = [
     'formats/comic-rar5-solid.cbr', 'reflowable.epub', 'fixed-layout.epub',
     'text.pdf', 'image-only.pdf',
 ]
-with tempfile.TemporaryDirectory(prefix='busybooks-opening-') as directory:
+# A strict Snap has a private /tmp; ordinary home files exercise its home plug.
+with tempfile.TemporaryDirectory(prefix='busybooks-opening-',
+                                 dir=Path.home() if args.snap else None) as directory:
     owned = Path(directory)
     books = owned / 'books'
     books.mkdir()
@@ -45,13 +54,13 @@ with tempfile.TemporaryDirectory(prefix='busybooks-opening-') as directory:
     environment = {**os.environ, 'BUSYBOOKS_PROFILE': str(profile)}
     with (owned / 'application.log').open('w+') as log:
         started_ms = int(time.time() * 1000)
-        application = subprocess.Popen([binary, originals[0]], cwd=root, env=environment, stdout=log, stderr=log)
+        application = subprocess.Popen([*command, originals[0]], cwd=root, env=environment, stdout=log, stderr=log)
         try:
             for index, original in enumerate(originals):
                 watch = time.monotonic()
                 if index:
                     started_ms = int(time.time() * 1000)
-                    forwarded = subprocess.run([binary, os.path.relpath(original, sender)], cwd=sender, env=environment, capture_output=True, timeout=15)
+                    forwarded = subprocess.run([*command, os.path.relpath(original, sender)], cwd=sender, env=environment, capture_output=True, timeout=15)
                     if forwarded.returncode:
                         raise RuntimeError(forwarded.stderr.decode(errors='replace'))
                 identity = hashlib.sha256(original.read_bytes()).hexdigest()
@@ -76,7 +85,7 @@ with tempfile.TemporaryDirectory(prefix='busybooks-opening-') as directory:
                     raise RuntimeError(f'No rendered, saved location for {original.name}: {book and {k:book.get(k) for k in ["format","anchor","read"]}}')
                 assert original.read_bytes() == (root / 'test/fixtures' / names[index]).read_bytes()
                 print(json.dumps({'fixture': original.name, 'format': book['format'], 'openedAndSavedMs': round((time.monotonic()-watch)*1000), 'forwarded': index > 0}), flush=True)
-            print(json.dumps({'status': 'passed', 'books': len(originals), 'scope': 'Actual Linux bundle, first and forwarded relative paths, original-byte identity, renderer opened, saved typed locations, same primary process'}))
+            print(json.dumps({'status': 'passed', 'books': len(originals), 'distribution': 'strict Snap' if args.snap else 'native bundle', 'scope': 'First and forwarded relative paths, home filesystem access, original-byte identity, renderer opened, saved typed locations, same primary process'}))
         except BaseException:
             log.seek(0)
             print(log.read()[-16000:], file=sys.stderr)
